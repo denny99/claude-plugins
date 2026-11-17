@@ -110,6 +110,8 @@ Minuten waren zwölf davon. Stattdessen:
    - `secret` (`/geheim`): sofort holen und per `discord whisper` antworten, auch wenn die anderen gerade reden; das
      Flüstern wartet nicht auf sie. Wie schnell, steht in 4c („Ein Spieler sagt dir etwas heimlich“).
    - `break`: die Spieler machen Pause: vorbereiten (unten), dann einen neuen Wächter.
+   - `resume`: sie haben „Weiter“ gedrückt: kein `wait_for_players`, mit einem Satz einsteigen, wo sie stehen, dann
+     einen neuen Wächter.
    - `null` (30 min nichts) oder `error` (ältere Studio-Version): neuer Wächter, bei `error` wie früher mit
      `wait_for_players` warten.
 3. Vor dem Ende jedes Zugs, in dem du geantwortet hast, wieder einen Wächter starten. Ohne Wächter weckt dich nichts.
@@ -168,8 +170,9 @@ bringen“). Der Anfang entscheidet, ob die Runde in der Welt ankommt, das Ende,
 **Eine Pause ist Vorbereitungszeit** (Denny, 2026-10-29: „preppen kannst du natürlich prima auch dinge wenn wir aktiv
 den pause button drücken“). Drücken die Spieler Pause, steht die Grafikkarte dir allein: jetzt die Bilder malen, die
 bald gebraucht werden (`picture`, auch größere), die Zeilen der nächsten Szene mit `say_line prepare` machen, den
-Prüfer laufen lassen und seinen Bericht lesen. Danach mit `wait_for_players` weiter warten, bis sie „Weiter“ drücken,
-und mit einem Satz einsteigen, wo sie stehen.
+Prüfer laufen lassen und seinen Bericht lesen. Danach einen neuen Wächter starten und den Zug beenden: drücken sie
+„Weiter“, weckt er dich mit `resume`, dann mit einem Satz einsteigen, wo sie stehen. Nie in `wait_for_players` auf das
+Ende der Pause warten.
 
 **Wenn die Spieler alles über den Haufen werfen, darfst du kurz umräumen** (Denny, 2026-10-29: „sorry leute ich muss
 ma hier kurz denken und umräumen“). Ist eine Wendung so groß, dass eine schnelle Antwort nur Unsinn würde (ein NPC

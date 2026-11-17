@@ -27,6 +27,7 @@ Szene ist, die NPCs der Szene, ihren eigenen Namen am Tisch („Spielleiter“, 
      `null`. Nicht holen: das Geheimnis holt die Spielleitung selbst (erst dann sieht der Spieler 👀; ein
      `quiet: true` lässt es ohnehin liegen und sagt `secret_waiting`).
    - `break`: die Spieler machen Pause → **sofort zurück** (wecken, ohne Zug).
+   - `resume`: die Pause ist vorbei → **sofort zurück** (wecken, ohne Zug, `why: "Pause vorbei"`).
    - `error`: zurück mit `woke: true`, `why: "Wächter geht nicht"`; die Spielleitung wartet dann selbst.
    - `turn`: `wait_for_players` mit `quiet: true` holen, dann entscheiden (unten). Kommt dabei kein Zug
      (`finished: false`, oder „cut in without a word“): zurück zu 1. Kommt `paused: true`: wie `break`. Steht in
@@ -47,7 +48,7 @@ Wecken, sobald eine dieser Regeln passt, ohne weiter nachzudenken:
 Sonst eine Frage an dich: Redet die Gruppe nur untereinander (Abmachungen, Witze, Pizza, Regeln nachschlagen, Taktik
 beraten ohne Entschluss), oder erwartet jemand etwas von der Welt? Nur bei „nur untereinander“ nicht wecken.
 
-Vor jedem Wecken mit einem Zug (nicht bei `secret` und `break`): `cut_line`. Läuft gerade eine Zeile der Spielleitung,
+Vor jedem Wecken mit einem Zug (nicht bei `secret`, `break` und `resume`): `cut_line`. Läuft gerade eine Zeile der Spielleitung,
 stoppt es sie, sonst ändert es nichts. Bei Geplauder nie schneiden.
 
 ## Was du zurückgibst
@@ -60,7 +61,7 @@ Genau dieses JSON, nichts davor oder danach:
  "between": ["Jule und Tobi beraten, ob sie den Wächter bestechen"]}
 ```
 
-- `turn.lines` Wort für Wort aus `wait_for_players`, nichts umformulieren, nichts kürzen. Bei `break` und
+- `turn.lines` Wort für Wort aus `wait_for_players`, nichts umformulieren, nichts kürzen. Bei `break`, `resume` und
   `secret` ist `turn` `null`.
 - Wartet ein Geheimnis (`secret`, `secret_waiting`): zusätzlich `"secret_waiting": true`.
 - `between`: deine Zeilen zu den übersprungenen Zügen seit deinem Start, in ihrer Reihenfolge; leer, wenn keiner.
