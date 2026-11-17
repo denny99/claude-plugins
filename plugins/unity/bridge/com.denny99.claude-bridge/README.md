@@ -49,5 +49,29 @@ Unity deletes `Temp/` when the editor closes, so nothing is left behind.
 - Screenshots: in Play mode `ScreenCapture.CaptureScreenshot` (Game view incl. UI; the Game view must be visible); in
   Edit mode the main camera is rendered into a texture (no overlay UI; HDRP/URP render through `Camera.Render`).
 - Test filters are regexes on full test names (`Filter.groupNames`), several separated by `;`.
-- Untested in CI: this package was written without a Unity compiler at hand. If it fails to compile on your Unity
-  version, the console shows the error; please report it.
+- Console entries carry a `seq` that only grows during an editor session (also across `clear-console` and domain
+  reloads), so "everything after seq N" stays valid. Logs written by other `[InitializeOnLoad]` static constructors
+  during a reload can run before the bridge subscribes and are then missing from `console.json` (Editor.log has them).
+- `play` answers with an error while scripts do not compile (Unity would refuse Play mode silently).
+- `tests.json` is rewritten after every test, so a PlayMode run keeps its results across the Play mode domain reload.
+  A run still marked `running` that this editor session did not start (editor killed or crashed mid-run) is set to
+  `error` when the bridge starts. Unity 6 also wipes `Temp/` on the next start. While the editor stays down the file
+  keeps saying `running`; the plugin should read that together with a stale heartbeat as an aborted run.
+- EditMode tests run against the last successfully compiled assemblies even while the current scripts have errors.
+- Asset import worker processes (Unity 6 runs them by default) also load this package; the bridge stays off in them.
+
+## Verified
+
+On Unity 6000.6.7f1, macOS, built-in render pipeline, editor in `-batchmode` (no `-nographics`), driven through the
+file protocol: compiles without warnings; heartbeat every 1 s; `refresh` → `compile.json` with the CS error, and clean
+again after the fix; console capture across domain reloads; `clear-console` (native console emptied too); EditMode run
+with a filter (pass + fail); PlayMode run including the domain reload; `play`/`pause`/`stop`; screenshots in Edit mode
+(`Camera.Render`) and Play mode (`ScreenCapture`, works in batchmode too); `open-scene`; `select` (and its error for a missing asset); stale
+`running` test state.
+Mono 6.13 on macOS: `File.Replace` over an existing file is an atomic rename (3000 replaces under a concurrent reader:
+no missing or partial reads, no leftover temp files); `File.Move` onto an existing file throws and has no `overwrite`
+overload, hence Replace-or-Move.
+
+Untested: HDRP/URP camera rendering for Edit-mode screenshots, Windows file locking (virus scanners, indexers; the
+writes retry), Unity versions other than 6000.6 (the 6000.3.24f1 install on the test machine had no editor binary),
+and how `select`'s ping looks in a visible Project window.

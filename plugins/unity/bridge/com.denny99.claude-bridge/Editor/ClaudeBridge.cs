@@ -37,6 +37,7 @@ namespace Denny99.ClaudeBridge
         static double nextFlush;
         static double nextCleanup;
         static bool consoleDirty;
+        static int lastSeq; // monotonic for the editor session, also across clear-console and domain reloads
         static readonly object consoleLock = new object();
         static List<ConsoleEntry> console = new List<ConsoleEntry>();
         static readonly List<CompileMessage> pendingMessages = new List<CompileMessage>();
@@ -48,6 +49,10 @@ namespace Denny99.ClaudeBridge
 
         static ClaudeBridge()
         {
+            // Asset import worker processes (Unity 2020.2+, always on in Unity 6) load editor assemblies and run
+            // [InitializeOnLoad] too, in the same project folder. Without this guard every worker writes its own
+            // heartbeat, flushes its empty console over ours on each of its reloads and could steal commands.
+            if (AssetDatabase.IsAssetImportWorkerProcess()) return;
             try
             {
                 Directory.CreateDirectory(Dir);
@@ -190,6 +195,8 @@ namespace Denny99.ClaudeBridge
                     AssetDatabase.Refresh(ImportAssetOptions.Default);
                     break;
                 case "play":
+                    // Unity refuses Play mode silently (a console line only) while scripts do not compile.
+                    if (EditorUtility.scriptCompilationFailed) throw new InvalidOperationException("Scripts have compile errors; fix them before entering Play mode.");
                     Answer(new Result { id = c.id, ok = true });
                     EditorApplication.isPlaying = true;
                     break;
@@ -221,8 +228,12 @@ namespace Denny99.ClaudeBridge
                     Answer(new Result { id = c.id, ok = true, path = c.path });
                     break;
                 case "clear-console":
-                    var logEntries = Type.GetType("UnityEditor.LogEntries, UnityEditor");
-                    logEntries?.GetMethod("Clear")?.Invoke(null, null);
+                    // Internal API (verified on 6000.6): looked up next to EditorApplication rather than by assembly name,
+                    // which has moved between Unity versions; a missing method is reported instead of ignored.
+                    var logEntries = typeof(EditorApplication).Assembly.GetType("UnityEditor.LogEntries");
+                    var clear = logEntries?.GetMethod("Clear", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                    if (clear == null) throw new MissingMethodException("UnityEditor.LogEntries.Clear not found in this Unity version.");
+                    clear.Invoke(null, null);
                     lock (consoleLock) console.Clear();
                     consoleDirty = true;
                     Answer(new Result { id = c.id, ok = true });
@@ -247,7 +258,8 @@ namespace Denny99.ClaudeBridge
                 ScreenCapture.CaptureScreenshot(path);
                 shotId = c.id;
                 shotPath = path;
-                shotDeadline = EditorApplication.timeSinceStartup + 10;
+                // Below the plugin's 10 s command timeout, so it gets this error instead of a timeout.
+                shotDeadline = EditorApplication.timeSinceStartup + 7;
                 return;
             }
             // Edit mode: render the main camera into a texture (no overlay UI).
@@ -360,9 +372,7 @@ namespace Denny99.ClaudeBridge
         {
             lock (consoleLock)
             {
-                var seq = 0;
-                if (console.Count > 0) seq = console[console.Count - 1].seq;
-                console.Add(new ConsoleEntry { seq = seq + 1, type = type.ToString(), message = message, stack = stack, time = Now() });
+                console.Add(new ConsoleEntry { seq = ++lastSeq, type = type.ToString(), message = message, stack = stack, time = Now() });
                 if (console.Count > MaxConsole) console.RemoveRange(0, console.Count - MaxConsole);
                 consoleDirty = true;
             }
@@ -371,22 +381,31 @@ namespace Denny99.ClaudeBridge
         static void FlushConsole()
         {
             string json;
+            int seq;
             lock (consoleLock)
             {
                 json = JsonUtility.ToJson(new ConsoleFile { entries = new List<ConsoleEntry>(console) });
                 consoleDirty = false;
+                seq = lastSeq;
             }
+            SessionState.SetInt(ConsoleSeqKey, seq);
             WriteAtomic("console.json", json);
         }
 
         static void RestoreConsole()
         {
+            lastSeq = SessionState.GetInt(ConsoleSeqKey, 0);
             try
             {
                 var file = Path.Combine(Dir, "console.json");
                 if (!File.Exists(file)) return;
                 var restored = JsonUtility.FromJson<ConsoleFile>(File.ReadAllText(file));
-                if (restored?.entries != null) lock (consoleLock) console = restored.entries;
+                if (restored?.entries != null)
+                    lock (consoleLock)
+                    {
+                        console = restored.entries;
+                        foreach (var e in console) lastSeq = Math.Max(lastSeq, e.seq);
+                    }
             }
             catch
             {

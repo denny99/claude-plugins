@@ -38,6 +38,11 @@ namespace Denny99.ClaudeBridge
         static TestRun current = new TestRun();
         static TestRunnerApi api;
 
+        // The run id lives in SessionState too: it survives a domain reload (PlayMode run) but not an editor restart.
+        // A tests.json that says "running" for a run this editor session never started is left over from a killed or
+        // crashed editor and is marked as an error on startup.
+        const string RunKey = "ClaudeBridge.testRunId";
+
         class Callbacks : ICallbacks
         {
             public void RunStarted(ITestAdaptor testsToRun)
@@ -51,6 +56,7 @@ namespace Denny99.ClaudeBridge
                 if (current.state != "running") return;
                 current.state = "done";
                 current.finishedAt = ClaudeBridge.Now();
+                SessionState.EraseString(RunKey);
                 Save();
             }
 
@@ -84,6 +90,13 @@ namespace Denny99.ClaudeBridge
             {
                 current = new TestRun();
             }
+            if (current.state == "running" && SessionState.GetString(RunKey, "") != current.runId)
+            {
+                current.state = "error";
+                current.error = "The editor was closed or crashed during the run; results are incomplete.";
+                current.finishedAt = ClaudeBridge.Now();
+                Save();
+            }
             api = ScriptableObject.CreateInstance<TestRunnerApi>();
             api.RegisterCallbacks(new Callbacks());
         }
@@ -100,6 +113,7 @@ namespace Denny99.ClaudeBridge
                 mode = testMode == TestMode.PlayMode ? "PlayMode" : "EditMode",
                 filter = filter,
             };
+            SessionState.SetString(RunKey, current.runId);
             Save();
             var f = new Filter { testMode = testMode };
             if (!string.IsNullOrEmpty(filter))
@@ -117,6 +131,7 @@ namespace Denny99.ClaudeBridge
             {
                 current.state = "error";
                 current.error = e.Message;
+                SessionState.EraseString(RunKey);
                 Save();
             }
             return current.runId;
