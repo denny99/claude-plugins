@@ -1,0 +1,322 @@
+/**
+ * Reading a Bash command line well enough for two guards (best effort, never a full shell parser):
+ * - `git commit` while a "restore before commit" file is modified,
+ * - moving/deleting a Unity asset under Assets/ without its `.meta`.
+ * Pure: the hook supplies what it read from git and the disk.
+ */
+import { shQuote } from './shell'
+
+export interface Segment {
+  /** The words, quotes removed. */
+  words: string[]
+  /** Where this segment sits in the original line (to splice a corrected one in). */
+  start: number
+  end: number
+  /** The directory of the last `cd <dir>` earlier in the same line, if any. */
+  cd?: string
+}
+
+const OPS = ['&&', '||', ';', '|', '&', '\n']
+
+/** Splits a command line into simple commands at `&&`, `||`, `;`, `|`, `&` and newlines; quotes respected. */
+export function splitCommand(line: string): Segment[] {
+  const out: Segment[] = []
+  let words: string[] = []
+  let word = ''
+  let inWord = false
+  let start = 0
+  let cd: string | undefined
+  const endWord = () => {
+    if (inWord) words.push(word)
+    word = ''
+    inWord = false
+  }
+  const endSegment = (end: number) => {
+    endWord()
+    if (words.length) {
+      out.push({ words, start, end, ...(cd ? { cd } : {}) })
+      if (/^(cd|pushd|Set-Location)$/i.test(words[0] ?? '') && words[1]) cd = words[1]
+    }
+    words = []
+  }
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i] ?? ''
+    const op = OPS.find(o => line.startsWith(o, i))
+    if (op) {
+      endSegment(i)
+      i += op.length - 1
+      start = i + 1
+      continue
+    }
+    if (c === ' ' || c === '\t') {
+      endWord()
+      continue
+    }
+    if (c === "'") {
+      const close = line.indexOf("'", i + 1)
+      const to = close < 0 ? line.length : close
+      word += line.slice(i + 1, to)
+      inWord = true
+      i = to
+      continue
+    }
+    if (c === '"') {
+      inWord = true
+      for (i++; i < line.length && line[i] !== '"'; i++) {
+        const d = line[i] ?? ''
+        if (d === '\\' && /["\\$`]/.test(line[i + 1] ?? '')) word += line[++i] ?? ''
+        else word += d
+      }
+      continue
+    }
+    // A backslash escapes only shell-special characters; elsewhere it is a Windows path separator.
+    if (c === '\\' && /[ '"\\;&|$`()]/.test(line[i + 1] ?? '')) {
+      word += line[++i] ?? ''
+      inWord = true
+      continue
+    }
+    word += c
+    inWord = true
+  }
+  endSegment(line.length)
+  return out
+}
+
+/** The words after leading `VAR=value` assignments and `sudo`/`command`/`exec`. */
+function commandWords(words: string[]): string[] {
+  let i = 0
+  while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i] ?? '')) i++
+  while (i < words.length && /^(sudo|command|exec|nohup|time)$/.test(words[i] ?? '')) i++
+  return words.slice(i)
+}
+
+const isGit = (w: string | undefined) => !!w && /(^|[\\/])git(\.exe)?$/i.test(w)
+
+/** `git [global options] <sub> …` → the subcommand, its args and a `-C` dir. */
+export function gitInvocation(words: string[]): { sub: string; args: string[]; dir?: string } | undefined {
+  const w = commandWords(words)
+  if (!isGit(w[0])) return undefined
+  let dir: string | undefined
+  let i = 1
+  while (i < w.length) {
+    const a = w[i] ?? ''
+    if (a === '-C') {
+      dir = dir ? `${dir}/${w[i + 1] ?? ''}` : w[i + 1]
+      i += 2
+    } else if (a === '-c' || a === '--git-dir' || a === '--work-tree' || a === '--namespace') i += 2
+    else if (a.startsWith('-')) i++
+    else break
+  }
+  const sub = w[i]
+  return sub ? { sub, args: w.slice(i + 1), ...(dir ? { dir } : {}) } : undefined
+}
+
+/** Every `git commit` in the line, with the directory it runs in (`-C`, else an earlier `cd`). */
+export function gitCommits(line: string): { dir?: string }[] {
+  const out: { dir?: string }[] = []
+  for (const s of splitCommand(line)) {
+    const g = gitInvocation(s.words)
+    if (g?.sub !== 'commit') continue
+    const dir = g.dir ?? s.cd
+    out.push(dir ? { dir } : {})
+  }
+  return out
+}
+
+/** One `git status --porcelain` line → status + path (renames: the new path). */
+export function parsePorcelain(text: string): { staged: boolean; path: string }[] {
+  const out: { staged: boolean; path: string }[] = []
+  for (const line of text.split(/\r?\n/)) {
+    if (line.length < 4 || line.startsWith('??') || line.startsWith('!!')) continue
+    const x = line[0] ?? ' '
+    let path = line.slice(3)
+    const arrow = path.indexOf(' -> ')
+    if (arrow >= 0) path = path.slice(arrow + 4)
+    out.push({ staged: x !== ' ', path: path.replace(/^"|"$/g, '') })
+  }
+  return out
+}
+
+/** The deny reason for a commit while restore-before-commit files are modified, or undefined. */
+export function commitReason(modified: { staged: boolean; path: string }[], gitDir?: string): string | undefined {
+  if (!modified.length) return undefined
+  const git = gitDir ? `git -C ${shQuote(gitDir)}` : 'git'
+  const fix = modified.map(m => `${git} checkout ${m.staged ? 'HEAD ' : ''}-- ${shQuote(m.path)}`)
+  return [
+    `Unity: ${modified.map(m => m.path).join(', ')} ${modified.length > 1 ? 'are' : 'is'} modified and listed under restoreBeforeCommit in .claude/unity.json (it churns locally and must not land in a commit).`,
+    `Restore it first, then commit again:`,
+    ...fix.map(f => `  ${f}`),
+  ].join('\n')
+}
+
+// --- .meta guard ---
+
+type Style = 'posix' | 'git' | 'cmd' | 'ps'
+
+export interface FileOp {
+  op: 'move' | 'remove'
+  style: Style
+  segment: Segment
+  /** Command words before the paths (incl. flags), e.g. `git mv -f`. */
+  head: string[]
+  sources: string[]
+  dest?: string
+  /** `mv -t dir` form. */
+  targetDir?: boolean
+}
+
+/** A move/remove in one segment: mv/rm, git mv/rm, cmd move/del/erase, PowerShell Move-Item/Remove-Item. */
+export function fileOp(segment: Segment): FileOp | undefined {
+  const w = commandWords(segment.words)
+  const cmd = (w[0] ?? '').replace(/^.*[\\/]/, '')
+  const g = gitInvocation(segment.words)
+  if (g && (g.sub === 'mv' || g.sub === 'rm')) {
+    const head = w.slice(0, w.indexOf(g.sub) + 1)
+    return posixOp(g.sub === 'mv' ? 'move' : 'remove', 'git', segment, head, g.args)
+  }
+  if (cmd === 'mv' || cmd === 'rm')
+    return posixOp(cmd === 'mv' ? 'move' : 'remove', 'posix', segment, [w[0] ?? cmd], w.slice(1))
+  const lower = cmd.toLowerCase()
+  if (lower === 'move' || lower === 'del' || lower === 'erase') {
+    const flags = w.slice(1).filter(a => /^\/-?[A-Za-z]/.test(a) && a.length <= 3)
+    const paths = w.slice(1).filter(a => !flags.includes(a))
+    const head = [w[0] ?? cmd, ...flags]
+    if (lower === 'move')
+      return paths.length >= 2
+        ? { op: 'move', style: 'cmd', segment, head, sources: paths.slice(0, -1), dest: paths[paths.length - 1] }
+        : undefined
+    return paths.length ? { op: 'remove', style: 'cmd', segment, head, sources: paths } : undefined
+  }
+  if (/^(move-item|mi|remove-item|ri|del|erase)$/i.test(cmd)) return psOp(/^(move-item|mi)$/i.test(cmd), segment, w)
+  return undefined
+}
+
+function posixOp(op: FileOp['op'], style: Style, segment: Segment, head: string[], args: string[]): FileOp | undefined {
+  const flags: string[] = []
+  const paths: string[] = []
+  let target: string | undefined
+  let ended = false
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i] ?? ''
+    if (!ended && a === '--') ended = true
+    else if (!ended && (a === '-t' || a === '--target-directory')) target = args[++i]
+    else if (!ended && a.startsWith('--target-directory=')) target = a.slice('--target-directory='.length)
+    else if (!ended && a.startsWith('-') && a !== '-') flags.push(a)
+    else paths.push(a)
+  }
+  const h = [...head, ...flags]
+  if (op === 'remove') return paths.length ? { op, style, segment, head: h, sources: paths } : undefined
+  if (target)
+    return paths.length ? { op, style, segment, head: h, sources: paths, dest: target, targetDir: true } : undefined
+  if (paths.length < 2) return undefined
+  return { op, style, segment, head: h, sources: paths.slice(0, -1), dest: paths[paths.length - 1] }
+}
+
+function psOp(move: boolean, segment: Segment, w: string[]): FileOp | undefined {
+  const flags: string[] = []
+  const positional: string[] = []
+  let path: string[] | undefined
+  let dest: string | undefined
+  const list = (v: string | undefined) =>
+    (v ?? '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean)
+  for (let i = 1; i < w.length; i++) {
+    const a = w[i] ?? ''
+    if (/^-(Path|LiteralPath|PSPath)$/i.test(a)) path = list(w[++i])
+    else if (/^-Destination$/i.test(a)) dest = w[++i]
+    else if (a.startsWith('-')) flags.push(a)
+    else positional.push(a)
+  }
+  const sources = path ?? list(positional.shift())
+  if (move) dest = dest ?? positional.shift()
+  const head = [w[0] ?? '', ...flags]
+  if (!sources.length || (move && !dest)) return undefined
+  return { op: move ? 'move' : 'remove', style: 'ps', segment, head, sources, ...(move ? { dest } : {}) }
+}
+
+const slash = (p: string) => p.replace(/\\/g, '/')
+const trimSlash = (p: string) => p.replace(/[\\/]+$/, '')
+
+/** A path under a Unity `Assets/` folder that has a `.meta` of its own (not a .meta, no wildcard). */
+export function isAssetPath(p: string): boolean {
+  const n = trimSlash(slash(p))
+  return /(^|\/)Assets\/./.test(n) && !/\.meta$/i.test(n) && !/[*?[\]]/.test(n)
+}
+
+/** Sources of the op whose `.meta` is not named by any move/remove in the same command line (`named`). */
+export function missingMetas(op: FileOp, named?: Set<string>): string[] {
+  const all = named ?? new Set(op.sources.map(key))
+  return op.sources.filter(s => isAssetPath(s) && !all.has(`${key(s)}.meta`))
+}
+
+const key = (p: string) => trimSlash(slash(p)).toLowerCase()
+
+function quoteFor(style: Style, word: string): string {
+  if (style === 'posix' || style === 'git') return shQuote(word)
+  return /[\s,;'"&()]/.test(word) ? `"${word.replace(/"/g, '""')}"` : word
+}
+
+/** The command for one op with the given `.meta` files added. */
+export function correctedOp(op: FileOp, missing: string[]): string {
+  const q = (w: string) => quoteFor(op.style, w)
+  const head = op.head.map(q).join(' ')
+  const meta = (p: string) => `${trimSlash(p)}.meta`
+  const sep = op.style === 'ps' ? '; ' : ' && '
+  if (op.op === 'remove') {
+    if (op.style === 'ps')
+      return [op.sources, missing.map(meta)]
+        .flat()
+        .map(p => `${head} ${q(p)}`)
+        .join(sep)
+    return `${head} ${[...op.sources, ...missing.map(meta)].map(q).join(' ')}`
+  }
+  const dest = op.dest ?? ''
+  const intoDir = op.targetDir || op.sources.length > 1 || /[\\/]$/.test(dest)
+  if (op.targetDir) return `${head} -t ${q(dest)} ${[...op.sources, ...missing.map(meta)].map(q).join(' ')}`
+  if (intoDir && (op.style === 'posix' || op.style === 'git'))
+    return `${head} ${[...op.sources, ...missing.map(meta), dest].map(q).join(' ')}`
+  // Rename (or a one-source move in cmd/PowerShell): move the .meta beside it under the matching name.
+  const lines = [`${head} ${op.sources.map(q).join(' ')} ${q(dest)}`]
+  for (const m of missing) lines.push(`${head} ${q(meta(m))} ${q(intoDir ? dest : meta(dest))}`)
+  return lines.join(sep)
+}
+
+export interface MetaFinding {
+  op: FileOp
+  missing: string[]
+}
+
+/** Every move/remove of an asset under Assets/ without its `.meta` in the same command. */
+export function metaFindings(line: string): MetaFinding[] {
+  const ops = splitCommand(line)
+    .map(fileOp)
+    .filter((o): o is FileOp => !!o)
+  const named = new Set(ops.flatMap(o => o.sources.map(key)))
+  const out: MetaFinding[] = []
+  for (const op of ops) {
+    const missing = missingMetas(op, named)
+    if (missing.length) out.push({ op, missing })
+  }
+  return out
+}
+
+/** The deny reason with the corrected full command (each faulty segment replaced). */
+export function metaReason(line: string, findings: MetaFinding[]): string | undefined {
+  if (!findings.length) return undefined
+  let fixed = line
+  for (const f of [...findings].sort((a, b) => b.op.segment.start - a.op.segment.start)) {
+    const raw = line.slice(f.op.segment.start, f.op.segment.end)
+    const lead = raw.length - raw.trimStart().length
+    const trail = raw.length - raw.trimEnd().length
+    fixed = `${fixed.slice(0, f.op.segment.start + lead)}${correctedOp(f.op, f.missing)}${fixed.slice(f.op.segment.end - trail)}`
+  }
+  const files = findings.flatMap(f => f.missing)
+  const verb = findings.every(f => f.op.op === 'remove') ? 'deleted' : 'moved'
+  return [
+    `Unity: ${files.join(', ')} ${verb} without ${files.length > 1 ? 'their' : 'its'} .meta. The .meta holds the asset's GUID; without it Unity re-imports under a new GUID and every scene/prefab reference to it breaks (or an orphaned .meta stays behind).`,
+    'Run this instead:',
+    `  ${fixed}`,
+  ].join('\n')
+}

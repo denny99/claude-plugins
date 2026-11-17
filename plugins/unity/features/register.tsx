@@ -4,11 +4,15 @@ import type { EngineInterface, On } from 'claude-code'
 import { createHost } from '../lib/host'
 import { isAbsolute, join, relative } from '../lib/path'
 import { formatMessage, isScriptFile, splitFilter, type ProjectConfig } from '../lib/unity'
+import { bashVerdictReason } from './bash'
 import { editNotes, metaCandidates } from './guards'
 import { draftConfig, draftJson } from './init'
 import { BRIDGE_GIT_URL, BRIDGE_README, openPane, PANE_ID, renderPane } from './pane'
 import {
+  affectedTests,
+  batchTarget,
   bridgeCommand,
+  createWorktree,
   compileGate,
   configOf,
   ensureModel,
@@ -53,6 +57,25 @@ const TOOLS: { name: string; description: string; inputSchema?: Record<string, u
     },
   },
   {
+    name: 'unity_affected_tests',
+    description:
+      'Narrow-test picker. Reads the changed files (git diff against HEAD + untracked), maps them to the test areas of .claude/unity.json / the code map and runs only those areas (`run: false` only lists them). Also says when the full suite is due (commits since the last full run ≥ fullSuiteEvery).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        mode: { type: 'string', enum: ['EditMode', 'PlayMode'] },
+        run: { type: 'boolean' },
+        waitSeconds: { type: 'number' },
+      },
+    },
+  },
+  {
+    name: 'unity_worktree',
+    description:
+      'Writes outside the editor: `git worktree add <worktreeDir>/<name>` (new branch <name> from HEAD), then copies Library/ copy-on-write in the background. When the copy ends, batchmode runs (tests, compile check, build, batch custom jobs) go to the worktree instead of the checkout someone plays in.',
+    inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+  },
+  {
     name: 'unity_test_results',
     description: 'Read-only. The current/last Unity test run: counts and failures, newly red first.',
   },
@@ -75,6 +98,12 @@ const COMMANDS = [
   },
   { name: 'unity-play', description: 'Toggle Play mode in the open Unity editor' },
   { name: 'unity-screenshot', description: 'Capture the Unity Game view and show its path' },
+  {
+    name: 'unity-affected',
+    description: 'Run only the test areas the changed files touch',
+    argumentHint: '[play]',
+  },
+  { name: 'unity-worktree', description: 'Add a worktree for batch runs (Library copied)', argumentHint: '<name>' },
   { name: 'unity-init', description: 'Draft .claude/unity.json for this project (shown for review, not written)' },
 ]
 
@@ -139,6 +168,18 @@ function statusText(m: Awaited<ReturnType<typeof readModel>>): string {
       : `Bridge: ${m.bridge.why === 'stale' ? 'not answering' : 'not running'} (install: Package Manager → Add package from git URL ${BRIDGE_GIT_URL})`,
     `Lock file: ${m.lock}${m.lock === 'held' ? ' — an editor has the project open; no batchmode here' : ''}`,
   ]
+  if (m.worktree)
+    lines.push(
+      `Worktree ${m.worktree.name}: ${m.worktree.status}${m.worktree.status === 'ready' ? ` — batch runs go to ${batchTarget(m).root}` : ''}${m.worktree.error ? ` (${m.worktree.error})` : ''}`,
+    )
+  if (m.landings?.since)
+    lines.push(`Commits since the last full test run: ${m.landings.count} (reminder at ${m.landings.every})`)
+  const failed = [...m.jobs].reverse().find(j => j.failLog?.length)
+  if (failed)
+    lines.push(
+      `Last failed job "${failed.name}", last log lines:`,
+      ...(failed.failLog ?? []).slice(-15).map(l => `  ${l}`),
+    )
   if (m.compile) {
     const errs = m.compile.messages.filter(x => x.severity === 'error')
     lines.push(
@@ -167,7 +208,15 @@ export function registerUnity(on: On, options: Options): void {
     return next(e)
   })
 
-  // --- edit guards + compile gate (Edit / Write only: never hook Bash) ---
+  // --- Bash guards: verdicts only (tool.check), never tool.call/tool.run on Bash ---
+  on('tool.check', { tool: 'Bash' }, async ($, e, next) => {
+    const command = (e.input as { command?: unknown } | undefined)?.command
+    if (typeof command !== 'string' || !command.trim()) return next(e)
+    const reason = await bashVerdictReason($, options, command)
+    return reason ? { decision: 'deny' as const, reason } : next(e)
+  }).catch(($, e, next) => next(e))
+
+  // --- edit guards + compile gate (Edit / Write only: never hook Bash calls) ---
   on('tool.call', { tool: 'Edit' }, async ($, e, next) => {
     const ran = await next(e)
     if (ran.deny !== undefined || ran.isError) return ran
@@ -226,6 +275,22 @@ export function registerUnity(on: On, options: Options): void {
     return { result: await runTests($, options, mode, filter, Math.max(0, input.waitSeconds ?? 120) * 1000) }
   }).catch(() => ({ deny: 'unity: run tests failed.' }))
 
+  on('tool.run', { tool: 'mcp__unity__unity_affected_tests' }, async ($, e) => {
+    const input = e as unknown as { mode?: string; run?: boolean; waitSeconds?: number }
+    return {
+      result: await affectedTests($, options, {
+        mode: input.mode === 'PlayMode' ? 'PlayMode' : 'EditMode',
+        run: input.run !== false,
+        waitMs: Math.max(0, input.waitSeconds ?? 120) * 1000,
+      }),
+    }
+  }).catch(() => ({ deny: 'unity: affected tests failed.' }))
+
+  on('tool.run', { tool: 'mcp__unity__unity_worktree' }, async ($, e) => {
+    const input = e as unknown as { name?: string }
+    return { result: await createWorktree($, options, String(input.name ?? '').trim()) }
+  }).catch(() => ({ deny: 'unity: worktree failed.' }))
+
   on('tool.run', { tool: 'mcp__unity__unity_test_results' }, async $ => ({
     result: await testsText($, options),
   })).catch(() => ({
@@ -263,7 +328,7 @@ export function registerUnity(on: On, options: Options): void {
   on('command.run', { command: 'unity' }, async $ => {
     await openPane($, options)
     return { text: 'Unity pane opened.' }
-  })
+  }).catch(() => ({ text: 'unity: opening the pane failed.' }))
 
   on('command.run', { command: 'unity-test' }, async ($, e) => {
     const words = (e.args ?? '').trim().split(/\s+/).filter(Boolean)
@@ -274,18 +339,30 @@ export function registerUnity(on: On, options: Options): void {
     await openPane($, options)
     const text = await runTests($, options, mode, filter, 0)
     return { text }
-  })
+  }).catch(() => ({ text: 'unity: starting the tests failed.' }))
+
+  on('command.run', { command: 'unity-affected' }, async ($, e) => {
+    const mode = (e.args ?? '').trim().toLowerCase().startsWith('play') ? 'PlayMode' : 'EditMode'
+    await openPane($, options)
+    return { text: await affectedTests($, options, { mode, run: true, waitMs: 0 }) }
+  }).catch(() => ({ text: 'unity: picking the affected tests failed.' }))
+
+  on('command.run', { command: 'unity-worktree' }, async ($, e) => {
+    const name = (e.args ?? '').trim()
+    if (!name) return { text: 'Usage: /unity-worktree <name>' }
+    return { text: await createWorktree($, options, name) }
+  }).catch(() => ({ text: 'unity: adding the worktree failed.' }))
 
   on('command.run', { command: 'unity-play' }, async $ => {
     const m = await refreshModel($, options)
     const r = await bridgeCommand($, options, { cmd: m.bridge.isPlaying ? 'stop' : 'play' })
     return { text: r.ok ? (m.bridge.isPlaying ? 'Stopped Play mode.' : 'Entered Play mode.') : r.error }
-  })
+  }).catch(() => ({ text: 'unity: toggling Play failed.' }))
 
   on('command.run', { command: 'unity-screenshot' }, async $ => {
     const shot = await screenshot($, options)
     return { text: 'error' in shot ? `No screenshot: ${shot.error}` : `Screenshot saved: ${shot.path}` }
-  })
+  }).catch(() => ({ text: 'unity: screenshot failed.' }))
 
   on('command.run', { command: 'unity-init' }, async $ => {
     const m = await refreshModel($, options)
@@ -304,7 +381,7 @@ export function registerUnity(on: On, options: Options): void {
         `Keys: unityPath, projectDir, worktreeDir, editorEnv, tests.areas, filterDocs, bannedApis, restoreBeforeCommit, syncReminders, customJobs, playRestart, refreshWhilePlaying, watchdogMinutes, buildMethod, buildTarget. Bridge package: ${BRIDGE_README}`,
       ].join('\n'),
     }
-  })
+  }).catch(() => ({ text: 'unity: drafting the config failed.' }))
 
   // --- pane ---
   on('ui.render', { component: 'Pane', requestId: PANE_ID }, async ($, e) => renderPane($, e, options))

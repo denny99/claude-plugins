@@ -407,6 +407,8 @@ export interface TestFilterPreset {
   /** Unity test filter: a regex the TestRunnerApi matches against full test names (`groupNames`). */
   filter: string
   source: 'config' | 'docs'
+  /** Paths/globs (project- or session-relative) this area's tests cover: narrow-test picker. */
+  paths?: string[]
 }
 
 /**
@@ -441,6 +443,10 @@ export interface ProjectConfig {
   editorEnv?: Record<string, string>
   /** Test areas: name → Unity filter (regex on full names; several separated by `;`). */
   areas?: Record<string, string>
+  /** Area name → paths/globs its tests cover (narrow-test picker; else guessed from folder names). */
+  areaPaths?: Record<string, string[]>
+  /** Remind to run the full suite after this many commits since the last full run (default 5). */
+  fullSuiteEvery?: number
   filterDocs?: string[]
   bannedApis?: { glob: string; patterns: string[] }[]
   restoreBeforeCommit?: string[]
@@ -482,9 +488,19 @@ export function parseProjectConfig(text: string): ProjectConfig {
   }
   const env = strMap(raw.editorEnv)
   if (env) cfg.editorEnv = env
-  const tests = raw.tests as { areas?: unknown } | undefined
+  const tests = raw.tests as { areas?: unknown; paths?: unknown; fullSuiteEvery?: unknown } | undefined
   const areas = strMap(tests?.areas)
   if (areas) cfg.areas = areas
+  if (tests?.paths && typeof tests.paths === 'object' && !Array.isArray(tests.paths)) {
+    const ap = Object.fromEntries(
+      Object.entries(tests.paths as Record<string, unknown>)
+        .map(([k, v]) => [k, typeof v === 'string' ? [v] : (strList(v) ?? [])] as const)
+        .filter(([, v]) => v.length),
+    )
+    if (Object.keys(ap).length) cfg.areaPaths = ap
+  }
+  const every = raw.fullSuiteEvery ?? tests?.fullSuiteEvery
+  if (typeof every === 'number' && every > 0) cfg.fullSuiteEvery = Math.floor(every)
   const docs = strList(raw.filterDocs)
   if (docs) cfg.filterDocs = docs
   const restore = strList(raw.restoreBeforeCommit)
@@ -541,6 +557,7 @@ export async function loadProjectConfig(
     name,
     filter,
     source: 'config' as const,
+    ...(config.areaPaths?.[name] ? { paths: config.areaPaths[name] } : {}),
   }))
   // Docs are read only when the config names none of its own areas (best effort for unconfigured projects).
   if (!presets.length)
@@ -571,20 +588,21 @@ export function batchTestArgs(
   mode: 'EditMode' | 'PlayMode',
   resultsFile: string,
   filter?: string,
+  logFile = '-',
 ): string[] {
   const args = ['-batchmode', '-projectPath', project, '-runTests', '-testPlatform', mode, '-testResults', resultsFile]
   if (mode === 'EditMode') args.splice(1, 0, '-nographics')
   if (filter) args.push('-testFilter', filter)
-  return [...args, '-logFile', '-']
+  return [...args, '-logFile', logFile]
 }
 
 /** argv of a batchmode compile check (open, import, compile, quit; exit code ≠ 0 on compile errors). */
-export function batchCompileArgs(project: string): string[] {
-  return ['-batchmode', '-nographics', '-quit', '-projectPath', project, '-logFile', '-']
+export function batchCompileArgs(project: string, logFile = '-'): string[] {
+  return ['-batchmode', '-nographics', '-quit', '-projectPath', project, '-logFile', logFile]
 }
 
 /** argv of a batchmode build through the project's own static build method. */
-export function batchBuildArgs(project: string, method: string, target?: string): string[] {
+export function batchBuildArgs(project: string, method: string, target?: string, logFile = '-'): string[] {
   return [
     '-batchmode',
     '-nographics',
@@ -595,7 +613,7 @@ export function batchBuildArgs(project: string, method: string, target?: string)
     '-executeMethod',
     method,
     '-logFile',
-    '-',
+    logFile,
   ]
 }
 
@@ -618,6 +636,7 @@ export function toUnityFilter(filter: string): string {
 export function filtersFromDoc(markdown: string): TestFilterPreset[] {
   const out: TestFilterPreset[] = []
   const seen = new Set<string>()
+  const pending = new Map<string, string[]>()
   let heading = ''
   for (const line of markdown.split(/\r?\n/)) {
     const h = /^#{2,3}\s+(.+?)\s*$/.exec(line)
@@ -628,12 +647,20 @@ export function filtersFromDoc(markdown: string): TestFilterPreset[] {
         .trim()
       continue
     }
-    if (!heading || seen.has(heading)) continue
+    if (!heading) continue
+    const pathHits = [...line.matchAll(/`((?:Assets|Packages)\/[^`\s]+)`/g)].map(x => x[1] ?? '')
+    if (pathHits.length) {
+      const found = out.find(p => p.name === heading)
+      if (found) found.paths = [...new Set([...(found.paths ?? []), ...pathHits])]
+      else pending.set(heading, [...new Set([...(pending.get(heading) ?? []), ...pathHits])])
+    }
+    if (seen.has(heading)) continue
     const m = /[Ff]ilter\s*:?\s*`([^`]+)`/.exec(line)
     const raw = (m?.[1] ?? '').replace(/^--filter\s+/, '').replace(/^"|"$/g, '')
     if (!raw) continue
     seen.add(heading)
-    out.push({ name: heading, filter: toUnityFilter(raw), source: 'docs' })
+    const paths = pending.get(heading)
+    out.push({ name: heading, filter: toUnityFilter(raw), source: 'docs', ...(paths ? { paths } : {}) })
   }
   return out
 }

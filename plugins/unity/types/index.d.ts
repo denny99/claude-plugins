@@ -48,7 +48,7 @@ export type ModelConsoleEntry = {
 export type ModelJob = {
   key: string
   name: string
-  kind: 'tests' | 'compile' | 'build' | 'custom'
+  kind: 'tests' | 'compile' | 'build' | 'custom' | 'worktree'
   command: string
   status: 'running' | 'exited' | 'failed' | 'stopped' | 'denied' | 'timeout'
   startedAt: number
@@ -60,6 +60,14 @@ export type ModelJob = {
   mode?: 'EditMode' | 'PlayMode'
   tail: string[]
   error?: string
+  /** Unity's -logFile of a batchmode job (live tail + the failure view). */
+  logFile?: string
+  /** The last 60 lines of the log after a failed run. */
+  failLog?: string[]
+  /** A test run without a filter (records the full-suite commit when it passes). */
+  full?: boolean
+  /** The Unity project the job ran against (main checkout or worktree). */
+  root?: string
 }
 
 export type UnityModel = {
@@ -71,7 +79,7 @@ export type UnityModel = {
   configFound: boolean
   /** `.claude/unity.json` as parsed (lib/unity.ts ProjectConfig). */
   config: Record<string, unknown>
-  presets: { name: string; filter: string; source: 'config' | 'docs' }[]
+  presets: { name: string; filter: string; source: 'config' | 'docs'; paths?: string[] }[]
   lock: 'free' | 'held' | 'stale'
   bridge: {
     up: boolean
@@ -91,6 +99,23 @@ export type UnityModel = {
   filterInput: string
   jobs: ModelJob[]
   lastShot?: string
+  /** A worktree as the safe target for batch runs (ready once Library is copied). */
+  worktree?: {
+    name: string
+    path: string
+    projectRoot: string
+    status: 'copying' | 'ready' | 'failed'
+    jobKey?: string
+    error?: string
+  }
+  /** Lock state of the worktree's project (batch safety there). */
+  targetLock?: 'free' | 'held' | 'stale'
+  /** Bridge run id of a full-suite run in flight (recorded when it finishes green). */
+  fullPending?: string
+  /** Commits since the last recorded full test run. */
+  landings?: { count: number; every: number; since?: string }
+  /** The last narrow-test pick. */
+  affected?: { text: string; areas: string[]; at: number }
   busy?: string
   error?: string
 }

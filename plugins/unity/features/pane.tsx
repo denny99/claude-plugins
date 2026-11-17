@@ -5,7 +5,13 @@ import type { UnityModel } from '../types'
 import { batchAllowed, countResults, formatMessage, rankResults } from '../lib/unity'
 import { EmptyState, Header, kit, Line, LogBox, Row, Section, type Action, type Kit } from '../lib/ui'
 import {
+  affectedTests,
+  batchTarget,
   bridgeCommand,
+  createWorktree,
+  landingsLine,
+  refreshLandings,
+  useMainTarget,
   configOf,
   patchModel,
   readModel,
@@ -32,7 +38,7 @@ export const BRIDGE_README =
 
 export async function openPane($: EngineInterface, options: Options): Promise<void> {
   await $.ui.open({ id: PANE_ID, title: PANE_TITLE })
-  $.clock.after(0, () => void refreshModel($, options))
+  $.clock.after(0, () => void refreshModel($, options).then(() => refreshLandings($, options)))
 }
 
 /** Hands a problem to Claude as a prompt. */
@@ -85,7 +91,7 @@ export async function renderPane($: EngineInterface, e: RenderInput<'Pane'>, opt
       })}
       {m.error ? Line(k, `✗ ${m.error}`, { color: 'red' }) : null}
       {editorSection($, k, x, m, options)}
-      {targetSection(k, m)}
+      {targetSection($, k, m, options)}
       {compileSection($, k, m)}
       {m.bridge.up ? consoleSection($, k, m, options) : null}
       {testsSection($, k, x, m, options)}
@@ -166,9 +172,30 @@ function msg(r: { ok: boolean; error?: string }, okText: string): string {
   return r.ok ? okText : `Failed: ${r.error ?? ''}`
 }
 
-function targetSection(k: Kit, m: UnityModel): RenderElement {
-  const allowed = batchAllowed({ lock: m.lock, bridgeUp: m.bridge.up })
+function targetSection($: EngineInterface, k: Kit, m: UnityModel, options: Options): RenderElement {
+  const target = batchTarget(m)
+  const allowed = batchAllowed({ lock: target.lock, bridgeUp: target.bridgeUp })
   const cfg = configOf(m)
+  const wt = m.worktree
+  const actions: Action[] = []
+  if (!wt || wt.status === 'failed')
+    actions.push({
+      key: 'worktree-new',
+      label: 'Worktree',
+      onPress: run($, 'worktree', async () => {
+        const stamp = new Date(await $.clock.now()).toISOString().slice(0, 16).replace(/[-:T]/g, '')
+        return createWorktree($, options, `batch-${stamp}`)
+      }),
+    })
+  if (wt)
+    actions.push({
+      key: 'worktree-main',
+      label: 'Use main',
+      onPress: run($, 'main target', async () => {
+        await useMainTarget($)
+        return 'Batch runs go to the main checkout again.'
+      }),
+    })
   const editorState = m.bridge.up
     ? 'editor open'
     : m.lock === 'held'
@@ -180,13 +207,25 @@ function targetSection(k: Kit, m: UnityModel): RenderElement {
     key: 'target',
     title: 'Target',
     collapsible: true,
+    actions,
     children: [
       Row(k, {
         key: 'target-row',
         status: allowed.ok ? 'ok' : 'warning',
-        primary: `${m.project?.root ?? ''}`,
-        secondary: `${editorState} · batch runs ${allowed.ok ? 'allowed' : 'blocked'}`,
+        primary: target.worktree ? `${target.root} (worktree ${target.worktree})` : `${m.project?.root ?? ''}`,
+        secondary: target.worktree
+          ? `main checkout: ${editorState} · batch runs ${allowed.ok ? 'allowed' : 'blocked'} here`
+          : `${editorState} · batch runs ${allowed.ok ? 'allowed' : 'blocked'}`,
       }),
+      wt && wt.status !== 'ready'
+        ? Row(k, {
+            key: 'worktree-row',
+            status: wt.status === 'copying' ? 'running' : 'failed',
+            primary: `Worktree ${wt.name}: ${wt.status === 'copying' ? 'copying Library…' : (wt.error ?? 'failed')}`,
+            secondary: wt.path,
+            indent: 2,
+          })
+        : null,
       !allowed.ok ? Line(k, allowed.reason ?? '', { dim: true, indent: 2 }) : null,
       cfg.worktreeDir ? Line(k, `Worktrees for batch runs: ${cfg.worktreeDir}/`, { dim: true, indent: 2 }) : null,
       cfg.restoreBeforeCommit?.length
@@ -283,7 +322,9 @@ function testsSection($: EngineInterface, k: Kit, x: Extra, m: UnityModel, optio
   const t = m.tests
   const c = t ? countResults(t.results) : undefined
   const ranked = t ? rankResults(t.results, m.previous).filter(r => r.status === 'Failed') : []
-  const canRun = m.bridge.up || batchAllowed({ lock: m.lock, bridgeUp: false }).ok
+  const target = batchTarget(m)
+  const canRun = m.bridge.up || batchAllowed({ lock: target.lock, bridgeUp: false }).ok
+  const reminder = landingsLine(m)
   return Section(k, {
     key: 'tests',
     title: 'Tests',
@@ -292,9 +333,24 @@ function testsSection($: EngineInterface, k: Kit, x: Extra, m: UnityModel, optio
       ? [
           { key: 'edit-tests', label: 'EditMode', primary: true, onPress: start('EditMode') },
           { key: 'play-tests', label: 'PlayMode', onPress: start('PlayMode') },
+          {
+            key: 'affected-tests',
+            label: 'Affected',
+            onPress: run($, 'affected tests', () => affectedTests($, options, { run: true, waitMs: 0 })),
+          },
         ]
       : [],
     children: [
+      reminder ? Line(k, `⚠ ${reminder}`, { color: 'yellow' }) : null,
+      m.affected
+        ? Line(
+            k,
+            `Affected: ${m.affected.areas.length ? m.affected.areas.join(', ') : (m.affected.text.split('\n')[0] ?? '')}`,
+            {
+              dim: true,
+            },
+          )
+        : null,
       <Input
         key="filter"
         label="Filter"
@@ -347,7 +403,8 @@ function testsSection($: EngineInterface, k: Kit, x: Extra, m: UnityModel, optio
 
 function jobsSection($: EngineInterface, k: Kit, m: UnityModel, options: Options): RenderElement | null {
   const cfg = configOf(m)
-  const allowed = batchAllowed({ lock: m.lock, bridgeUp: m.bridge.up }).ok
+  const target = batchTarget(m)
+  const allowed = batchAllowed({ lock: target.lock, bridgeUp: target.bridgeUp }).ok
   const actions: Action[] = []
   if (allowed) {
     actions.push({
@@ -399,9 +456,15 @@ function jobsSection($: EngineInterface, k: Kit, m: UnityModel, options: Options
               : [],
         }),
       ),
-      latest[0] && latest[0].tail.length
-        ? LogBox(k, { key: 'job-log', title: `Log · ${latest[0].name}`, lines: latest[0].tail })
-        : null,
+      latest[0]?.status === 'failed' && latest[0].failLog?.length
+        ? LogBox(k, {
+            key: 'job-faillog',
+            title: `Last ${Math.min(60, latest[0].failLog.length)} log lines · ${latest[0].name}`,
+            lines: latest[0].failLog,
+          })
+        : latest[0] && latest[0].tail.length
+          ? LogBox(k, { key: 'job-log', title: `Log · ${latest[0].name}`, lines: latest[0].tail })
+          : null,
     ],
   })
 }

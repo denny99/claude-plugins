@@ -2,7 +2,9 @@
   "name": "unity",
   "version": "0.1.0",
   "description": "Unity inside Claude Code: compile gate after C# edits, editor console, EditMode/PlayMode tests, play/stop and Game view screenshots through a small editor bridge package, batchmode runs when no editor is open. Works with any Unity project on macOS and Windows.",
-  "author": { "name": "denny99" },
+  "author": {
+    "name": "denny99"
+  },
   "keywords": ["unity", "gamedev", "csharp", "tests", "editor", "mod"],
   "types": "./types/index.d.ts",
   "userConfig": {
@@ -29,6 +31,18 @@
       "title": "Unity editor path",
       "description": "Explicit Unity editor binary for batchmode runs. Empty: found through Unity Hub from ProjectVersion.txt.",
       "default": ""
+    },
+    "commitGuard": {
+      "type": "boolean",
+      "title": "Restore-before-commit guard",
+      "description": "Refuse a Bash `git commit` while a file listed under restoreBeforeCommit in .claude/unity.json is modified; the refusal names the `git checkout` to run first.",
+      "default": true
+    },
+    "metaGuard": {
+      "type": "boolean",
+      "title": ".meta guard",
+      "description": "Refuse a Bash mv/rm (git, cmd, PowerShell too) of an asset under Assets/ whose .meta is not part of the same command; the refusal shows the corrected command.",
+      "default": true
     }
   }
 }

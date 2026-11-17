@@ -1,8 +1,6 @@
 /**
  * Edit guards: notes appended to an Edit/Write result (never a block). Pure; the hook supplies what it read.
- *
- * Bash `mv`/`rm` of a .cs without its .meta is NOT covered: hooking Bash with tool.call/tool.run disables
- * run_in_background, and a tool.check verdict carries no text for the model. Only Edit/Write are watched.
+ * Bash moves/deletes without the .meta are refused in features/bash.ts (tool.check verdicts).
  */
 import { join, norm, relative } from '../lib/path'
 import { isSerializedAsset, matchesGlob, type ProjectConfig } from '../lib/unity'
