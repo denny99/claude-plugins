@@ -12,6 +12,7 @@ import {
   noteStudioStatus,
   renderDiscord,
   renderInterjections,
+  renderListener,
   STALE_TEXT,
 } from "./evening";
 import { applyLook } from "./look";
@@ -20,6 +21,7 @@ import {
   advance,
   bandParts,
   currentTurn,
+  isListenerMode,
   isLive,
   looksPrivate,
   parseOrder,
@@ -54,6 +56,8 @@ import type {
 } from "../types";
 
 type Obj = Record<string, unknown>;
+const obj = (v: unknown): Obj =>
+  v && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : {};
 
 /** The campaign's npcs and scenes, kept between table refreshes (only a person's Refresh reads them again). */
 let campaignCache: Obj | undefined;
@@ -235,8 +239,26 @@ export async function observe(
     }
     case "say_line": {
       await patchLive($, () => ({ saidAt: now, ...touch(input.from) }));
-      if (json.interrupted === true || json.held === true || json.unheard) {
-        const unheard = typeof json.unheard === "string" ? json.unheard : "";
+      // The Studio nests the cut under `table` (say_line's table part); older answers had it on top.
+      const cut = { ...json, ...obj(json.table) };
+      const unheardRaw = cut.unheard;
+      const unheard =
+        typeof unheardRaw === "string"
+          ? unheardRaw
+          : Array.isArray(unheardRaw)
+            ? unheardRaw.map(String).join(" ")
+            : "";
+      const listenerCut =
+        cut.interrupted === true &&
+        (isListenerMode(view) || /the listener cut/i.test(String(cut.note)));
+      if (listenerCut) {
+        notes.push(
+          `**The listener cut the line** — do nothing more at the table: wait for the listener's return (pnp-zuhoerer), then answer the turn it brings${unheard ? `; afterwards deliver what they did not hear if it still holds: "${truncate(unheard, 160)}"` : ""}.`,
+        );
+        await patchLive($, () => ({
+          warning: "listener cut the line: wait for its return",
+        }));
+      } else if (cut.interrupted === true || cut.held === true || unheardRaw) {
         notes.push(
           `**The players cut in** — answer them first; deliver later what they did not hear${unheard ? `: "${truncate(unheard, 160)}"` : ""}.`,
         );
@@ -306,6 +328,13 @@ export async function observe(
         notes.push(
           `**Screen share ended** for ${json.stream_ended.map(String).join(", ")}: ask them to share the players' window again.`,
         );
+      const mode =
+        input.listener === "haiku" || input.listener === "off"
+          ? String(input.listener)
+          : typeof json.listener === "string"
+            ? json.listener
+            : "";
+      if (mode && view) await setTable($, { ...view, listener: mode });
       if (input.action === "leave" && view?.speaker)
         notes.push("A line was still playing when the bot left.");
       break;
@@ -401,6 +430,8 @@ export async function watch(
   const r = (await next(e as never)) as Obj;
   try {
     if (r.deny) return r as never;
+    // The listener's own take (pnp-zuhoerer, a subagent, quiet): its turn reaches the GM with the listener's return.
+    if (tool === "wait_for_players" && (e as Obj)?.agentId) return r as never;
     const text = textOf(r.result ?? r);
     const notes = await observe($, tool, inputOf(e), text);
     if (await noteStale($, text))
@@ -602,7 +633,7 @@ export function registerTable(on: On): void {
     const live = await readLive($);
     const now = await $.clock.now();
     const band = bandParts(view, ini, live, now);
-    const ev = bandEvening(await readEvening($));
+    const ev = bandEvening(await readEvening($), isListenerMode(view));
     const { Box, Text } = $.ui.resolve(e);
     const width = Math.max(20, e.props.bodyColumns ?? 80);
     return (
@@ -611,7 +642,9 @@ export function registerTable(on: On): void {
         {band.silence > SILENCE_WARN_S ? (
           <Text color="yellow">{`· ${band.silence}s silent — filler?`}</Text>
         ) : null}
-        <Text color={ev.watching ? "green" : "yellow"}>{`· ${ev.watch}`}</Text>
+        <Text color={ev.watching ? "green" : "yellow"}>
+          {truncate(`· ${ev.watch}`, Math.floor(width * 0.4))}
+        </Text>
         {ev.stale ? <Text color="red">{`· ${ev.stale}`}</Text> : null}
         {band.warning ? (
           <Text color="red">
@@ -675,10 +708,18 @@ export function renderTable(
       : "",
     view.turnsWaiting ? `${view.turnsWaiting} turn(s) waiting` : "",
     view.paused ? "paused" : "",
+    isListenerMode(view) ? "listener on" : "",
   ].filter(Boolean);
   out.push(Line(k, status.join(" · "), { dim: true }));
   if (evening.stale) out.push(Line(k, `⚠ ${evening.stale}`, { color: "red" }));
-  if (isLive(view, ini))
+  if (isLive(view, ini) && isListenerMode(view)) {
+    const ev = bandEvening(evening, true);
+    out.push(
+      Line(k, `${ev.watching ? "●" : "○"} ${ev.watch}`, {
+        color: ev.watching ? "green" : "yellow",
+      }),
+    );
+  } else if (isLive(view, ini))
     out.push(
       Line(
         k,
@@ -898,6 +939,7 @@ export function renderTable(
     }),
   );
 
+  out.push(renderListener($, k, { evening, view, rules }));
   out.push(renderDiscord($, k, { evening, view, rules, now }));
 
   // Pause / end of the evening

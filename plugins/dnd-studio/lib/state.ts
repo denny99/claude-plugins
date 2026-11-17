@@ -42,7 +42,7 @@ const tabAtom = atom(
 const tableAtom = atom(
   { plugin: "dnd-studio", key: "table" } as const,
   null as TableView | null,
-  { shape: "table-1" },
+  { shape: "table-2" },
 );
 const iniAtom = atom(
   { plugin: "dnd-studio", key: "initiative" } as const,
@@ -209,7 +209,7 @@ const eveningAtom = atom(
   { plugin: "dnd-studio", key: "evening" } as const,
   EMPTY_EVENING,
   {
-    shape: "evening-1",
+    shape: "evening-2",
   },
 );
 export async function readEvening($: EngineInterface): Promise<EveningState> {

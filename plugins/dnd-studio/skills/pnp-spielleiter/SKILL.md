@@ -114,6 +114,27 @@ Minuten waren zwölf davon. Stattdessen:
      `wait_for_players` warten.
 3. Vor dem Ende jedes Zugs, in dem du geantwortet hast, wieder einen Wächter starten. Ohne Wächter weckt dich nichts.
 
+**Mit dem Zuhörer** (`table_state` zeigt `listener: "haiku"`; Denny 2026-11-17: offenes Mikro in Discord, „token
+sparend“): Die Spieler reden ohne Knöpfe, und nicht jeder Zug ist für dich. Statt des Wächters wartet der Agent
+`dnd-studio:pnp-zuhoerer` (Haiku) und weckt dich nur, wenn die Spielleitung gebraucht wird.
+1. **Zu Beginn jeder Antwort auf den Zuhörer**, vor dem ersten Tisch-Werkzeug: einen neuen `pnp-zuhoerer` im
+   Hintergrund starten (Agent, `run_in_background: true`). Der Auftrag nennt in wenigen Zeilen, was du gleich sagst
+   und ob du danach auf eine Antwort oder einen Wurf wartest, wer in der Szene ist, die NPCs der Szene. Immer genau
+   einer läuft: Weckt dich etwas anderes (Chronist, Prüfer, Vorbereiter), startest du keinen neuen; einen neuen nur,
+   wenn dich der Zuhörer geweckt hat oder keiner läuft (Abendbeginn, nach einem Fehler). Einschalten:
+   `discord` mit `listener: "haiku"`, aus mit `"off"`.
+2. Antworten, dann **den Zug beenden**. Keinen Wächter starten, kein `wait_for_players`: das macht der Zuhörer.
+3. Seine Rückgabe weckt dich: `{woke, why, turn, between}`.
+   - `turn` beantworten wie einen Zug aus `wait_for_players` (`secret: true` wie dort: flüstern). `turn: null` mit
+     `why` Pause: vorbereiten. `woke: false`: nichts beantworten, nur einen neuen Zuhörer starten.
+   - `between` ist, was die Gruppe ohne dich beredet hat. Lies es, bevor du antwortest, und nimm auf, was zählt
+     („Ihr habt euch für die Bestechung entschieden …“); den Wortlaut hat `table_state log`.
+4. Stimme schneidet deine Zeile nicht mehr von selbst; der Zuhörer tut es, wenn ein Zug wichtig ist (`cut_line`), und
+   Absenden tut es sofort. `say_line` kommt dann `interrupted` zurück: am Tisch nichts weiter tun, bis die Rückgabe
+   des Zuhörers da ist, dann sie beantworten (`unheard` danach, wenn es noch passt). „Reinreden geht vor“ (oben)
+   heißt im Zuhörer-Modus: auf die Rückgabe warten, nicht `wait_for_players`.
+5. Kommt er nicht (Fehler, `why: "Wächter geht nicht"`): wie oben mit dem Wächter weiter, und dem Menschen eine Zeile.
+
 Der Befehl braucht einmal die Erlaubnis für Bash (`curl` an `127.0.0.1`); fragt die App, den Menschen zu Beginn
 bitten, sie für die Sitzung zu geben. Gibt es `watch` nicht (ältere App): wie früher, `wait_for_players` wartet
 höchstens 50 s, `finished: false` → wieder aufrufen. Eine Pause der Spieler kommt einmal zurück (`paused`):
@@ -401,7 +422,8 @@ Die Spieler tun oft etwas, das kein Szenen-Rezept vorsieht. Das ist gut so.
   Langsames vor dem Abend oder zwischen Szenen): Das Spiel läuft weiter, und das Bild ist ein Zusatz, keine Bedingung.
 - **Helfer-Agents, die nie bremsen** (Denny, 2026-10-29: „vllt bist du nie alleine … die dürfen dich aber nicht hart
   ausbremsen“). Du bist der Erzähler und der Einzige am Tisch: Nur du rufst `say_line`, `show_players`, `roll_dice`,
-  `play_sound`, `wait_for_players` und die übrigen Tisch-Werkzeuge. Helfer laufen im Hintergrund (Agent-Tool), und
+  `play_sound`, `wait_for_players` und die übrigen Tisch-Werkzeuge (einzige Ausnahme: der Zuhörer, `pnp-zuhoerer`,
+  holt mit dem Schalter `listener: "haiku"` die Züge und schneidet; er spricht nie). Helfer laufen im Hintergrund (Agent-Tool), und
   auf keinen wartest du zwischen zwei Zügen:
   - **`pnp-vorbereiter`** bei jeder Abweichung und jedem Szenenwechsel: malt die Bilder, die bald gebraucht werden,
     und macht kurze Texte für die nächsten wahrscheinlichen Momente in der richtigen Stimme fertig. Der Auftrag nennt

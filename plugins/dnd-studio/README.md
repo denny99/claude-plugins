@@ -3,7 +3,7 @@
 Private plugin for D&D Studio (the desktop app in `dnd-character-creator`). It brings, in one install:
 
 - **The Studio's MCP server** (`dnd-studio`, http://127.0.0.1:<port>/mcp) with the token kept as a sensitive option.
-- **Skills** `pnp-kampagne` (build a campaign) and `pnp-spielleiter` (lead an evening), and the **13 `pnp-*` agents**.
+- **Skills** `pnp-kampagne` (build a campaign) and `pnp-spielleiter` (lead an evening), and the **14 `pnp-*` agents** (including the listener `pnp-zuhoerer`, below).
 - **A pane** `/dnd` with three tabs:
   - **Table** (GM screen): table status (players' window, Discord, listening, pause, unheard), scene card with the scene's bound sounds as play buttons, initiative with *Next turn* (moves the Studio's spotlight to a hero), party values and conditions with spotlight fairness, NPC stock lines with their `how`, dice log, secrets & whispers (hidden while spoiler-safe), a Discord section (mapped players, heroes without a player, rooms, last whisper delivered or why not — `not_mapped`, `dms_closed`, `not_set_up` —, screen-share/unheard warnings; Status, Join, Merge only on a press), whether a watcher (`wait_for_players watch` as a background Bash) runs, pause flow and the end-of-evening steps with the person's interjections (what they typed into the chat at the live table, also written to `debrief-<campaign>-<date>.md` in the plugin's data folder). Every write to the Studio happens only on a press.
   - **Build** (pnp-kampagne cockpit): the pipeline lore → plan → texts → pictures → sounds → voices → review → fixes, tracked from the `pnp-*` agents that run; the reviewers' findings counted from their Mängel files; a GPU line from `studio_status` (running/queued jobs; two GPU agents at once are flagged); the plan sign-off (*Approve plan* records it and tells the main thread to go on); the full acceptance checklist of pnp-kampagne §4 (scenes with picture, text and recipe; maps painted; places pinned; talking NPCs with portrait, voice, sheet and lines; start squares; threads and party_at; broken references; prepare_table) with the `pnp-*` agent that fixes each gap. Spoiler-safe shows counts only.
@@ -12,6 +12,19 @@ Private plugin for D&D Studio (the desktop app in `dnd-character-creator`). It b
 - **Notes on the model's own table calls** (never blocking): secret turns → whisper only, cut-in lines, unplayed sounds, maps without markers, reminders after a new scene, repeated entry writes, `make_sound` at a live table costs GPU time.
 - **Two hard guards** (each can be switched off): a handout or secret for one player on the shared window (`show_players`/`give_find`), and `talk_npc` at a live table. Writes are also refused while the profile "Meine Familie" is open.
 - **Scene looks** (desktop and mobile apps; the terminal takes only the colors): while a table is live the theme and an animated vector backdrop follow the scene's mood (tavern, forest, dungeon, camp, town, mountains, sea, swamp, battle, ruins, or the neutral table); a scene note `look: <mood>` or the picker in the pane overrides the keywords. While a build runs the look follows the pipeline phase. The plugin clears only a theme it set itself; another theme mod (such as ds-seasons) comes back after `/reload-plugins` or a restart.
+
+## Listener mode (open mic, `pnp-zuhoerer`)
+
+With the table's switch `discord listener: "haiku"` (`table_state` shows `listener`) the players talk without buttons and a Haiku agent, `dnd-studio:pnp-zuhoerer`, waits in place of the GM's watcher: it runs the watch in the foreground, takes each turn quietly, lets table talk pass and comes back only when the GM is needed (a move, a question to the GM or an NPC, Send, a secret, a break), cutting the GM's line with `cut_line` when it matters. Its return is the JSON `{woke, why, turn, between}`.
+
+What the mod does with it:
+
+- A running `pnp-zuhoerer` (tracked from `agent.spawn` / `turn.complete`) counts as the watcher: no false "no watcher" reminder; the listener's own foreground watch and its quiet `wait_for_players` are not taken for the GM's. Listeners do not show up as build runs.
+- The band shows `listener: waiting · N skipped` while one runs, `listener woke: <why>` after a wake, `no listener` (and `N listeners running` when more than one) otherwise.
+- The Table tab gets a **Listener** section: on/off, the last return and turn, and what the group discussed without the GM (`between`, collected over returns that did not wake the GM). *Listener on* / *Listener off* call `discord` with `listener` — only on a press, off asks first.
+- `say_line` coming back `interrupted` in listener mode gets the note "wait for the listener's return, then answer" instead of the cut-in hint; an answer that ends in listener mode without a running listener gets a toast and a note on the next prompt (the skill: exactly one listener, started at the beginning of each answer to a listener wake).
+
+The listener runs `curl` to 127.0.0.1 with Bash: allow it for the session when asked.
 
 Commands: `/dnd [table|build|health]`, `/dnd-scene`. Model tool: `initiative` (set / next / end / show).
 

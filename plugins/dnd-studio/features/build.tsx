@@ -4,7 +4,14 @@
  */
 import type { EngineInterface, On, RenderElement } from "claude-code";
 
-import { noteStudioStatus, noteTurnEnd, submitForPerson } from "./evening";
+import {
+  LISTENER_AGENT,
+  noteListenerEnd,
+  noteListenerSpawn,
+  noteStudioStatus,
+  noteTurnEnd,
+  submitForPerson,
+} from "./evening";
 import { applyLook } from "./look";
 import { createHost } from "../lib/host";
 import {
@@ -234,8 +241,12 @@ export function registerBuild(on: On): void {
   on("agent.spawn", async ($, e, next) => {
     const r = await next(e);
     try {
-      if (!("deny" in r && r.deny))
-        await recordSpawn($, e.subagentType, r.agentId, e.prompt);
+      if (!("deny" in r && r.deny)) {
+        // The listener runs at every answer of the evening: the evening tracks it, not the build.
+        if (pnpAgentOf(e.subagentType) === LISTENER_AGENT)
+          await noteListenerSpawn($, r.agentId);
+        else await recordSpawn($, e.subagentType, r.agentId, e.prompt);
+      }
     } catch {
       // tracking never blocks an agent
     }
@@ -244,7 +255,17 @@ export function registerBuild(on: On): void {
   on("turn.complete", async ($, e, next) => {
     const r = await next(e);
     try {
-      if (e.agentId)
+      if (
+        e.agentId &&
+        (await noteListenerEnd(
+          $,
+          e.agentId,
+          e.answer,
+          e.reason === "error" || e.reason === "aborted",
+        ))
+      ) {
+        // the listener's return is read; it is no build run
+      } else if (e.agentId)
         await recordEnd(
           $,
           e.agentId,

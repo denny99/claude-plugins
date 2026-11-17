@@ -52,6 +52,8 @@ export type TableView = {
   spotlight: string;
   unheard: string;
   turnsWaiting: number;
+  /** The table's listener switch (table_state listener): "haiku" = open mic, pnp-zuhoerer waits; "" or "off" = the watch. */
+  listener: string;
 };
 
 export type Initiative = {
@@ -160,8 +162,29 @@ export type WhisperInfo = {
   at: number;
 };
 
+/** The listener (pnp-zuhoerer, Haiku) in listener mode: its runs and what it last brought back. */
+export type ListenerState = {
+  /** agentIds of the listeners running now (the skill wants exactly one). */
+  running: string[];
+  startedAt: number;
+  endedAt: number;
+  /** The last return parsed ({woke, why, turn, between}); returned false until one came back. */
+  returned: boolean;
+  woke: boolean;
+  why: string;
+  /** The last turn's lines as "who: text". */
+  turn: string[];
+  sent: boolean;
+  secret: boolean;
+  /** What the group discussed without the GM since the GM was last woken (between of the returns, in order). */
+  between: string[];
+  /** The last run ended without a return the mod could read. */
+  error: string;
+};
+
 /** The evening's own state: watcher, interjections, Discord, Studio version. */
 export type EveningState = {
+  listener: ListenerState;
   watcher: WatcherState;
   notes: Interjection[];
   notesFile: string;
@@ -174,6 +197,8 @@ export type EveningState = {
   stale: string;
   /** A turn ended at a live table without a watcher: tell the model on the next prompt. */
   remindPending: boolean;
+  /** The pending reminder is for listener mode (no pnp-zuhoerer running), not for a missing watcher. */
+  remindListener: boolean;
 };
 
 export type AcceptStatus = "ok" | "failed" | "warning" | "idle";

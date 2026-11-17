@@ -9,6 +9,7 @@ import type {
   EveningState,
   GpuState,
   WhisperInfo,
+  ListenerState,
   Hero,
   Initiative,
   Npc,
@@ -171,6 +172,7 @@ export function toTableView(state: Obj, campaign: Obj, now: number): TableView {
     unheard,
     turnsWaiting:
       typeof state.turns_waiting === "number" ? state.turns_waiting : 0,
+    listener: str(state.listener),
   };
 }
 
@@ -309,7 +311,22 @@ export function buildPhase(runs: AgentRun[]): string {
   return stage;
 }
 
+export const EMPTY_LISTENER: ListenerState = {
+  running: [],
+  startedAt: 0,
+  endedAt: 0,
+  returned: false,
+  woke: false,
+  why: "",
+  turn: [],
+  sent: false,
+  secret: false,
+  between: [],
+  error: "",
+};
+
 export const EMPTY_EVENING: EveningState = {
+  listener: EMPTY_LISTENER,
   watcher: {
     state: "none",
     watchId: "",
@@ -325,6 +342,7 @@ export const EMPTY_EVENING: EveningState = {
   versionNow: "",
   stale: "",
   remindPending: false,
+  remindListener: false,
 };
 
 export const EMPTY_CHECK: BuildCheck = {
@@ -340,6 +358,57 @@ export const EMPTY_CHECK: BuildCheck = {
 /** A Bash command that runs the Studio's watch URL (`curl -s -m 1900 http://127.0.0.1:<port>/watch/<id>`). */
 export function isWatchCommand(command: string): boolean {
   return /\/watch\/[0-9a-z]{6,}/i.test(command);
+}
+
+/** Listener mode: the table's switch says "haiku" (open mic, pnp-zuhoerer waits for the GM). */
+export function isListenerMode(view: TableView | null): boolean {
+  return view?.listener === "haiku";
+}
+
+export type ListenerReturn = {
+  woke: boolean;
+  why: string;
+  lines: { who: string; text: string; secret: boolean }[];
+  sent: boolean;
+  secret: boolean;
+  between: string[];
+};
+
+/**
+ * The listener's answer `{woke, why, turn, between}` (pnp-zuhoerer returns exactly that JSON; a code fence or a word
+ * around it is tolerated). Undefined when no such object is in the text.
+ */
+export function listenerReturnOf(answer: string): ListenerReturn | undefined {
+  const start = answer.indexOf("{");
+  const end = answer.lastIndexOf("}");
+  if (start < 0 || end <= start) return undefined;
+  let json: unknown;
+  try {
+    json = JSON.parse(answer.slice(start, end + 1));
+  } catch {
+    return undefined;
+  }
+  const o = obj(json);
+  if (typeof o.woke !== "boolean") return undefined;
+  const turn = obj(o.turn);
+  const lines = arr(turn.lines)
+    .map(obj)
+    .map((l) => ({
+      who: str(l.who),
+      text: str(l.text),
+      secret: l.secret === true,
+    }))
+    .filter((l) => l.who || l.text);
+  return {
+    woke: o.woke,
+    why: str(o.why),
+    lines,
+    sent: turn.sent === true,
+    secret: turn.secret === true || lines.some((l) => l.secret),
+    between: arr(o.between)
+      .map((b) => str(b))
+      .filter(Boolean),
+  };
 }
 
 /** The id in a watch URL (`…/watch/<id>`), or "". */
