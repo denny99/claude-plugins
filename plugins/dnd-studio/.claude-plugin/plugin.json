@@ -1,6 +1,6 @@
 {
   "name": "dnd-studio",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "D&D Studio at the table and in the build: the GM screen (scene, initiative, party, NPC lines, sounds, dice, secrets), a band above the prompt, scene looks, the pnp-kampagne build cockpit, the pnp-* skills and agents, and the Studio's MCP server.",
   "author": {
     "name": "denny99"

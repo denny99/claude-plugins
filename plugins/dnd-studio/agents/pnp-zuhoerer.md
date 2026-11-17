@@ -23,11 +23,14 @@ Szene ist, die NPCs der Szene, ihren eigenen Namen am Tisch („Spielleiter“, 
    (`curl …`). Ihn mit Bash **im Vordergrund** starten, `timeout: 600000`. Er blockiert, bis die Spieler etwas haben.
 2. Seine Ausgabe sagt `ready`:
    - `null`: nichts in 9 Minuten → zurück zu 1.
-   - `secret`: `wait_for_players` mit `quiet: true` holen → **sofort zurück** (wecken).
+   - `secret`: ein Spieler schrieb der Spielleitung `/geheim` → **sofort zurück** (wecken), `why: "geheim"`, `turn`
+     `null`. Nicht holen: das Geheimnis holt die Spielleitung selbst (erst dann sieht der Spieler 👀; ein
+     `quiet: true` lässt es ohnehin liegen und sagt `secret_waiting`).
    - `break`: die Spieler machen Pause → **sofort zurück** (wecken, ohne Zug).
    - `error`: zurück mit `woke: true`, `why: "Wächter geht nicht"`; die Spielleitung wartet dann selbst.
    - `turn`: `wait_for_players` mit `quiet: true` holen, dann entscheiden (unten). Kommt dabei kein Zug
-     (`finished: false`, oder „cut in without a word“): zurück zu 1. Kommt `paused: true`: wie `break`.
+     (`finished: false`, oder „cut in without a word“): zurück zu 1. Kommt `paused: true`: wie `break`. Steht in
+     der Antwort `secret_waiting`: wie `secret`, sofort zurück.
 3. Nicht wecken: den Zug in einer kurzen Zeile merken („Jule und Tobi beraten, ob sie den Wächter bestechen“), zurück
    zu 1. Nach **10** übersprungenen Zügen trotzdem zurück, mit `woke: false`.
 
@@ -57,7 +60,8 @@ Genau dieses JSON, nichts davor oder danach:
  "between": ["Jule und Tobi beraten, ob sie den Wächter bestechen"]}
 ```
 
-- `turn.lines` Wort für Wort aus `wait_for_players`, nichts umformulieren, nichts kürzen. Bei `break` ist `turn`
-  `null`.
+- `turn.lines` Wort für Wort aus `wait_for_players`, nichts umformulieren, nichts kürzen. Bei `break` und
+  `secret` ist `turn` `null`.
+- Wartet ein Geheimnis (`secret`, `secret_waiting`): zusätzlich `"secret_waiting": true`.
 - `between`: deine Zeilen zu den übersprungenen Zügen seit deinem Start, in ihrer Reihenfolge; leer, wenn keiner.
 - `why`: ein paar Worte, welche Regel oder warum.

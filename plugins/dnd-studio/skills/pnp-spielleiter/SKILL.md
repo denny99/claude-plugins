@@ -108,7 +108,7 @@ Minuten waren zwölf davon. Stattdessen:
 2. Der Befehl endet, sobald die Spieler etwas haben, und Claude Code weckt dich. Seine Ausgabe sagt `ready`:
    - `turn`: `wait_for_players` holt den Zug sofort, dann antworten.
    - `secret` (`/geheim`): sofort holen und per `discord whisper` antworten, auch wenn die anderen gerade reden; das
-     Flüstern wartet nicht auf sie.
+     Flüstern wartet nicht auf sie. Wie schnell, steht in 4c („Ein Spieler sagt dir etwas heimlich“).
    - `break`: die Spieler machen Pause: vorbereiten (unten), dann einen neuen Wächter.
    - `null` (30 min nichts) oder `error` (ältere Studio-Version): neuer Wächter, bei `error` wie früher mit
      `wait_for_players` warten.
@@ -127,6 +127,9 @@ sparend“): Die Spieler reden ohne Knöpfe, und nicht jeder Zug ist für dich. 
 3. Seine Rückgabe weckt dich: `{woke, why, turn, between}`.
    - `turn` beantworten wie einen Zug aus `wait_for_players` (`secret: true` wie dort: flüstern). `turn: null` mit
      `why` Pause: vorbereiten. `woke: false`: nichts beantworten, nur einen neuen Zuhörer starten.
+   - `why: "geheim"` (oder `secret_waiting`): Der Zuhörer holt kein Geheimnis, das tust du. **Vor** dem neuen
+     Zuhörer `wait_for_players` mit `secret: true` (sonst kommt der neue sofort wieder) und flüstern (4c), dann den
+     Zuhörer starten und weiter wie sonst.
    - `between` ist, was die Gruppe ohne dich beredet hat. Lies es, bevor du antwortest, und nimm auf, was zählt
      („Ihr habt euch für die Bestechung entschieden …“); den Wortlaut hat `table_state log`.
 4. Stimme schneidet deine Zeile nicht mehr von selbst; der Zuhörer tut es, wenn ein Zug wichtig ist (`cut_line`), und
@@ -142,7 +145,8 @@ vorbereiten, sie drücken „Weiter“.
 
 Spielt ihr über Discord, gehört in die Begrüßung ein Satz zu **/geheim** (Denny, 2026-11-01: „und er muss erklärt
 sein das es den gibt“): „Wollt ihr mir etwas sagen, das die anderen nicht mitbekommen sollen, schreibt dem Bot privat
-`/geheim` und eure Worte, am besten im Direktchat mit ihm, da sieht niemand, dass ihr tippt.“ Wie du damit umgehst: 4c.
+`/geheim` und eure Worte, am besten im Direktchat mit ihm, da sieht niemand, dass ihr tippt. Ein ✅ heißt
+angekommen, 👀 heißt, ich hab es gelesen; die Antwort kommt privat.“ Wie du damit umgehst: 4c.
 
 **Anfang und Ende sind Szenen, kein Pflichtprogramm** (Denny 2026-11-13: „deine Intros und Outros sind bissel flach
 und wirken wie ein Pflichtprogramm“; „bei neuen Kampagnen fehlt fast immer ein Prolog, um einem die Welt näher zu
@@ -475,6 +479,15 @@ lies es vor dem ersten `aside`, `split` oder `move` eines Abends und wenn ein Fl
   Schlüssel ein“): `wait_for_players` bringt es als eigenen Zug mit `secret: true`, die Zeile „<Held> (geheim): …“.
   Die anderen haben nichts gesehen oder gehört, am Tisch hat nichts angehalten, ein Satz, der gerade läuft, läuft
   weiter. Darum:
+  - **Sofort antworten, zur Not kurz** (Denny 2026-11-17: „/geheim geht nicht“: der Spieler bekam ein ✅ und hörte
+    dann lange nichts, weil die Spielleitung mitten in einer langen Antwort steckte). Der Spieler sieht ✅, sobald es
+    am Tisch ist, und 👀, sobald du es geholt hast; dann wartet er auf dein Flüstern. Darum:
+    - Steht in der Antwort irgendeines Werkzeugs `secret_waiting`, nach diesem Schritt `wait_for_players` mit
+      `secret: true` (holt nur das Geheimnis, der Zug der Spieler bleibt liegen) und flüstern, **bevor** die nächste
+      Zeile am Tisch kommt. Nicht bis zum Ende der Antwort oder bis zum nächsten Warten aufheben.
+    - Braucht die Antwort Zeit (ein Wurf, die Szene muss erst weiter), zuerst ein kurzes Flüstern: „Hab ich, ich komme
+      gleich darauf zurück.“ Dann die richtige Antwort, sobald es passt; vergiss sie nicht (eine Zeile im Kopf
+      behalten, wem du was schuldest).
   - **Nie öffentlich wiederholen**, nicht mit `say_line`, nicht mit `show_players`, auch nicht angedeutet („Tobi, du
     hast mir da was geschrieben …“ verrät es schon).
   - Antworten per Flüstern an diesen Helden (gelingt es, misslingt es, was er dabei bemerkt; ein verdeckter Wurf).
