@@ -1,0 +1,34 @@
+{
+  "name": "unity",
+  "version": "0.1.0",
+  "description": "Unity inside Claude Code: compile gate after C# edits, editor console, EditMode/PlayMode tests, play/stop and Game view screenshots through a small editor bridge package, batchmode runs when no editor is open. Works with any Unity project on macOS and Windows.",
+  "author": { "name": "denny99" },
+  "keywords": ["unity", "gamedev", "csharp", "tests", "editor", "mod"],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "compileGate": {
+      "type": "boolean",
+      "title": "Compile gate",
+      "description": "After Claude edits a .cs/.asmdef/.asmref file, refresh Unity and append the compile errors to the edit's result.",
+      "default": true
+    },
+    "compileWaitSeconds": {
+      "type": "number",
+      "title": "Compile wait (s)",
+      "description": "How long the compile gate waits for Unity to finish compiling before it gives up.",
+      "default": 60
+    },
+    "debounceMs": {
+      "type": "number",
+      "title": "Compile debounce (ms)",
+      "description": "Edits landing within this window share one refresh.",
+      "default": 400
+    },
+    "editorPath": {
+      "type": "string",
+      "title": "Unity editor path",
+      "description": "Explicit Unity editor binary for batchmode runs. Empty: found through Unity Hub from ProjectVersion.txt.",
+      "default": ""
+    }
+  }
+}

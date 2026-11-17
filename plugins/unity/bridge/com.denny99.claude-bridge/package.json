@@ -1,0 +1,19 @@
+{
+  "name": "com.denny99.claude-bridge",
+  "version": "0.1.0",
+  "displayName": "Claude Code Bridge",
+  "description": "Editor-only file-queue bridge for the Claude Code `unity` plugin: status heartbeat, refresh + compile messages, console, Play/Stop/Pause, EditMode/PlayMode test runs and Game view screenshots via <project>/Temp/ClaudeBridge. No network.",
+  "unity": "2021.3",
+  "author": {
+    "name": "denny99"
+  },
+  "dependencies": {
+    "com.unity.test-framework": "1.1.33"
+  },
+  "keywords": [
+    "claude",
+    "editor",
+    "tests",
+    "automation"
+  ]
+}
