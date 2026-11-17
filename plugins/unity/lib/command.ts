@@ -18,9 +18,13 @@ export interface Segment {
 
 const OPS = ['&&', '||', ';', '|', '&', '\n']
 
-/** Splits a command line into simple commands at `&&`, `||`, `;`, `|`, `&` and newlines; quotes respected. */
+/**
+ * Splits a command line into simple commands at `&&`, `||`, `;`, `|`, `&` and newlines; quotes respected. Heredoc
+ * bodies (`<<EOF` … `EOF`) are skipped: they are text, not commands.
+ */
 export function splitCommand(line: string): Segment[] {
   const out: Segment[] = []
+  const heredocs: { delim: string; strip: boolean }[] = []
   let words: string[] = []
   let word = ''
   let inWord = false
@@ -41,10 +45,31 @@ export function splitCommand(line: string): Segment[] {
   }
   for (let i = 0; i < line.length; i++) {
     const c = line[i] ?? ''
+    if (line.startsWith('<<', i) && !line.startsWith('<<<', i)) {
+      const m = /^<<(-?)[ \t]*(?:'([^']*)'|"([^"]*)"|\\?([A-Za-z0-9_.-]+))/.exec(line.slice(i))
+      if (m) {
+        endWord()
+        heredocs.push({ delim: m[2] ?? m[3] ?? m[4] ?? '', strip: m[1] === '-' })
+        i += m[0].length - 1
+        continue
+      }
+    }
     const op = OPS.find(o => line.startsWith(o, i))
     if (op) {
       endSegment(i)
       i += op.length - 1
+      if (op === '\n') {
+        // Skip each pending heredoc body up to and including its delimiter line.
+        for (const doc of heredocs.splice(0)) {
+          for (;;) {
+            const next = line.indexOf('\n', i + 1)
+            const lineEnd = next < 0 ? line.length : next
+            const text = line.slice(i + 1, lineEnd)
+            i = lineEnd
+            if ((doc.strip ? text.replace(/^\t+/, '') : text) === doc.delim || next < 0) break
+          }
+        }
+      }
       start = i + 1
       continue
     }
@@ -319,10 +344,16 @@ function psOp(move: boolean, segment: Segment, w: string[]): FileOp | undefined 
 const slash = (p: string) => p.replace(/\\/g, '/')
 const trimSlash = (p: string) => p.replace(/[\\/]+$/, '')
 
-/** A path under a Unity `Assets/` folder that has a `.meta` of its own (not a .meta, no wildcard). */
+/**
+ * A path under a Unity `Assets/` folder that has a `.meta` of its own (not a .meta, no wildcard). Paths inside
+ * Library/, Temp/ or a PackageCache are Unity's own copies (no tracked .meta) and are left out.
+ */
 export function isAssetPath(p: string): boolean {
   const n = trimSlash(slash(p))
-  return /(^|\/)Assets\/./.test(n) && !/\.meta$/i.test(n) && !/[*?[\]]/.test(n)
+  const at = n.search(/(^|\/)Assets\/./)
+  if (at < 0 || /\.meta$/i.test(n) || /[*?[\]]/.test(n)) return false
+  // Only folders above the Assets/ folder count: Assets/Temp/x.cs is an ordinary asset.
+  return !/(^|\/)(Library|Temp|PackageCache)(\/|$)/.test(n.slice(0, at))
 }
 
 /** Sources of the op whose `.meta` is not named by any move/remove in the same command line (`named`). */
@@ -396,6 +427,11 @@ export function metaReason(line: string, findings: MetaFinding[]): string | unde
   const verb = findings.every(f => f.op.op === 'remove') ? 'deleted' : 'moved'
   return [
     `Unity: ${files.join(', ')} ${verb} without ${files.length > 1 ? 'their' : 'its'} .meta. The .meta holds the asset's GUID; without it Unity re-imports under a new GUID and every scene/prefab reference to it breaks (or an orphaned .meta stays behind).`,
+    ...(findings.some(f => f.op.style === 'git' && f.op.head.includes('--cached'))
+      ? [
+          'git rm --cached only untracks the file (it stays on disk), but the .meta must leave the index with it, or the repo keeps a GUID for an asset it no longer has.',
+        ]
+      : []),
     'Run this instead:',
     `  ${fixed}`,
   ].join('\n')

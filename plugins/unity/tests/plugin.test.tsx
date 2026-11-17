@@ -28,6 +28,34 @@ test('compile gate: an Edit of a .cs gets the compile errors appended; a .md edi
   expect(JSON.stringify(md)).not.toContain('Unity')
 })
 
+test('compile gate: a refresh with nothing new to compile still reports the standing errors', async ($, on) => {
+  const world = fakeWorld(on)
+  world.bridge.nothingToCompile = true
+  world.files[`${BRIDGE}/compile.json`] = JSON.stringify({
+    seq: 3,
+    finishedAt: 900,
+    messages: [
+      {
+        severity: 'Error',
+        message: 'Assets/Game/B.cs(7,2): error CS0103: The name x does not exist',
+        file: 'Assets/Game/B.cs',
+        line: 7,
+        column: 2,
+      },
+    ],
+  })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
+  const text = JSON.stringify(
+    await settle(
+      world,
+      $.tool.call({ tool: 'Edit', file_path: `${PROJECT}/Assets/Game/A.cs`, old_string: 'a', new_string: 'b' }),
+    ),
+  )
+  expect(text).toContain('nothing new to compile; the last compile still stands')
+  expect(text).toContain('Assets/Game/B.cs(7,2): error CS0103')
+  expect(text).not.toContain('Unity refreshed: nothing to compile.')
+})
+
 test('compile gate never refreshes an editor in Play mode; tells to restart Play', async ($, on) => {
   const world = fakeWorld(on)
   world.bridge.isPlaying = true

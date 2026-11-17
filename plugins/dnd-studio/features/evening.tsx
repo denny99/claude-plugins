@@ -258,7 +258,12 @@ export async function noteTurnEnd($: EngineInterface): Promise<boolean> {
   const s = await readEvening($);
   if (isListenerMode(await readTable($))) {
     // Listener mode: the running pnp-zuhoerer is the watcher.
-    if (s.listener.running.length) return false;
+    const running = await dropExpiredListeners($, s.listener.running);
+    if (running.length) return false;
+    // It came back during this very turn (or its wake is still on its way): the GM restarts it after reading it.
+    const l = s.listener;
+    if (s.wakePending) return false;
+    if (!l.error && l.endedAt && l.endedAt >= (s.mainTurnAt ?? 0)) return false;
     await patchEvening($, () => ({
       remindPending: true,
       remindListener: true,
@@ -279,6 +284,43 @@ export async function noteTurnEnd($: EngineInterface): Promise<boolean> {
 }
 
 // --- the listener (pnp-zuhoerer) ---------------------------------------------------------------------------------
+
+/** Listeners started without an agentId carry a made-up id `pnp-zuhoerer-<startedAt>`. */
+const SYNTHETIC_PREFIX = `${LISTENER_AGENT}-`;
+/** A made-up listener id older than this is a run whose end never reached the mod: dropped. */
+const SYNTHETIC_TTL_MS = 15 * 60 * 1000;
+
+const syntheticAt = (id: string): number | undefined => {
+  if (!id.startsWith(SYNTHETIC_PREFIX)) return undefined;
+  const at = Number(id.slice(SYNTHETIC_PREFIX.length));
+  return Number.isFinite(at) ? at : undefined;
+};
+
+/** `running` without the made-up ids older than the TTL (stored back when any were dropped). */
+async function dropExpiredListeners(
+  $: EngineInterface,
+  running: string[],
+): Promise<string[]> {
+  const now = await $.clock.now();
+  const keep = running.filter((r) => {
+    const at = syntheticAt(r);
+    return at === undefined || now - at < SYNTHETIC_TTL_MS;
+  });
+  if (keep.length !== running.length)
+    await patchEvening($, (e) => ({
+      listener: {
+        ...e.listener,
+        running: e.listener.running.filter((r) => keep.includes(r)),
+      },
+    }));
+  return keep;
+}
+
+/** The main thread's turn started: a listener return after this belongs to this turn; an earlier wake is now read. */
+export async function noteMainTurnStart($: EngineInterface): Promise<void> {
+  const now = await $.clock.now();
+  await patchEvening($, () => ({ mainTurnAt: now, wakePending: false }));
+}
 
 /** A pnp-zuhoerer started (agent.spawn): it is the watcher in listener mode. */
 export async function noteListenerSpawn(
@@ -310,12 +352,14 @@ export async function noteListenerEnd(
   failed: boolean,
 ): Promise<boolean> {
   const s = await readEvening($);
-  const running = s.listener.running;
+  const running = await dropExpiredListeners($, s.listener.running);
   const back = failed ? undefined : listenerReturnOf(answer);
+  // A listener spawned without an agentId: its return is matched only when it is the one such run.
+  const synthetic = running.filter((r) => syntheticAt(r) !== undefined);
   const id = running.includes(agentId)
     ? agentId
-    : back
-      ? running.find((r) => r.startsWith(`${LISTENER_AGENT}-`))
+    : back && synthetic.length === 1
+      ? synthetic[0]
       : undefined;
   if (!id) return false;
   const now = await $.clock.now();
@@ -352,6 +396,7 @@ export async function noteListenerEnd(
       ].slice(-30),
       error: "",
     },
+    wakePending: back.woke,
   }));
   if (back.woke && back.lines.length) {
     const live = await readLive($);
@@ -471,15 +516,27 @@ export function registerEvening(on: On): void {
     return verdict;
   }).catch(($, e, next) => next(e));
 
+  on("turn.start", async ($, e, next) => {
+    try {
+      if (!e.agentId) await noteMainTurnStart($);
+    } catch {
+      // timing never delays a turn
+    }
+    return next(e);
+  });
+
   on("prompt.submit", async ($, e, next) => {
     let context: string[] = [];
     try {
       if (
         e.origin?.kind === "task-notification" ||
         /<task-notification>/.test(e.text)
-      )
+      ) {
         await noteTaskNotification($, e.text);
-      else if (isPersonsPrompt(e)) {
+        // a returned agent reaches the main thread: a pending wake is delivered with it
+        if ((await readEvening($)).wakePending)
+          await patchEvening($, () => ({ wakePending: false }));
+      } else if (isPersonsPrompt(e)) {
         const s = await readEvening($);
         if (s.remindPending) {
           context = [s.remindListener ? NO_LISTENER_NOTE : NO_WATCHER_NOTE];

@@ -44,7 +44,8 @@ package (the **bridge**, in `bridge/com.denny99.claude-bridge`).
 
 ## Setup
 
-1. Install the plugin: `/plugin install unity --marketplace denny99/claude-plugins`.
+1. Install the plugin: `claude plugin marketplace add denny99/claude-plugins`, then
+   `claude plugin install unity@denny99`.
 2. Install the bridge in the Unity project: Package Manager → _Add package from git URL_ →
    `https://github.com/denny99/claude-plugins.git?path=/plugins/unity/bridge/com.denny99.claude-bridge`
    (details in the bridge's README).

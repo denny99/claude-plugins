@@ -56,7 +56,10 @@ export async function applyLook($: EngineInterface): Promise<void> {
     if (target === look.applied) return;
     if (target) {
       await $.theme.set(themeOf(target));
-      await patchLook($, () => ({ applied: target }));
+      await patchLook($, () => ({ applied: target, foreign: false }));
+    } else if (look.applied && look.foreign) {
+      // another plugin's theme stands now: leave it, ours is gone anyway
+      await patchLook($, () => ({ applied: "", foreign: false }));
     } else if (look.applied) {
       await $.theme.clear();
       await patchLook($, () => ({ applied: "" }));
@@ -90,7 +93,27 @@ export async function loadLookOverrides($: EngineInterface): Promise<void> {
     }));
 }
 
+/** Another plugin's theme.set / theme.clear (a plugin's own calls skip its own hooks): ours no longer stands. */
+async function noteForeignTheme($: EngineInterface): Promise<void> {
+  try {
+    if ((await readLook($)).applied)
+      await patchLook($, () => ({ foreign: true }));
+  } catch {
+    // observing never fails the other plugin's call
+  }
+}
+
 export function registerLook(on: On): void {
+  on("theme.set", async ($, e, next) => {
+    const r = await next(e);
+    await noteForeignTheme($);
+    return r;
+  });
+  on("theme.clear", async ($, e, next) => {
+    const r = await next(e);
+    await noteForeignTheme($);
+    return r;
+  });
   on("ui.render", { component: "Backdrop" }, ($, e, next) => {
     if (e.surface !== "desktop" && e.surface !== "mobile") return next(e);
     const scene = String(e.props.scene ?? "");

@@ -199,6 +199,10 @@ export type EveningState = {
   remindPending: boolean;
   /** The pending reminder is for listener mode (no pnp-zuhoerer running), not for a missing watcher. */
   remindListener: boolean;
+  /** When the main thread's current turn started (turn.start without an agent). */
+  mainTurnAt?: number;
+  /** The listener woke the GM and its return has not reached the main thread yet (task notification pending). */
+  wakePending?: boolean;
 };
 
 export type AcceptStatus = "ok" | "failed" | "warning" | "idle";
@@ -235,7 +239,12 @@ export type BuildCheck = {
   plan: PlanApproval | null;
 };
 
-export type LookState = { applied: string; overrides: Record<string, string> };
+export type LookState = {
+  applied: string;
+  overrides: Record<string, string>;
+  /** Another plugin set (or cleared) the theme after ours: ours no longer stands, so we never clear. */
+  foreign?: boolean;
+};
 
 declare module "claude-code" {
   interface PluginState {

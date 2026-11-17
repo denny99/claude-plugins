@@ -379,17 +379,8 @@ export type ListenerReturn = {
  * around it is tolerated). Undefined when no such object is in the text.
  */
 export function listenerReturnOf(answer: string): ListenerReturn | undefined {
-  const start = answer.indexOf("{");
-  const end = answer.lastIndexOf("}");
-  if (start < 0 || end <= start) return undefined;
-  let json: unknown;
-  try {
-    json = JSON.parse(answer.slice(start, end + 1));
-  } catch {
-    return undefined;
-  }
-  const o = obj(json);
-  if (typeof o.woke !== "boolean") return undefined;
+  const o = listenerJsonOf(answer);
+  if (!o) return undefined;
   const turn = obj(o.turn);
   const lines = arr(turn.lines)
     .map(obj)
@@ -400,7 +391,7 @@ export function listenerReturnOf(answer: string): ListenerReturn | undefined {
     }))
     .filter((l) => l.who || l.text);
   return {
-    woke: o.woke,
+    woke: o.woke === true,
     why: str(o.why),
     lines,
     sent: turn.sent === true,
@@ -409,6 +400,36 @@ export function listenerReturnOf(answer: string): ListenerReturn | undefined {
       .map((b) => str(b))
       .filter(Boolean),
   };
+}
+
+/** The listener's JSON object (with a boolean `woke`): a fenced ```json block first, then each `{` in the text. */
+function listenerJsonOf(answer: string): Obj | undefined {
+  const parse = (text: string): Obj | undefined => {
+    try {
+      const o = obj(JSON.parse(text));
+      return typeof o.woke === "boolean" ? o : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  for (const m of answer.matchAll(/```(?:json)?[ \t]*\n([\s\S]*?)```/gi)) {
+    const o = parse((m[1] ?? "").trim());
+    if (o) return o;
+  }
+  const ends: number[] = [];
+  for (let i = answer.length - 1; i >= 0; i--)
+    if (answer[i] === "}") ends.push(i);
+  for (
+    let start = answer.indexOf("{");
+    start >= 0;
+    start = answer.indexOf("{", start + 1)
+  )
+    for (const end of ends) {
+      if (end <= start) break;
+      const o = parse(answer.slice(start, end + 1));
+      if (o) return o;
+    }
+  return undefined;
 }
 
 /** The id in a watch URL (`…/watch/<id>`), or "". */

@@ -1,3 +1,4 @@
+import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
 import { checkColors } from '../lib/make-colors.js'
@@ -62,6 +63,53 @@ test('the build cockpit tracks pnp agents and counts the reviewers’ findings',
   await ui2.unmount()
   // The build ended: the look the plugin set is cleared.
   expect(themes).toEqual(['dnd-inspect', 'clear'])
+})
+
+const SEASONS = {
+  name: 'seasons',
+  register(on: On) {
+    on('agent.spawn', async ($, e, next) => {
+      const r = await next(e)
+      if (e.subagentType === 'general-purpose') await $.theme.set({ colors: {} } as never)
+      return r
+    })
+  },
+}
+
+test('a theme another plugin set after ours is never cleared when our look goes off', { plugins: [SEASONS as never] }, async ($, on) => {
+  const themes: string[] = []
+  mock.clock(on, { now: 1_700_000_000_000 })
+  on('command.register', (_, e) => ({ value: { command: e.name } }))
+  on('tool.register', () => ({ value: {} as never }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('store.get', () => ({ value: undefined }))
+  on('store.set', () => ({ value: undefined }))
+  on('theme.set', (_, e) => {
+    themes.push(String((e as { backdrop?: { scene?: string } }).backdrop?.scene ?? 'other'))
+    return { value: { isDrawn: true, requestId: 'r' } as never }
+  })
+  on('theme.clear', () => {
+    themes.push('clear')
+    return { value: { isDrawn: true } as never }
+  })
+  on('ui.toast', () => ({ value: undefined }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.info', () => ({ value: { platform: 'macos', isHosted: false } as never }))
+  on('env.get', (_, e) => ({ value: e.name === 'HOME' ? '/Users/d' : '/usr/bin' }))
+  on('fs.read', () => {
+    throw new Error('missing')
+  })
+  on('agent.spawn', (_, e) => ({ model: 'opus', agentId: e.description }))
+  on('turn.complete', () => ({ text: '' }))
+
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.agent.spawn({ tool_use_id: 't1', prompt: 'x', description: 'a1', subagentType: 'dnd-studio:pnp-texter', parentModel: 'opus' } as never)
+  expect(themes.length).toBe(1)
+  // Another plugin (seasons) sets its own theme over ours.
+  await $.agent.spawn({ tool_use_id: 't2', prompt: 'x', description: 'g1', subagentType: 'general-purpose', parentModel: 'opus' } as never)
+  expect(themes).toEqual(['dnd-ink', 'other'])
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 'x', agentId: 'a1', reason: 'answer' } as never)
+  expect(themes).not.toContain('clear')
 })
 
 test('agent names, findings paths and counts', () => {

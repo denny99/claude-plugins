@@ -14,7 +14,7 @@ export type World = {
   calls: Record<string, unknown>[]
   argv: string[]
   prompts: string[]
-  bridge: { up: boolean; isPlaying: boolean; compileSeq: number; errors: boolean }
+  bridge: { up: boolean; isPlaying: boolean; compileSeq: number; errors: boolean; nothingToCompile?: boolean }
   clock: { advance(ms: number): Promise<void> }
 }
 
@@ -90,7 +90,8 @@ export function fakeWorld(
       const done = (data: Record<string, unknown>) => {
         files[`${BRIDGE}/result-${m[1]}.json`] = JSON.stringify({ id: m[1], ok: true, ...data })
       }
-      if (cmd.cmd === 'refresh') {
+      if (cmd.cmd === 'refresh' && world.bridge.nothingToCompile) done({})
+      else if (cmd.cmd === 'refresh') {
         world.bridge.compileSeq++
         files[`${BRIDGE}/compile.json`] = JSON.stringify({
           seq: world.bridge.compileSeq,

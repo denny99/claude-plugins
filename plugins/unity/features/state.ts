@@ -211,16 +211,34 @@ let hinted = false
 export function compileGate($: EngineInterface, options: Options, files: string[]): Promise<string | undefined> {
   pendingFiles.push(...files)
   if (pending) return pending
-  pending = runGate($, options).catch(e => `Unity compile gate failed: ${e instanceof Error ? e.message : String(e)}`)
+  pending = gateLoop($, options)
   return pending
 }
 
-async function runGate($: EngineInterface, options: Options): Promise<string | undefined> {
+/** One gate run; when edits arrived while it ran, one more run so they are not left unchecked. */
+async function gateLoop($: EngineInterface, options: Options): Promise<string | undefined> {
+  const fail = (e: unknown) => `Unity compile gate failed: ${e instanceof Error ? e.message : String(e)}`
+  try {
+    const host = await createHost($)
+    await sleep(host, Math.max(0, options.debounceMs ?? 400))
+    const files = pendingFiles
+    pendingFiles = []
+    let text = await runGate($, options, files).catch(fail)
+    if (pendingFiles.length) {
+      const more = pendingFiles
+      pendingFiles = []
+      text = await runGate($, options, files.concat(more)).catch(fail)
+    }
+    return text
+  } catch (e) {
+    return fail(e)
+  } finally {
+    pending = undefined
+  }
+}
+
+async function runGate($: EngineInterface, options: Options, files: string[]): Promise<string | undefined> {
   const host = await createHost($)
-  await sleep(host, Math.max(0, options.debounceMs ?? 400))
-  const files = pendingFiles
-  pendingFiles = []
-  pending = undefined
   const m = await refreshModel($, options)
   if (!m.project) return undefined
   const cfg = configOf(m)
@@ -241,8 +259,11 @@ async function runGate($: EngineInterface, options: Options): Promise<string | u
       }
       const now = await host.now()
       if (s.up && !s.status.isCompiling && s.status.compileSeq === before && now - started > 3000) {
-        await refreshModel($, options)
-        return 'Unity refreshed: nothing to compile.'
+        const standing = await refreshModel($, options)
+        const errs = compileContext(standing.compile?.messages ?? [], files)
+        return errs
+          ? `Unity refreshed: nothing new to compile; the last compile still stands.\n${errs}`
+          : 'Unity refreshed: nothing to compile.'
       }
       if (now >= deadline) break
       await sleep(host, 500)

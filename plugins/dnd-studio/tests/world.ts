@@ -202,6 +202,7 @@ export function world(on: On, answers: Record<string, unknown> = {}): World {
     return { text: e.text };
   });
   on("turn.complete", () => ({ text: "" }));
+  on("turn.start", (_, e) => ({ turnId: e.turnId }));
   on("agent.spawn", (_, e) => ({ model: "opus", agentId: e.description }));
   on("mcp.connect", () => ({
     value: { isConnected: true, server: "plugin:dnd-studio:dnd-studio" },

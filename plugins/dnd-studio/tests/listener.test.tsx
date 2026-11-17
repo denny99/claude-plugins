@@ -1,4 +1,6 @@
+import type { On } from "claude-code";
 import { expect, test } from "claude-code/testing";
+import type { Engine } from "claude-code/testing";
 
 import { listenerReturnOf } from "../lib/model";
 import { band, pane, PREFIX, TABLE, toolResult, world } from "./world";
@@ -102,6 +104,8 @@ test("listener mode: a running pnp-zuhoerer is the watcher, its return fills ban
     ),
   );
   expect(await bandText()).toContain("no listener");
+  await w.clock.advance(1000);
+  await $.turn.start({ text: "weiter", turnId: "m2" } as never);
   await $.turn.complete(done(undefined, "", "m2"));
   expect(w.toasts.filter((t) => /without a listener/.test(t)).length).toBe(1);
   const r = await $.prompt.submit({
@@ -234,4 +238,148 @@ test("render check: the filled Listener section and band stay inside 40 columns 
       await ui.unmount();
     }
   }
+});
+
+function allowAll(on: On) {
+  on(
+    "tool.check",
+    () =>
+      ({
+        decision: "allow" as const,
+        value: { decision: "allow" as const },
+      }) as never,
+  );
+}
+
+async function bandOf($: Engine) {
+  const b = await $.ui.mount({ ...band(), surface: "desktop" });
+  const t = (await b.findAll({ type: "Text" })).map((x) => x.text).join(" ");
+  await b.unmount();
+  return t;
+}
+
+const watchCheck = (agentId: string) =>
+  ({
+    tool: "Bash",
+    input: { command: WATCH, run_in_background: true },
+    tool_use_id: `b-${agentId}`,
+    agentId,
+  }) as never;
+
+test("a subagent's watch is never the GM's watcher, with or without listener mode", async ($, on) => {
+  world(on);
+  on("tool.call", () => toolResult({ ok: true }) as never);
+  allowAll(on);
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd", args: "table" } as never);
+  await $.tool.check(watchCheck("sub1"));
+  expect(await bandOf($)).toContain("no watcher");
+});
+
+test("listener mode: a subagent's watch does not set the watcher running", async ($, on) => {
+  const w = world(on, { table_state: LISTENING });
+  on("tool.call", () => toolResult({ ok: true }) as never);
+  allowAll(on);
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd", args: "table" } as never);
+  await $.agent.spawn(spawn("z1"));
+  await $.tool.check(watchCheck("z1"));
+  // Listener mode off again: the band shows the watcher, which the listener's watch never started.
+  w.answers.table_state = TABLE;
+  await $.command.run({ command: "dnd", args: "table" } as never);
+  expect(await bandOf($)).toContain("no watcher");
+});
+
+test("a listener's quiet take with a secret turn leaves no secret note and no pending secret", async ($, on) => {
+  world(on, { table_state: LISTENING });
+  on("tool.call", (_, e) =>
+    e.tool === `${PREFIX}wait_for_players`
+      ? (toolResult({
+          lines: [
+            { who: "Jule", text: "Ich stecke den Ring ein", secret: true },
+          ],
+        }) as never)
+      : (toolResult({ ok: true }) as never),
+  );
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd", args: "table" } as never);
+  const take = await $.tool.call({
+    tool: `${PREFIX}wait_for_players`,
+    input: { quiet: true },
+    agentId: "z1",
+  } as never);
+  expect(JSON.stringify(take)).not.toContain("Secret turn");
+  // No secret is pending: the GM's next line gets no secret warning.
+  const said = await $.tool.call({
+    tool: `${PREFIX}say_line`,
+    input: { text: "Der Wirt nickt." },
+  } as never);
+  expect(JSON.stringify(said)).not.toContain("told you a secret");
+});
+
+test("pure: prose with a brace before the fenced JSON, and a stray brace before bare JSON", () => {
+  const fenced = listenerReturnOf(
+    'Ich habe {nichts Wichtiges} gehört, außer:\n```json\n{"woke": true, "why": "Frage", "turn": {"lines": [{"who": "Tobi", "text": "Hallo"}]}, "between": []}\n```\nEnde {ok}',
+  );
+  expect(fenced?.woke).toBe(true);
+  expect(fenced?.lines).toEqual([
+    { who: "Tobi", text: "Hallo", secret: false },
+  ]);
+  const bare = listenerReturnOf(
+    'Hinweis {siehe unten}: {"woke": false, "why": "", "turn": null, "between": ["Pizza"]} danke}',
+  );
+  expect(bare?.woke).toBe(false);
+  expect(bare?.between).toEqual(["Pizza"]);
+});
+
+test("listener mode: the listener comes back during the GM's own turn, so the turn's end reminds nobody", async ($, on) => {
+  const w = world(on, { table_state: LISTENING });
+  on("tool.call", () => toolResult({ ok: true }) as never);
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd", args: "table" } as never);
+  await $.agent.spawn(spawn("z1"));
+  await w.clock.advance(1000);
+  await $.turn.start({ text: "weiter", turnId: "m1" } as never);
+  await w.clock.advance(1000);
+  await $.turn.complete(
+    done(
+      "z1",
+      '{"woke": true, "why": "Frage", "turn": {"lines": [{"who": "Tobi", "text": "Hallo"}]}, "between": []}',
+      "z1t",
+    ),
+  );
+  await $.turn.complete(done(undefined, "", "m1"));
+  expect(w.toasts.filter((t) => /without a listener/.test(t))).toEqual([]);
+  const r = await $.prompt.submit({
+    text: "weiter",
+    origin: { kind: "composer" },
+  } as never);
+  expect((r.context ?? []).join(" ")).not.toContain("pnp-zuhoerer");
+});
+
+test("listener mode: an aborted listener is an error, is no longer running, and the next GM turn is reminded", async ($, on) => {
+  const w = world(on, { table_state: LISTENING });
+  on("tool.call", () => toolResult({ ok: true }) as never);
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd", args: "table" } as never);
+  await $.agent.spawn(spawn("z1"));
+  await w.clock.advance(1000);
+  await $.turn.start({ text: "weiter", turnId: "m1" } as never);
+  await $.turn.complete({
+    answer: "",
+    durationMs: 1,
+    isAborted: true,
+    turnId: "z1t",
+    agentId: "z1",
+    reason: "aborted",
+  } as never);
+  expect(await bandOf($)).toContain("no listener");
+  const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
+  const texts = (await ui.findAll({ type: "Text" }))
+    .map((x) => x.text)
+    .join(" ");
+  await ui.unmount();
+  expect(texts).toContain("the listener stopped");
+  await $.turn.complete(done(undefined, "", "m1"));
+  expect(w.toasts.filter((t) => /without a listener/.test(t)).length).toBe(1);
 });

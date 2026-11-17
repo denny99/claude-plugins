@@ -92,6 +92,26 @@ describe('.meta guard', () => {
     ])
       expect(metaFindings(ok)).toEqual([])
   })
+  test('no finding for heredoc bodies or Unity copies under Library/, Temp/, PackageCache', () => {
+    for (const ok of [
+      "cat > notes.md <<'EOF'\nrm Assets/A.cs\nmv Assets/B.cs Assets/C.cs\nEOF\necho done",
+      'git commit -F - <<EOF\nrm Assets/Old.cs\nEOF',
+      'cat <<-END\n\tmv Assets/A.png Assets/B.png\n\tEND',
+      'rm -rf Library/PackageCache/com.x@1.0/Assets/Foo.cs',
+      'rm unity/Library/Bee/Assets/Gen.cs',
+      'mv Temp/Assets/x.cs Temp/Assets/y.cs',
+      'rm PackageCache/com.y/Assets/Z.cs',
+    ])
+      expect(metaFindings(ok)).toEqual([])
+    // A command after the heredoc is still read, and Assets/Temp/ is an ordinary asset folder.
+    expect(metaFindings("cat <<'EOF' > a.txt\nhello\nEOF\nrm Assets/A.cs")).toHaveLength(1)
+    expect(metaFindings('rm Assets/Temp/A.cs')).toHaveLength(1)
+  })
+  test('git rm --cached stays flagged and the reason says why', () => {
+    const r = reasonFor('git rm --cached Assets/A.cs') ?? ''
+    expect(r).toContain('git rm --cached only untracks')
+    expect(r).toContain('git rm --cached Assets/A.cs Assets/A.cs.meta')
+  })
 })
 
 describe('worktree', () => {
