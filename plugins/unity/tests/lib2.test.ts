@@ -1,7 +1,16 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import { affectedAreas, affectedText, changedFiles, landingsReminder } from '../lib/affected'
-import { commitReason, gitCommits, metaFindings, metaReason, parsePorcelain, splitCommand } from '../lib/command'
+import {
+  commitReason,
+  gitCommits,
+  metaFindings,
+  metaReason,
+  parsePorcelain,
+  splitCommand,
+  writeCommitReason,
+  writesBeforeCommit,
+} from '../lib/command'
 import { batchCompileArgs, filtersFromDoc, parseProjectConfig, type TestFilterPreset } from '../lib/unity'
 import { libraryCopyArgs, libraryCopyLine, worktreeAddArgs, worktreePaths } from '../lib/worktree'
 
@@ -156,5 +165,30 @@ describe('narrow-test picker', () => {
   })
   test('batch runs log to a file when given one', () => {
     expect(batchCompileArgs('/p', '/p/Logs/c.log').slice(-2)).toEqual(['-logFile', '/p/Logs/c.log'])
+  })
+})
+
+describe('writes to a restore-before-commit file in the same line as a commit', () => {
+  const lock = ['Packages/packages-lock.json']
+  test('redirects, sed -i, tee, cd + relative path and package managers count; after the commit or no commit do not', () => {
+    expect(writesBeforeCommit('echo x >> Packages/packages-lock.json && git add -A && git commit -m t', lock)).toEqual(
+      lock,
+    )
+    expect(writesBeforeCommit('echo x>Packages/packages-lock.json; git commit -am t', lock)).toEqual(lock)
+    expect(writesBeforeCommit("sed -i '' 's/a/b/' Packages/packages-lock.json && git commit -am t", lock)).toEqual(lock)
+    expect(writesBeforeCommit('cd Packages && echo y | tee -a packages-lock.json && git commit -am t', lock)).toEqual(
+      lock,
+    )
+    expect(writesBeforeCommit('npm i && git commit -am t', ['package-lock.json'])).toEqual(['package-lock.json'])
+    expect(writesBeforeCommit('git commit -m t && echo x >> Packages/packages-lock.json', lock)).toEqual([])
+    expect(writesBeforeCommit('echo x >> Packages/packages-lock.json', lock)).toEqual([])
+    expect(writesBeforeCommit('echo x >> Assets/A.cs && git commit -am t', lock)).toEqual([])
+    expect(writesBeforeCommit('npm i && git commit -am t', lock)).toEqual([])
+  })
+  test('the reason names the file and how to go on', () => {
+    const r = writeCommitReason(lock) ?? ''
+    expect(r).toContain('Packages/packages-lock.json')
+    expect(r).toContain('git checkout -- Packages/packages-lock.json')
+    expect(writeCommitReason([])).toBeUndefined()
   })
 })

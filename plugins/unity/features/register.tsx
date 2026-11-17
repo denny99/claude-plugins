@@ -213,7 +213,10 @@ export function registerUnity(on: On, options: Options): void {
     const command = (e.input as { command?: unknown } | undefined)?.command
     if (typeof command !== 'string' || !command.trim()) return next(e)
     const reason = await bashVerdictReason($, options, command)
-    return reason ? { decision: 'deny' as const, reason } : next(e)
+    if (!reason) return next(e)
+    // Deny AFTER next(e): answering without next makes the engine report this hook as skipped by the hooks above.
+    const verdict = await next(e)
+    return verdict.decision === 'deny' ? verdict : { decision: 'deny' as const, reason }
   }).catch(($, e, next) => next(e))
 
   // --- edit guards + compile gate (Edit / Write only: never hook Bash calls) ---

@@ -17,16 +17,19 @@ Commands: `/dnd [table|build|health]`, `/dnd-scene`. Model tool: `initiative` (s
 
 ## Install
 
+The normal path: in the Studio, *Settings → Connections → AI assistants (MCP) → Install for Claude Code*. The app installs the plugin with its token and port, and removes old copies and the old user-level `dnd-studio` MCP server.
+
+By hand, the command the app copies:
+
 ```sh
-claude plugin marketplace add denny99/claude-plugins
-claude plugin install dnd-studio@denny99
+claude plugin marketplace add denny99/claude-plugins && claude plugin install dnd-studio@denny99 --config token=<…> --config port=<…>
 ```
 
-During install (or later under `/plugin` → dnd-studio → configure) set the **token**: in the Studio, *Settings → Connections → AI assistants (MCP) → Copy the setup command*, and take the part after `Bearer `. The port stays 37641 unless the app's `settings.json` sets `mcpPort`.
-
-Remove an older user-level server first so the tools are not there twice: `claude mcp remove dnd-studio -s user`.
+Token and port can be changed later under `/plugin` → dnd-studio → configure. The port stays 37641 unless the app's `settings.json` sets `mcpPort`.
 
 The plugin's MCP tools are named `mcp__plugin_dnd-studio_dnd-studio__<tool>` and its agents `dnd-studio:pnp-<name>`.
+
+An older MCP server named `dnd-studio` at user level (the Studio's former setup command) holds the name of the plugin's own `initiative` tool and makes Claude Code suppress the plugin's server as a duplicate; `/dnd health` says so. Remove it once with `claude mcp remove dnd-studio -s user` and restart Claude Code (the D&D Studio app's new installer does this migration too).
 
 ### Windows
 

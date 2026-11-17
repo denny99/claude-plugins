@@ -8,7 +8,7 @@ import {
   renderBuild,
 } from "../features/build";
 import { refreshDiscord, registerEvening } from "../features/evening";
-import { healthText, probe, renderHealth } from "../features/health";
+import { clashText, healthText, probe, renderHealth } from "../features/health";
 import {
   loadLookOverrides,
   registerLook,
@@ -25,6 +25,7 @@ import {
 } from "../features/table";
 import {
   readCampaign,
+  readClash,
   readCheck,
   readEvening,
   readHealth,
@@ -35,6 +36,7 @@ import {
   readRuns,
   readTab,
   readTable,
+  setClash,
   setTab,
 } from "../lib/state";
 import { Header, Tabs, kit } from "../lib/ui";
@@ -86,7 +88,7 @@ export async function initiativeTool(
       : [];
     if (!order.length) return "Give order: the names in turn order.";
     await startInitiative($, order);
-    return `Fight started, round 1: ${order.join(", ")}. The spotlight is not moved yet; call next when the first acts.`;
+    return `Fight started, round 1: ${order.join(", ")}. Nobody has the turn yet; call next to give it to ${order[0]} (the spotlight follows).`;
   }
   if (action === "next") {
     const ini = await nextTurn($);
@@ -112,32 +114,49 @@ export const register: Register = (on, options) => {
   registerEvening(on);
 
   on("session.start", async ($, e, next) => {
-    await $.command.register({
-      name: "dnd",
-      description: "Open the D&D Studio pane (table, build, health)",
-      argumentHint: "[table|build|health]",
-    });
-    await $.command.register({
-      name: "dnd-scene",
-      description: "Read the D&D table now: scene, round, whose turn, party",
-    });
-    await $.tool.register({
-      name: "initiative",
-      description:
-        "The fight order on the GM screen (kept by this plugin, the Studio has none). action set + order starts a fight (round 1); next moves to the next in line and, for a hero, puts the Studio's spotlight on them (writes to the players' window); end stops it; show (default) reads the GM screen: scene, round, order, party values.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          action: { type: "string", enum: ["set", "next", "end", "show"] },
-          order: {
-            type: "array",
-            items: { type: "string" },
-            description: "set: names in turn order, heroes and foes",
+    // Each registration on its own: one that fails (an old user-level MCP server named "dnd-studio" takes this
+    // plugin's tool names) must not skip the rest, the kept state or next(e).
+    try {
+      await $.command.register({
+        name: "dnd",
+        description: "Open the D&D Studio pane (table, build, health)",
+        argumentHint: "[table|build|health]",
+      });
+    } catch (err) {
+      $.ui.log(`dnd-studio: /dnd not registered: ${String(err)}`);
+    }
+    try {
+      await $.command.register({
+        name: "dnd-scene",
+        description: "Read the D&D table now: scene, round, whose turn, party",
+      });
+    } catch (err) {
+      $.ui.log(`dnd-studio: /dnd-scene not registered: ${String(err)}`);
+    }
+    let clash: string | null = null;
+    try {
+      await $.tool.register({
+        name: "initiative",
+        description:
+          "The fight order on the GM screen (kept by this plugin, the Studio has none). action set + order starts a fight (round 1, nobody has the turn yet); next gives the turn to the next in line (the first one right after set) and, for a hero, puts the Studio's spotlight on them (writes to the players' window); end stops it; show (default) reads the GM screen: scene, round, order, party values.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            action: { type: "string", enum: ["set", "next", "end", "show"] },
+            order: {
+              type: "array",
+              items: { type: "string" },
+              description: "set: names in turn order, heroes and foes",
+            },
           },
         },
-      },
-    });
+      });
+    } catch (err) {
+      clash = err instanceof Error ? err.message : String(err);
+      $.ui.log(`dnd-studio: ${clashText(clash)}`);
+    }
     try {
+      await setClash($, clash);
       await loadRuns($);
       await loadPlanApproval($);
       await loadLookOverrides($);
@@ -203,7 +222,11 @@ export const register: Register = (on, options) => {
               rules,
               check: await readCheck($),
             })
-          : renderHealth($, k, options, { health: await readHealth($), rules });
+          : renderHealth($, k, options, {
+              health: await readHealth($),
+              rules,
+              clash: await readClash($),
+            });
     return (
       <Box flexDirection="column" gap={1}>
         {Header(k, {

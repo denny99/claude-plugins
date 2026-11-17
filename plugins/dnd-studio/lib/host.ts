@@ -146,7 +146,7 @@ export async function createHost($: EngineInterface): Promise<Host> {
       } catch (err) {
         return {
           isUp: false,
-          detail: err instanceof Error ? err.message : String(err),
+          detail: tidyError(err instanceof Error ? err.message : String(err)),
         };
       }
     },
@@ -156,4 +156,18 @@ export async function createHost($: EngineInterface): Promise<Host> {
 /** For tests: forget the cached OS/env. */
 export function resetHostCache(): void {
   cached = undefined;
+}
+
+/**
+ * An engine error as one readable detail: without the `dnd-studio: `, `$.tool.register: ` and `$.http.fetch(…) failed: `
+ * wrapping and with
+ * a repeated code said once (`ECONNREFUSED: ECONNREFUSED: Unable…` → `ECONNREFUSED: Unable…`).
+ */
+export function tidyError(message: string): string {
+  return message
+    .replace(/^(?:dnd-studio:\s*)+/i, "")
+    .replace(/\$\.http\.fetch\([^)]*\) failed:\s*/g, "")
+    .replace(/^\$\.[a-z]+\.[a-zA-Z]+:\s*/, "")
+    .replace(/\b([A-Z][A-Z0-9_]+):\s+(?:\1:\s+)+/g, "$1: ")
+    .trim();
 }

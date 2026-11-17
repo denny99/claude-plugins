@@ -161,6 +161,21 @@ export async function setPreview(
 ): Promise<void> {
   await update($, previewAtom, () => text);
 }
+const clashAtom = atom(
+  { plugin: "dnd-studio", key: "clash" } as const,
+  null as string | null,
+  { shape: "clash-1" },
+);
+/** Why this plugin's own tools could not be registered at session start (null: all registered). */
+export async function readClash($: EngineInterface): Promise<string | null> {
+  return read($, clashAtom);
+}
+export async function setClash(
+  $: EngineInterface,
+  why: string | null,
+): Promise<void> {
+  await update($, clashAtom, () => why);
+}
 export async function readHealth($: EngineInterface): Promise<Health | null> {
   return read($, healthAtom);
 }

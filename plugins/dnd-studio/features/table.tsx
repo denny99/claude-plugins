@@ -107,14 +107,14 @@ export async function tableAction(
   await refreshTable($, false);
 }
 
-/** Starts a fight with this order (round 1, first in line). */
+/** Starts a fight with this order: round 1, BEFORE the first in line, so the first `next` gives them the turn. */
 export async function startInitiative(
   $: EngineInterface,
   order: string[],
 ): Promise<Initiative> {
   const out = await patchInitiative($, () => ({
     order,
-    index: 0,
+    index: -1,
     round: 1,
     isActive: order.length > 0,
   }));
@@ -418,44 +418,49 @@ export async function watch(
   return r as never;
 }
 
-/** The body of the guarding `tool.check` hooks: the only hard denies of the plugin. */
+/** The deny reason of the guarding `tool.check` hooks for this call, or undefined. */
+async function guardReason(
+  $: EngineInterface,
+  e: unknown,
+  tool: string,
+): Promise<string | undefined> {
+  const rules = await readRules($);
+  const input = inputOf((e as Obj).input ?? {});
+  if ((tool === "show_players" || tool === "give_find") && rules.denyLeaks) {
+    const forWhom = looksPrivate(input);
+    if (forWhom)
+      return `This looks like a handout or secret for ${forWhom}: deliver it privately (discord whisper with handout/sheet), not on the shared window. The rule can be turned off in /dnd → Health → Rules.`;
+  }
+  if (
+    tool === "talk_npc" &&
+    rules.denyTalkNpc &&
+    isLive(await readTable($), await readInitiative($))
+  )
+    return "The table is live: speak the NPC yourself with say_line (voice = the NPC); talk_npc is for preparation. Rule toggle: /dnd → Health → Rules.";
+  if (rules.denyFamily && /meine familie/i.test((await readLive($)).profile))
+    return 'The open Studio profile is "Meine Familie", which is never changed: switch the profile first.';
+  return undefined;
+}
+
+/**
+ * The body of the guarding `tool.check` hooks: the only hard denies of the plugin. A deny is returned AFTER `next(e)`
+ * (a stricter verdict beneath stands): answering without next makes the engine report this hook as skipped.
+ */
 export async function guard(
   $: EngineInterface,
   e: unknown,
   next: (e: never) => Promise<unknown>,
   tool: string,
 ): Promise<never> {
+  let reason: string | undefined;
   try {
-    const rules = await readRules($);
-    const input = inputOf((e as Obj).input ?? {});
-    if ((tool === "show_players" || tool === "give_find") && rules.denyLeaks) {
-      const forWhom = looksPrivate(input);
-      if (forWhom)
-        return {
-          decision: "deny",
-          reason: `This looks like a handout or secret for ${forWhom}: deliver it privately (discord whisper with handout/sheet), not on the shared window. The rule can be turned off in /dnd → Health → Rules.`,
-        } as never;
-    }
-    if (
-      tool === "talk_npc" &&
-      rules.denyTalkNpc &&
-      isLive(await readTable($), await readInitiative($))
-    )
-      return {
-        decision: "deny",
-        reason:
-          "The table is live: speak the NPC yourself with say_line (voice = the NPC); talk_npc is for preparation. Rule toggle: /dnd → Health → Rules.",
-      } as never;
-    if (rules.denyFamily && /meine familie/i.test((await readLive($)).profile))
-      return {
-        decision: "deny",
-        reason:
-          'The open Studio profile is "Meine Familie", which is never changed: switch the profile first.',
-      } as never;
+    reason = await guardReason($, e, tool);
   } catch {
     // a failing guard lets the call through
   }
-  return next(e as never) as never;
+  const verdict = (await next(e as never)) as { decision?: string } | undefined;
+  if (!reason || verdict?.decision === "deny") return verdict as never;
+  return { decision: "deny", reason } as never;
 }
 
 /** A watcher that fails hands the call through unchanged: a note is never worth a stalled table. */

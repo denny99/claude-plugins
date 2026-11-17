@@ -86,6 +86,7 @@ namespace Denny99.ClaudeBridge
             public bool isPaused;
             public int compileSeq;
             public string scene;
+            public bool batchmode;
         }
 
         public static long Now() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -103,6 +104,7 @@ namespace Denny99.ClaudeBridge
                 isPaused = EditorApplication.isPaused,
                 compileSeq = SessionState.GetInt(SeqKey, 0),
                 scene = SceneManager.GetActiveScene().path,
+                batchmode = Application.isBatchMode,
             };
             WriteAtomic("status.json", JsonUtility.ToJson(s));
         }
@@ -252,6 +254,8 @@ namespace Denny99.ClaudeBridge
             var path = string.IsNullOrEmpty(c.path) ? Path.Combine(Dir, "shots", "shot-" + Now() + ".png") : c.path;
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             if (File.Exists(path)) File.Delete(path);
+            if (EditorApplication.isPlaying && Application.isBatchMode)
+                throw new InvalidOperationException("Play-mode screenshots need a visible editor window (not batchmode).");
             if (EditorApplication.isPlaying)
             {
                 // The Game view as the player sees it (UI included); written at the end of the frame.
@@ -316,6 +320,7 @@ namespace Denny99.ClaudeBridge
             public string file;
             public int line;
             public int column;
+            public string code;
         }
 
         [Serializable]
@@ -333,11 +338,28 @@ namespace Denny99.ClaudeBridge
                     pendingMessages.Add(new CompileMessage
                     {
                         severity = m.type == CompilerMessageType.Error ? "error" : "warning",
-                        message = m.message,
+                        message = BareMessage(m.message, out var code),
+                        code = code,
                         file = (m.file ?? "").Replace('\\', '/'),
                         line = m.line,
                         column = m.column,
                     });
+        }
+
+        // CompilerMessage.message repeats "Assets/A.cs(12,5): error CS1002: " before the text; file/line/column/code
+        // are fields of their own, so only the bare text goes to compile.json.
+        static readonly System.Text.RegularExpressions.Regex MessagePrefix = new System.Text.RegularExpressions.Regex(
+            @"^\s*(?:[^\r\n]*?\(\d+,\d+\)\s*:\s*)?(?:error|warning)\s+([A-Z]+\d+)\s*:\s*",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        static string BareMessage(string message, out string code)
+        {
+            code = null;
+            if (string.IsNullOrEmpty(message)) return message ?? "";
+            var m = MessagePrefix.Match(message);
+            if (!m.Success) return message;
+            code = m.Groups[1].Value;
+            return message.Substring(m.Length);
         }
 
         static void OnCompilationFinished()

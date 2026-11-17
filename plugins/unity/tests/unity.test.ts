@@ -2,7 +2,7 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import { editNotes, metaCandidates } from '../features/guards'
 import { draftJson, jobsFromDocs } from '../features/init'
-import { readStatus } from '../lib/bridge'
+import { readCompile, readStatus } from '../lib/bridge'
 import type { HostEnv } from '../lib/host'
 import { augmentedPath, pathDelimiter } from '../lib/host'
 import { dirname, join, norm, relative } from '../lib/path'
@@ -26,6 +26,7 @@ import {
   rankResults,
   splitFilter,
   testReport,
+  formatMessage,
   toUnityFilter,
 } from '../lib/unity'
 
@@ -188,7 +189,7 @@ describe('tests', () => {
     const report = testReport({ state: 'done', mode: 'EditMode', results }, { 'Game.Tests.MathTests.Old': 'Failed' })
     expect(report.split('\n')[0]).toBe('EditMode: 1 passed, 2 failed, 1 skipped of 4.')
     expect(report).toContain('NEW FAIL Game.Tests.MathTests.Divides')
-    expect(report).toContain('at at Game.Tests.MathTests.Divides () [0x0] in /p/Assets/Tests/MathTests.cs:14')
+    expect(report).toContain('  at Game.Tests.MathTests.Divides () [0x0] in /p/Assets/Tests/MathTests.cs:14')
     expect(batchTestArgs('/p', 'EditMode', '/p/Logs/r.xml', 'A;B')).toEqual([
       '-batchmode',
       '-nographics',
@@ -318,5 +319,69 @@ describe('guards and init', () => {
       tests: { areas: { A: 'x' } },
       editorEnv: {},
     })
+  })
+})
+
+describe('smoke-test regressions', () => {
+  test('a compiler message is located once, also when the message (old bridge) repeats the prefix', () => {
+    const where = { severity: 'error' as const, file: 'Assets/Smoke.cs', line: 1, column: 41, code: 'CS0029' }
+    const line = "Assets/Smoke.cs(1,41): error CS0029: Cannot implicitly convert type 'string' to 'int'"
+    expect(formatMessage({ ...where, message: line })).toBe(line)
+    expect(formatMessage({ ...where, message: "Cannot implicitly convert type 'string' to 'int'" })).toBe(line)
+    expect(formatMessage({ severity: 'warning', message: 'error-free text: kept' })).toBe(
+      'warning: error-free text: kept',
+    )
+  })
+
+  test('compile.json: the bridge code field wins, old bridges still give the code from the message', async () => {
+    const fs = memFs({
+      '/p/Temp/ClaudeBridge/compile.json': JSON.stringify({
+        seq: 2,
+        messages: [
+          { severity: 'error', message: 'bare', file: 'Assets/A.cs', line: 1, column: 2, code: 'CS1002' },
+          {
+            severity: 'error',
+            message: 'Assets/B.cs(3,4): error CS0103: old',
+            file: 'Assets/B.cs',
+            line: 3,
+            column: 4,
+          },
+        ],
+      }),
+    })
+    const c = await readCompile(fs, '/p')
+    expect(c?.messages.map(m => m.code)).toEqual(['CS1002', 'CS0103'])
+    expect(c?.messages.map(formatMessage)).toEqual([
+      'Assets/A.cs(1,2): error CS1002: bare',
+      'Assets/B.cs(3,4): error CS0103: old',
+    ])
+  })
+
+  test('a failed test stack line already starting with "at" is not prefixed twice', () => {
+    const report = testReport(
+      {
+        state: 'done',
+        mode: 'EditMode',
+        results: [
+          {
+            fullName: 'EditTests.Fails',
+            status: 'Failed',
+            message: 'Expected: 1  But was: 2',
+            stack: 'at EditTests.Fails () [0x00001] in /p/Assets/Tests/EditTests.cs:12',
+          },
+        ],
+      } as never,
+      {},
+    )
+    expect(report).toContain('  at EditTests.Fails () [0x00001] in /p/Assets/Tests/EditTests.cs:12')
+    expect(report).not.toContain('at at')
+  })
+
+  test('status.json: batchmode is read when present, absent from older bridges', async () => {
+    const at = (extra: object) =>
+      memFs({ '/p/Temp/ClaudeBridge/status.json': JSON.stringify({ updatedAt: 1000, ...extra }) })
+    expect(await readStatus(at({ batchmode: true }), '/p', 2000)).toMatchObject({ status: { batchmode: true } })
+    const old = await readStatus(at({}), '/p', 2000)
+    expect(old.status && 'batchmode' in old.status).toBe(false)
   })
 })

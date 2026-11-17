@@ -9,8 +9,8 @@ import type {
 } from "claude-code";
 
 import { applyLook } from "./look";
-import { createHost, startArgv, startHint } from "../lib/host";
-import { readHealth, setHealth, toggleRule } from "../lib/state";
+import { createHost, startArgv, startHint, tidyError } from "../lib/host";
+import { readClash, readHealth, setHealth, toggleRule } from "../lib/state";
 import { SERVER_KEY } from "../lib/studio";
 import { Line, Row, Section } from "../lib/ui";
 import type { Kit } from "../lib/ui";
@@ -34,7 +34,7 @@ export async function probe(
     const link = await $.mcp.connect(SERVER_KEY);
     connected = link.isConnected;
     if (!link.isConnected)
-      detail = `${http.detail}; MCP: ${link.message || link.reason}`;
+      detail = `${http.detail}; MCP: ${tidyError(link.message || link.reason)}`;
   }
   const h: Health = {
     checkedAt: await $.clock.now(),
@@ -62,13 +62,31 @@ export async function startApp(
   $.clock.after(8000, () => void probe($, options));
 }
 
+/** The fix for an old user-level MCP server named like this plugin (its tools take the plugin's tool names). */
+export const CLASH_FIX =
+  "Run `claude mcp remove dnd-studio -s user`, then restart Claude Code (the D&D Studio app's new installer does this migration too).";
+
+/** The health line for a failed tool registration at session start. */
+export function clashText(why: string): string {
+  const detail = tidyError(why);
+  return /MCP server named|already/i.test(detail)
+    ? `The plugin's own tool (initiative) is missing: an MCP server named "dnd-studio" is set up at user level and holds its name (${detail}). ${CLASH_FIX}`
+    : `The plugin's own tool (initiative) could not be registered: ${detail}`;
+}
+
 export async function healthText($: EngineInterface): Promise<string> {
+  const clash = await readClash($);
+  const text = await healthLine($);
+  return clash ? `${clashText(clash)}\n${text}` : text;
+}
+
+async function healthLine($: EngineInterface): Promise<string> {
   const h = await readHealth($);
   if (!h) return "Not checked yet.";
   if (h.app === "down")
     return `D&D Studio is not running (${h.detail}). ${startHint(h.platform as never)}`;
   if (!h.connected)
-    return `The app runs but Claude is not connected: set the token (/plugin → dnd-studio → configure). ${h.detail}`;
+    return `The app runs but Claude is not connected: set the token (Studio → Settings → Connections → Install for Claude Code, or /plugin → dnd-studio → configure). ${h.detail}`;
   return "D&D Studio is running and connected.";
 }
 
@@ -85,10 +103,27 @@ export function renderHealth(
   $: EngineInterface,
   k: Kit,
   options: PluginOptions,
-  d: { health: Health | null; rules: Rules },
+  d: { health: Health | null; rules: Rules; clash?: string | null },
 ): RenderElement[] {
   const { health, rules } = d;
   const out: RenderElement[] = [];
+  if (d.clash)
+    out.push(
+      Section(k, {
+        key: "clash",
+        title: "Old MCP server",
+        children: [
+          Row(k, {
+            key: "h-clash",
+            status: "failed",
+            primary:
+              'User-level MCP server "dnd-studio" takes the plugin\'s tool names',
+            secondary: d.clash,
+          }),
+          Line(k, CLASH_FIX, { dim: true }),
+        ],
+      }),
+    );
   out.push(
     Section(k, {
       key: "studio",
@@ -133,7 +168,7 @@ export function renderHealth(
                 : "Claude not connected",
               secondary: health.connected
                 ? ""
-                : "Token: Studio → Settings → Connections → Copy the setup command",
+                : "Studio → Settings → Connections → Install for Claude Code",
             }),
             health.app === "down"
               ? Line(k, startHint(health.platform as never), { dim: true })

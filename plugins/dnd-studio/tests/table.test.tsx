@@ -162,7 +162,10 @@ test("GM buttons call the right Studio tool only on press", async ($, on) => {
 
   await ui.input({ key: "ini-order", text: "Wolf 1, Thorin" });
   await ui.press({ key: "ini-next" });
-  expect(writes()[2]).toEqual({ tool: "spotlight", args: { who: "Thorin" } });
+  // First next: the first in line (a foe clears the spotlight), then Thorin.
+  expect(writes()[2]).toEqual({ tool: "spotlight", args: { who: "" } });
+  await ui.press({ key: "ini-next" });
+  expect(writes()[3]).toEqual({ tool: "spotlight", args: { who: "Thorin" } });
   await ui.unmount();
 });
 
@@ -191,9 +194,30 @@ test("the band hides without a live table and shows scene, round and turn with o
   } as never);
   band = await $.ui.mount({ ...BAND, surface: "desktop" });
   expect((await band.find({ type: "Text", text: /⚔/ }))?.text).toBe(
+    "⚔ Das Tor · R1",
+  );
+  await band.unmount();
+
+  // The first next after set gives the FIRST in line the turn (not the second).
+  const first = await $.tool.run({
+    tool: "mcp__dnd-studio__initiative",
+    action: "next",
+  } as never);
+  expect(JSON.stringify(first)).toContain("Round 1: Thorin's turn.");
+  band = await $.ui.mount({ ...BAND, surface: "desktop" });
+  expect((await band.find({ type: "Text", text: /⚔/ }))?.text).toBe(
     "⚔ Das Tor · R1 · Thorin's turn",
   );
   await band.unmount();
+  await $.tool.run({
+    tool: "mcp__dnd-studio__initiative",
+    action: "next",
+  } as never);
+  const wrap = await $.tool.run({
+    tool: "mcp__dnd-studio__initiative",
+    action: "next",
+  } as never);
+  expect(JSON.stringify(wrap)).toContain("Round 2: Thorin's turn.");
 });
 
 test("handouts for one player are denied on the shared window; ordinary scenes pass", async ($, on) => {

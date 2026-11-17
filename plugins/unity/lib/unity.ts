@@ -211,10 +211,18 @@ export function lastCompileBlock(text: string): string {
   return at >= 0 ? text.slice(at) : text
 }
 
+/**
+ * The bare text of a compiler message: Unity's `CompilerMessage.message` (and old bridges) carry the
+ * `Assets/A.cs(12,5): error CS1002: ` prefix already; that prefix is dropped when present.
+ */
+export function bareMessage(message: string): string {
+  return message.replace(/^\s*(?:[^\r\n]*?\(\d+,\d+\)\s*:\s*)?(?:error|warning)\s+[A-Z]+\d+\s*:\s*/i, '')
+}
+
 /** One message as a line: `Assets/A.cs(12,5): error CS1002: ; expected`. */
 export function formatMessage(m: CompilerMessage): string {
   const where = m.file ? `${m.file}${m.line ? `(${m.line},${m.column ?? 0})` : ''}: ` : ''
-  return `${where}${m.severity}${m.code ? ` ${m.code}` : ''}: ${m.message}`
+  return `${where}${m.severity}${m.code ? ` ${m.code}` : ''}: ${bareMessage(m.message)}`
 }
 
 /**
@@ -416,7 +424,7 @@ export function testReport(run: TestRun, previous: Record<string, TestStatus>, m
     lines.push(`${r.newlyRed ? 'NEW ' : ''}FAIL ${r.fullName}`)
     if (r.message) lines.push(`  ${r.message.split('\n').slice(0, 4).join('\n  ')}`)
     const top = r.stack?.split('\n').find(l => /\.cs:\d+|\.cs:line \d+/.test(l))
-    if (top) lines.push(`  at ${top.trim()}`)
+    if (top) lines.push(`  at ${top.trim().replace(/^at\s+/, '')}`)
   }
   if (failed.length > maxFailures) lines.push(`… ${failed.length - maxFailures} more failures.`)
   return lines.join('\n')

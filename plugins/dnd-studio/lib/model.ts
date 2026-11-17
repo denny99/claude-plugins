@@ -187,10 +187,10 @@ export function parseOrder(text: string): string[] {
     .filter(Boolean);
 }
 
-/** Next turn: wraps to the top with the next round. */
+/** Next turn: from "before the first" (index -1, just set) to the first; wraps to the top with the next round. */
 export function advance(ini: Initiative): Initiative {
   if (!ini.order.length) return ini;
-  const next = ini.index + 1;
+  const next = Math.max(ini.index, -1) + 1;
   return next >= ini.order.length
     ? { ...ini, index: 0, round: ini.round + 1 }
     : { ...ini, index: next };

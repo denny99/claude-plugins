@@ -1,13 +1,23 @@
 /**
  * Bash guards as `tool.check` verdicts (never tool.call/tool.run on Bash: that would disable run_in_background).
  * A deny carries an instructive reason the model reads, so it can run the corrected command right away:
- * - restoreBeforeCommit: `git commit` while a listed file (e.g. Packages/packages-lock.json) is modified,
+ * - restoreBeforeCommit: `git commit` while a listed file (e.g. Packages/packages-lock.json) is modified, or when the
+ *   same line writes it first (`echo x >> lock && git commit`, sed -i, npm i, …),
  * - .meta guard: mv/rm (git, cmd, PowerShell too) of an asset under Assets/ without its `.meta`.
  * Both fail open: anything unexpected lets the command through.
  */
 import type { EngineInterface } from 'claude-code'
 
-import { commitReason, gitCommits, metaFindings, metaReason, parsePorcelain, type MetaFinding } from '../lib/command'
+import {
+  commitReason,
+  gitCommits,
+  metaFindings,
+  metaReason,
+  parsePorcelain,
+  writeCommitReason,
+  writesBeforeCommit,
+  type MetaFinding,
+} from '../lib/command'
 import { createHost } from '../lib/host'
 import { isAbsolute, join, relative } from '../lib/path'
 import { configOf, ensureModel, type Options } from './state'
@@ -31,6 +41,10 @@ export async function commitGuardReason(
   const host = await createHost($)
   const projectDir = m.project ? relative(sessionRoot, m.project.root) : ''
   const inProject = projectDir && m.project && projectDir !== m.project.root ? projectDir : ''
+  const written = writeCommitReason(
+    writesBeforeCommit(command, [...files, ...(inProject ? files.map(f => `${inProject}/${f}`) : [])]),
+  )
+  if (written) return written
   for (const c of commits) {
     const cwd = c.dir ? resolveIn(sessionRoot, c.dir) : sessionRoot
     const top = await host.run('git', ['-C', cwd, 'rev-parse', '--show-toplevel'], { cwd, log: () => undefined })

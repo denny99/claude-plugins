@@ -89,6 +89,7 @@ export type UnityModel = {
     isPaused?: boolean
     unityVersion?: string
     scene?: string
+    batchmode?: boolean
     compileSeq?: number
   }
   compile?: { seq: number; at: number; source: 'bridge' | 'log'; messages: ModelCompilerMessage[] }

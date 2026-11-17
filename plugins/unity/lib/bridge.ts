@@ -4,11 +4,11 @@
  * the editor closes, so a stale folder never outlives the editor for long):
  *
  * - `status.json`  — heartbeat the bridge rewrites every second: `{ updatedAt, pid, unityVersion, projectPath,
- *                    isCompiling, isPlaying, isPaused, compileSeq, scene }`. Older than {@link STALE_MS} → bridge down (10 s: a domain reload pauses the heartbeat for a few seconds).
+ *                    isCompiling, isPlaying, isPaused, compileSeq, scene, batchmode? }`. Older than {@link STALE_MS} → bridge down (10 s: a domain reload pauses the heartbeat for a few seconds).
  * - `cmd-<id>.json` — written by the mod: one flat object `{ id, cmd, mode?, filter?, path?, width?, height? }`. The
  *                    bridge picks it up on EditorApplication.update and deletes it.
  * - `result-<id>.json` — written by the bridge (tmp + rename, retried): `{ id, ok, error?, ...data }`.
- * - `compile.json`  — the last compile: `{ seq, finishedAt, messages: [{ severity, message, file, line, column }] }`,
+ * - `compile.json`  — the last compile: `{ seq, finishedAt, messages: [{ severity, message, file, line, column, code? }] }`,
  *                    written in compilationFinished, i.e. BEFORE the domain reload.
  * - `console.json`  — the last 300 log entries `{ entries: [{ seq, type, message, stack, time }] }`.
  * - `tests.json`    — the current/last test run (see unity.ts parseBridgeTests).
@@ -30,6 +30,8 @@ export interface BridgeStatus {
   isPaused: boolean
   compileSeq: number
   scene?: string
+  /** The editor runs with -batchmode (no window: Play-mode screenshots cannot work). Absent from older bridges. */
+  batchmode?: boolean
 }
 
 export interface ConsoleEntry {
@@ -81,8 +83,16 @@ export async function readStatus(
   if (raw.unityVersion) status.unityVersion = String(raw.unityVersion)
   if (raw.projectPath) status.projectPath = String(raw.projectPath)
   if (raw.scene) status.scene = String(raw.scene)
+  if (typeof raw.batchmode === 'boolean') status.batchmode = raw.batchmode
   if (now - status.updatedAt > STALE_MS) return { up: false, why: 'stale', status }
   return { up: true, status }
+}
+
+/** The compiler code: the bridge's `code` field, else (older bridges) the CSxxxx in the message. */
+function codeOf(m: Record<string, unknown>): { code?: string } {
+  if (typeof m.code === 'string' && m.code) return { code: m.code }
+  const found = /\b(CS\d+)\b/.exec(String(m.message ?? ''))?.[1]
+  return found ? { code: found } : {}
 }
 
 export async function readCompile(
@@ -101,7 +111,7 @@ export async function readCompile(
       ...(m.file ? { file: String(m.file) } : {}),
       ...(typeof m.line === 'number' ? { line: m.line } : {}),
       ...(typeof m.column === 'number' ? { column: m.column } : {}),
-      ...(/\b(CS\d+)\b/.exec(String(m.message ?? '')) ? { code: /\b(CS\d+)\b/.exec(String(m.message))?.[1] } : {}),
+      ...codeOf(m),
     })),
   }
 }

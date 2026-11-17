@@ -34,6 +34,14 @@ test('restoreBeforeCommit: git commit denied while the file is modified, with th
 
   world.git.status = ''
   expect((await settle(world, $.tool.check(check('git commit -m x')))).decision).not.toBe('deny')
+
+  // clean now, but the same line writes the lock file before committing (git status cannot see that yet)
+  const sameLine = await settle(
+    world,
+    $.tool.check(check('echo "// x" >> unity/Packages/packages-lock.json && git add -A && git commit -m t')),
+  )
+  expect(sameLine.decision).toBe('deny')
+  expect(sameLine.reason).toContain('changes unity/Packages/packages-lock.json and commits in the same line')
 })
 
 test('.meta guard: mv/rm of an asset without its .meta is denied with the corrected command; allowed cases pass', async ($, on) => {

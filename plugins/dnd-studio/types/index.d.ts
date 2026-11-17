@@ -225,6 +225,7 @@ declare module "claude-code" {
       campaign: ShapedState<CampaignInfo | null>;
       preview: ShapedState<string>;
       health: ShapedState<Health | null>;
+      clash: ShapedState<string | null>;
       look: ShapedState<LookState>;
       evening: ShapedState<EveningState>;
       check: ShapedState<BuildCheck>;

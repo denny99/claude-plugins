@@ -149,6 +149,86 @@ export function commitReason(modified: { staged: boolean; path: string }[], gitD
   ].join('\n')
 }
 
+// --- writes in the same line as a commit ---
+
+const LOCKS: Record<string, string[]> = {
+  npm: ['package-lock.json', 'npm-shrinkwrap.json'],
+  yarn: ['yarn.lock'],
+  pnpm: ['pnpm-lock.yaml'],
+}
+const INSTALL = /^(i|install|ci|add|remove|rm|uninstall|un|update|up|upgrade|dedupe|audit)$/
+
+/** The paths one simple command writes (best effort): redirect targets, `sed -i`/`perl -i`, tee, touch, cp/mv targets. */
+function writtenPaths(words: string[]): { paths: string[]; locks: string[] } {
+  const paths: string[] = []
+  const locks: string[] = []
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i] ?? ''
+    const r = /^(?:\d*|&)>>?\|?(.*)$/.exec(w)
+    // `> f`, `>>f`, `2> f` and `x>>f` (no space before the operator).
+    const target = r ? r[1] || words[++i] : w.includes('>') ? w.slice(w.lastIndexOf('>') + 1) || words[++i] : undefined
+    if (target && !target.startsWith('&')) paths.push(target)
+  }
+  const w = commandWords(
+    words.filter((x, i) => !/^(?:\d*|&)>/.test(x) && !/^(?:\d*|&)>>?\|?$/.test(words[i - 1] ?? '')),
+  )
+  const cmd = (w[0] ?? '').replace(/^.*[\\/]/, '').replace(/\.(exe|cmd)$/i, '')
+  const args = w.slice(1)
+  const files = args.filter(a => !a.startsWith('-'))
+  if ((cmd === 'sed' || cmd === 'perl') && args.some(a => /^-[a-zA-Z]*i/.test(a) || a.startsWith('--in-place'))) {
+    // sed -i 's/a/b/' file…: the first non-flag word is the script unless -e/-f gave it.
+    const script = args.some(a => a === '-e' || a === '-f' || /^-[a-zA-Z]*[ef]$/.test(a)) ? 0 : 1
+    paths.push(...files.slice(script))
+  } else if (cmd === 'tee' || cmd === 'touch' || cmd === 'truncate') paths.push(...files)
+  else if ((cmd === 'cp' || cmd === 'mv' || cmd === 'install') && files.length > 1)
+    paths.push(files[files.length - 1] ?? '')
+  else if (LOCKS[cmd] && (cmd === 'yarn' ? !files[0] || INSTALL.test(files[0]) : INSTALL.test(files[0] ?? '')))
+    locks.push(...(LOCKS[cmd] ?? []))
+  return { paths, locks }
+}
+
+const normPath = (p: string) =>
+  p
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter(x => x && x !== '.')
+    .join('/')
+
+/**
+ * Restore-before-commit paths the line writes BEFORE a `git commit` in the same line (`echo x >> lock && git commit`):
+ * the status check runs before the line, so it cannot see that change. `files` are relative to the session root.
+ */
+export function writesBeforeCommit(line: string, files: string[]): string[] {
+  const segs = splitCommand(line)
+  const lastCommit = segs.map(s => gitInvocation(s.words)?.sub === 'commit').lastIndexOf(true)
+  if (lastCommit < 0 || !files.length) return []
+  const wanted = files.map(normPath)
+  const hit = new Set<string>()
+  for (const s of segs.slice(0, lastCommit)) {
+    const { paths, locks } = writtenPaths(s.words)
+    for (const p of paths) {
+      const at = normPath(s.cd && !/^([\\/]|[A-Za-z]:)/.test(p) ? `${s.cd}/${p}` : p)
+      // The exact listed path, else the longest one it ends with (`unity/Packages/x` over `Packages/x`).
+      const near = wanted
+        .filter(f => at === f || at.endsWith(`/${f}`) || f.endsWith(`/${at}`))
+        .sort((a, b) => Number(b === at) - Number(a === at) || b.length - a.length)[0]
+      if (near) hit.add(near)
+    }
+    for (const l of locks) for (const f of wanted) if (f === l || f.endsWith(`/${l}`)) hit.add(f)
+  }
+  return [...hit]
+}
+
+/** The deny reason for writing a restore-before-commit file and committing in one line. */
+export function writeCommitReason(paths: string[]): string | undefined {
+  if (!paths.length) return undefined
+  return [
+    `Unity: this command line changes ${paths.join(', ')} and commits in the same line. ${paths.length > 1 ? 'They are' : 'It is'} listed under restoreBeforeCommit in .claude/unity.json (it churns locally and must not land in a commit).`,
+    `Run the change on its own, restore the file(s), then commit:`,
+    ...paths.map(p => `  git checkout -- ${shQuote(p)}`),
+  ].join('\n')
+}
+
 // --- .meta guard ---
 
 type Style = 'posix' | 'git' | 'cmd' | 'ps'

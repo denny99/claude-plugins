@@ -154,6 +154,7 @@ async function readBridge(
       compileSeq: st.compileSeq,
       ...(st.unityVersion ? { unityVersion: st.unityVersion } : {}),
       ...(st.scene ? { scene: st.scene } : {}),
+      ...(st.batchmode ? { batchmode: true } : {}),
     },
     console: (await readConsole(host.fs, project)).slice(-200),
   }
@@ -730,6 +731,9 @@ export async function markStopped($: EngineInterface, taskId: string): Promise<v
 
 // --- screenshot ---
 
+export const BATCHMODE_SHOT =
+  'Play-mode screenshots need a visible editor window (not batchmode). Stop Play mode for an Edit-mode camera shot, or open the project in the Unity editor.'
+
 export async function screenshot(
   $: EngineInterface,
   options: Options,
@@ -739,8 +743,10 @@ export async function screenshot(
   if (!m.project) return { error: 'No Unity project here.' }
   const host = await createHost($)
   const path = join(m.project.root, 'Temp', 'ClaudeBridge', 'shots', `shot-${await host.now()}.png`)
+  if (m.bridge.up && m.bridge.batchmode && m.bridge.isPlaying) return { error: BATCHMODE_SHOT }
   const res = await bridgeCommand($, options, { cmd: 'screenshot', path, ...size }, 20000)
-  if (!res.ok) return { error: res.error }
+  if (!res.ok)
+    return { error: m.bridge.batchmode && /no screenshot|visible/i.test(res.error) ? BATCHMODE_SHOT : res.error }
   const written = typeof res.data.path === 'string' && res.data.path ? res.data.path : path
   try {
     const base64 = await host.fs.readBase64(written)
