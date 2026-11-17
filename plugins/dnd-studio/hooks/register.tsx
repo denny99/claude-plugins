@@ -1,11 +1,13 @@
 import type { EngineInterface, PluginOptions, Register } from "claude-code";
 
 import {
+  loadPlanApproval,
   loadRuns,
   refreshCampaign,
   registerBuild,
   renderBuild,
 } from "../features/build";
+import { refreshDiscord, registerEvening } from "../features/evening";
 import { healthText, probe, renderHealth } from "../features/health";
 import {
   loadLookOverrides,
@@ -23,6 +25,8 @@ import {
 } from "../features/table";
 import {
   readCampaign,
+  readCheck,
+  readEvening,
   readHealth,
   readInitiative,
   readLive,
@@ -54,8 +58,10 @@ export async function refreshTab(
   tab: Tab,
   options: PluginOptions,
 ): Promise<void> {
-  if (tab === "table") await refreshTable($);
-  else if (tab === "build") await refreshCampaign($);
+  if (tab === "table") {
+    await refreshTable($);
+    if ((await readTable($))?.discord) await refreshDiscord($);
+  } else if (tab === "build") await refreshCampaign($);
   else await probe($, options);
 }
 
@@ -103,6 +109,7 @@ export const register: Register = (on, options) => {
   registerTable(on);
   registerBuild(on);
   registerLook(on);
+  registerEvening(on);
 
   on("session.start", async ($, e, next) => {
     await $.command.register({
@@ -132,6 +139,7 @@ export const register: Register = (on, options) => {
     });
     try {
       await loadRuns($);
+      await loadPlanApproval($);
       await loadLookOverrides($);
     } catch (err) {
       $.ui.log(`dnd-studio: loading kept state failed: ${String(err)}`);
@@ -179,6 +187,7 @@ export const register: Register = (on, options) => {
               live,
               rules,
               now,
+              evening: await readEvening($),
             }),
             renderLookPicker($, k, {
               sceneTitle: view?.scene?.title ?? "",
@@ -192,6 +201,7 @@ export const register: Register = (on, options) => {
               campaign: await readCampaign($),
               live,
               rules,
+              check: await readCheck($),
             })
           : renderHealth($, k, options, { health: await readHealth($), rules });
     return (

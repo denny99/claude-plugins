@@ -2,7 +2,13 @@
  * Pure shaping of what the Studio answers (table_state, campaign, logs) and of the mod's own state. No `$` here.
  */
 import type {
+  AcceptItem,
   AgentRun,
+  BuildCheck,
+  DiscordInfo,
+  EveningState,
+  GpuState,
+  WhisperInfo,
   Hero,
   Initiative,
   Npc,
@@ -303,3 +309,341 @@ export function buildPhase(runs: AgentRun[]): string {
   return stage;
 }
 
+export const EMPTY_EVENING: EveningState = {
+  watcher: { state: "none", taskId: "", startedAt: 0, endedAt: 0 },
+  notes: [],
+  notesFile: "",
+  discord: null,
+  whisper: null,
+  versionAtStart: "",
+  versionNow: "",
+  stale: "",
+  remindPending: false,
+};
+
+export const EMPTY_CHECK: BuildCheck = {
+  items: [],
+  checkedAt: 0,
+  error: "",
+  gpu: null,
+  plan: null,
+};
+
+// --- the evening: watcher, Discord, version ------------------------------------------------------------------------
+
+/** A Bash command that runs the Studio's watch URL (`curl -s -m 1900 http://127.0.0.1:<port>/watch/<id>`). */
+export function isWatchCommand(command: string): boolean {
+  return /\/watch\/[0-9a-z]{6,}/i.test(command);
+}
+
+/** The app's version from a studio_status answer: an explicit app version, or `version` when it looks like one. */
+export function versionOf(status: Obj): string {
+  for (const v of [
+    status.app_version,
+    status.appVersion,
+    status.studio_version,
+    obj(status.app).version,
+  ])
+    if (str(v)) return str(v);
+  return /^\d+\.\d+/.test(str(status.version)) ? str(status.version) : "";
+}
+
+/** The Studio refusing arguments Claude's cached schema offered ("say_line has no x (it takes: …)") = stale schemas. */
+export function staleSchemaOf(text: string): string {
+  const m = /\b(\w+) has no ([\w, ]+) \(it takes:/.exec(text);
+  return m ? `${m[1]} refused ${m[2]}` : "";
+}
+
+/** discord status (or a split/move/aside answer) → what the pane shows. */
+export function discordOf(json: Obj, now: number): DiscordInfo {
+  const voice = obj(json.voice);
+  const names = (v: unknown): string[] =>
+    arr(v)
+      .map((x) =>
+        typeof x === "string" ? x : str(obj(x).name) || str(obj(x).who),
+      )
+      .filter(Boolean);
+  return {
+    connected: json.connected === true,
+    channel: str(json.here) || str(voice.name),
+    members: arr(json.members)
+      .map(obj)
+      .map((m) => ({ name: str(m.name), character: str(m.character) }))
+      .filter((m) => m.name),
+    rooms: arr(json.rooms)
+      .map(obj)
+      .map((r) => ({
+        name: str(r.name),
+        members: arr(r.members).map(str).filter(Boolean),
+        bot: r.bot === true,
+      }))
+      .filter((r) => r.name),
+    missing: arr(json.missing)
+      .map((m) =>
+        typeof m === "string" ? m : str(obj(m).what) || str(obj(m).name),
+      )
+      .filter(Boolean),
+    warning: str(json.warning),
+    error: str(json.error),
+    streamEnded: names(json.stream_ended),
+    unheard: names(json.unheard),
+    checkedAt: now,
+  };
+}
+
+/** A whisper's delivery from discord whisper or roll_dice whisper; undefined when the answer has none. */
+export function whisperOf(json: Obj, now: number): WhisperInfo | undefined {
+  const w = typeof json.delivered === "boolean" ? json : obj(json.whisper);
+  if (typeof w.delivered !== "boolean") return undefined;
+  return {
+    to: str(w.to) || str(w.hero),
+    delivered: w.delivered,
+    reason: str(w.reason),
+    why: str(w.why),
+    at: now,
+  };
+}
+
+/** Running and queued jobs from studio_status. */
+export function gpuOf(status: Obj, now: number): GpuState {
+  const jobs = arr(status.jobs).map(obj);
+  const running = jobs.filter((j) => j.running === true);
+  const first = running[0] ?? {};
+  return {
+    running: running.length,
+    queued: jobs.length - running.length,
+    step: str(first.step) || str(first.mode),
+    progress: typeof first.progress === "number" ? first.progress : null,
+    busyNote: str(status.computerBusy),
+    checkedAt: now,
+  };
+}
+
+// --- acceptance checklist (pnp-kampagne §4) ------------------------------------------------------------------------
+
+const START_RE =
+  /start(feld|felder|squares?|positions?|platz)|\b[A-Z]\d{1,2}\b/i;
+const SILENT_RE = /\b(stumm|silent|mute|spricht nicht)\b/i;
+
+function names(list: string[]): string {
+  return list.join(", ");
+}
+
+function item(
+  key: string,
+  label: string,
+  total: number,
+  missing: string[],
+  fix: string,
+  emptyStatus: AcceptItem["status"] = "idle",
+): AcceptItem {
+  return {
+    key,
+    label,
+    status: total === 0 ? emptyStatus : missing.length ? "failed" : "ok",
+    counts: total === 0 ? "none" : `${total - missing.length}/${total}`,
+    detail: names(missing),
+    fix: missing.length ? fix : "",
+  };
+}
+
+/** Every §4 row the Studio can answer: campaign get, map list and the last prepare_table counts. */
+export function acceptanceOf(
+  campaign: Obj,
+  mapList: Obj,
+  prepared: string,
+): AcceptItem[] {
+  const name = str(campaign.open) || str(campaign.name);
+  const scenes = arr(campaign.scenes).map(obj);
+  const places = arr(campaign.places).map(obj);
+  const npcs = arr(campaign.npcs).map(obj);
+  const placeMap = new Map(places.map((p) => [str(p.name), str(p.map)]));
+  const out: AcceptItem[] = [];
+
+  // Scenes: picture, read-aloud text and the recipe in the notes.
+  const sceneGaps: string[] = [];
+  const sceneFix = new Set<string>();
+  for (const s of scenes) {
+    const lack = [
+      str(s.picture) ? "" : "picture",
+      str(s.text) ? "" : "text",
+      str(s.notes) ? "" : "recipe",
+    ].filter(Boolean);
+    if (lack.length) sceneGaps.push(`${str(s.title)} (${lack.join("/")})`);
+    if (lack.includes("picture")) sceneFix.add("pnp-maler");
+    if (lack.includes("text") || lack.includes("recipe"))
+      sceneFix.add("pnp-texter");
+  }
+  out.push(
+    item(
+      "scenes",
+      "Scenes: picture + text + recipe",
+      scenes.length,
+      sceneGaps,
+      [...sceneFix].join(", "),
+      "failed",
+    ),
+  );
+
+  // Maps of this campaign painted (every planned tile), places pinned.
+  const maps = arr(mapList.maps).map(obj);
+  const used = new Set(
+    [
+      ...placeMap.values(),
+      ...(typeof campaign.worldMap === "string" ? [campaign.worldMap] : []),
+    ].filter(Boolean),
+  );
+  const mine = maps.filter(
+    (m) =>
+      used.has(str(m.name)) ||
+      arr(m.usedBy).some((u) => !!name && str(u).includes(name)),
+  );
+  const unpainted = mine
+    .filter((m) => {
+      const tiles = arr(m.tiles).map(str);
+      const planned = Array.isArray(m.planned) ? m.planned.map(str) : [];
+      return !tiles.length || planned.some((t) => !tiles.includes(t));
+    })
+    .map((m) => str(m.name));
+  for (const want of used)
+    if (!maps.some((m) => str(m.name) === want))
+      unpainted.push(`${want} (missing)`);
+  out.push(
+    item(
+      "maps",
+      "Maps painted",
+      Math.max(mine.length, used.size),
+      unpainted,
+      "pnp-maler",
+      "failed",
+    ),
+  );
+  const unpinned = places
+    .filter(
+      (p) => p.marker === null || p.marker === undefined || p.marker === false,
+    )
+    .map((p) => str(p.name));
+  out.push(
+    item(
+      "pins",
+      "Places pinned on their map",
+      places.length,
+      unpinned,
+      "pnp-maler",
+    ),
+  );
+
+  // Talking NPCs: portrait, voice, sheet, stock lines.
+  const talking = npcs.filter(
+    (n) => !SILENT_RE.test(`${str(n.notes)} ${str(n.looks)}`),
+  );
+  const npcGaps: string[] = [];
+  const npcFix = new Set<string>();
+  for (const n of talking) {
+    const stock = obj(n.stock);
+    const lack = [
+      str(n.portrait) ? "" : "portrait",
+      str(n.voice) || n.ownVoice === true ? "" : "voice",
+      str(n.sheet) ? "" : "sheet",
+      Object.values(stock).some((l) => arr(l).length) ? "" : "stock lines",
+    ].filter(Boolean);
+    if (!lack.length) continue;
+    npcGaps.push(`${str(n.name)} (${lack.join("/")})`);
+    if (lack.includes("portrait")) npcFix.add("pnp-maler");
+    if (lack.includes("voice")) npcFix.add("pnp-nachbesserer");
+    if (lack.includes("sheet") || lack.includes("stock lines"))
+      npcFix.add("pnp-texter");
+  }
+  out.push(
+    item(
+      "npcs",
+      "Talking NPCs: portrait, voice, sheet, lines",
+      talking.length,
+      npcGaps,
+      [...npcFix].join(", "),
+    ),
+  );
+
+  // Scenes on a map name the start squares.
+  const onMap = scenes.filter((s) => !!placeMap.get(str(s.place)));
+  const noStart = onMap
+    .filter((s) => !START_RE.test(str(s.notes)))
+    .map((s) => str(s.title));
+  out.push(
+    item(
+      "start",
+      "Start squares in scene notes",
+      onMap.length,
+      noStart,
+      "pnp-texter",
+    ),
+  );
+
+  // Threads and where the party is (a chapter of a campaign).
+  const threads = arr(campaign.threads).length;
+  const partyAt = str(campaign.partyAt) || str(campaign.party_at);
+  out.push({
+    key: "threads",
+    label: "Threads and party_at set",
+    status: threads && partyAt ? "ok" : "warning",
+    counts: `${threads} threads · ${partyAt ? "party_at set" : "no party_at"}`,
+    detail: partyAt,
+    fix: threads && partyAt ? "" : "pnp-texter (chapter of a campaign)",
+  });
+
+  // Broken references.
+  const broken = arr(campaign.brokenReferences).map((b) =>
+    typeof b === "string" ? b : str(obj(b).name) || JSON.stringify(b),
+  );
+  out.push({
+    key: "broken",
+    label: "Broken references",
+    status: broken.length ? "failed" : "ok",
+    counts: String(broken.length),
+    detail: names(broken),
+    fix: broken.length ? "pnp-nachbesserer" : "",
+  });
+
+  // Voices made ahead (prepare_table).
+  const m = /^(\d+|\?)\/(\d+)(?:, (\d+) failed)?/.exec(prepared);
+  const failed = m?.[3] ? Number(m[3]) : 0;
+  const short = m ? m[1] !== m[2] : false;
+  out.push({
+    key: "prepare",
+    label: "prepare_table",
+    status: !prepared ? "idle" : failed || short ? "failed" : "ok",
+    counts: prepared || "not run yet",
+    detail: "",
+    fix: !prepared || failed || short ? "pnp-tischbereit" : "",
+  });
+  return out;
+}
+
+/** A file-name-safe word. */
+export function slug(text: string): string {
+  return (
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9äöüß]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "evening"
+  );
+}
+
+/** The debrief file's text. */
+export function debriefText(
+  title: string,
+  notes: { at: number; text: string }[],
+): string {
+  return [
+    `# Interjections — ${title}`,
+    "",
+    "What the person wrote into the chat while the table was live (for the debrief, nach-dem-abend.md).",
+    "",
+    ...notes.map(
+      (n) =>
+        `- ${new Date(n.at).toISOString().slice(11, 16)} ${n.text.replace(/\s+/g, " ")}`,
+    ),
+    "",
+  ].join("\n");
+}

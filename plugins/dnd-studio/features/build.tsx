@@ -4,9 +4,11 @@
  */
 import type { EngineInterface, On, RenderElement } from "claude-code";
 
+import { noteStudioStatus, noteTurnEnd, submitForPerson } from "./evening";
 import { applyLook } from "./look";
 import { createHost } from "../lib/host";
 import {
+  acceptanceOf,
   countFindings,
   findingsPathOf,
   PIPELINE,
@@ -15,6 +17,7 @@ import {
   stageState,
 } from "../lib/model";
 import {
+  patchCheck,
   patchRuns,
   readCampaign,
   readLive,
@@ -26,9 +29,58 @@ import {
 import { studioCall } from "../lib/studio";
 import { EmptyState, ErrorState, Line, LogBox, Row, Section } from "../lib/ui";
 import type { Kit } from "../lib/ui";
-import type { AgentRun, CampaignInfo, Rules, TableLive } from "../types";
+import type {
+  AgentRun,
+  BuildCheck,
+  CampaignInfo,
+  PlanApproval,
+  Rules,
+  TableLive,
+} from "../types";
 
 const STORE_KEY = "runs";
+const PLAN_KEY = "plan-approval";
+const GPU_AGENTS = ["pnp-maler", "pnp-klang", "pnp-tischbereit"];
+
+/** Loads the last plan sign-off kept in the store. */
+export async function loadPlanApproval($: EngineInterface): Promise<void> {
+  const kept = (await $.store.get(PLAN_KEY)) as PlanApproval | undefined;
+  if (kept && typeof kept === "object" && typeof kept.at === "number")
+    await patchCheck($, (c) => (c.plan ? {} : { plan: kept }));
+}
+
+/** The newest pnp-architekt run (the plan the pane offers for sign-off). */
+export function latestPlanRun(runs: AgentRun[]): AgentRun | undefined {
+  return [...runs].reverse().find((r) => r.agent === "pnp-architekt");
+}
+
+/** Is this plan run signed off? */
+export function isApproved(run: AgentRun, plan: PlanApproval | null): boolean {
+  return (
+    !!plan &&
+    plan.file === (run.planFile ?? "") &&
+    plan.at >= (run.endedAt ?? run.startedAt)
+  );
+}
+
+/** The person signs the plan off: recorded, and the main thread is told to go on building. */
+export async function approvePlan(
+  $: EngineInterface,
+  run: AgentRun,
+): Promise<void> {
+  const plan: PlanApproval = {
+    file: run.planFile ?? "",
+    campaign: run.campaign,
+    at: await $.clock.now(),
+  };
+  await patchCheck($, () => ({ plan }));
+  await $.store.set(PLAN_KEY, plan);
+  $.ui.toast("✓ Plan approved");
+  await submitForPerson(
+    $,
+    `I approved the pnp-architekt plan${plan.file ? ` (${plan.file})` : ""} in the D&D pane. Continue the build with it (pnp-kampagne: pnp-texter next).`,
+  );
+}
 
 /** Loads the runs kept from earlier sessions (marks those still "running" as failed: their session is gone). */
 export async function loadRuns($: EngineInterface): Promise<void> {
@@ -66,6 +118,7 @@ export async function recordSpawn(
     findingsFile: /review|nachbesserer/.test(agent)
       ? findingsPathOf(prompt)
       : undefined,
+    planFile: agent === "pnp-architekt" ? findingsPathOf(prompt) : undefined,
   };
   await saveRuns($, await patchRuns($, (runs) => [...runs, run]));
   await applyLook($);
@@ -111,24 +164,59 @@ function count(v: unknown): number {
   return 0;
 }
 
-/** Reads the open campaign's overview for the checklist (a person's Refresh). */
+function errText(err: unknown): string {
+  return err instanceof Error ? err.message.split("\n")[0]! : String(err);
+}
+
+/**
+ * The acceptance check (a person's Check/Refresh): the open campaign, the map list and studio_status (GPU jobs), each
+ * read once; the checklist rows come from pnp-kampagne §4.
+ */
 export async function refreshCampaign($: EngineInterface): Promise<void> {
+  const now = await $.clock.now();
+  let campaign: Record<string, unknown>;
   try {
-    const o = await studioCall($, "campaign", { overview: true });
-    const info: CampaignInfo = {
-      name: typeof o.name === "string" ? o.name : "",
-      scenes: count(o.scenes),
-      npcs: count(o.npcs),
-      places: count(o.places),
-      broken: count(o.brokenReferences),
-      fetchedAt: await $.clock.now(),
-    };
-    await setCampaign($, info);
+    campaign = await studioCall($, "campaign", {});
   } catch (err) {
-    $.ui.toast(
-      `✗ campaign: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`,
-    );
+    $.ui.toast(`✗ campaign: ${errText(err)}`);
+    await patchCheck($, () => ({
+      error: `campaign: ${errText(err)}`,
+      checkedAt: now,
+    }));
+    return;
   }
+  const info: CampaignInfo = {
+    name:
+      typeof campaign.open === "string"
+        ? campaign.open
+        : typeof campaign.name === "string"
+          ? campaign.name
+          : "",
+    scenes: count(campaign.scenes),
+    npcs: count(campaign.npcs),
+    places: count(campaign.places),
+    broken: count(campaign.brokenReferences),
+    fetchedAt: now,
+  };
+  await setCampaign($, info);
+  const errors: string[] = [];
+  let maps: Record<string, unknown> = {};
+  try {
+    maps = await studioCall($, "map", { action: "list" });
+  } catch (err) {
+    errors.push(`map list: ${errText(err)}`);
+  }
+  try {
+    await noteStudioStatus($, await studioCall($, "studio_status", {}));
+  } catch (err) {
+    errors.push(`studio_status: ${errText(err)}`);
+  }
+  const live = await readLive($);
+  await patchCheck($, () => ({
+    items: acceptanceOf(campaign, maps, live.prepared),
+    checkedAt: now,
+    error: errors.join(" · "),
+  }));
 }
 
 /** Shows (or hides) the start of a findings file in the pane. */
@@ -162,6 +250,8 @@ export function registerBuild(on: On): void {
           e.agentId,
           e.reason === "error" || e.reason === "aborted",
         );
+      // The main thread's turn: at a live table it must leave a watcher running.
+      else if (e.reason === "answer") await noteTurnEnd($);
     } catch {
       // ignore
     }
@@ -177,14 +267,43 @@ export async function renderBuild(
     campaign: CampaignInfo | null;
     live: TableLive;
     rules: Rules;
+    check: BuildCheck;
   },
 ): Promise<RenderElement[]> {
-  const { runs, campaign, live, rules } = d;
+  const { runs, campaign, live, rules, check } = d;
   const preview = await readPreview($);
   const mine = campaign?.name
     ? runs.filter((r) => !r.campaign || r.campaign === campaign.name)
     : runs;
   const out: RenderElement[] = [];
+  // GPU: the Studio paints, speaks and makes sounds one job after another.
+  const gpu = check.gpu;
+  const gpuRunning = mine.filter(
+    (r) => r.state === "running" && GPU_AGENTS.includes(r.agent),
+  );
+  out.push(
+    Row(k, {
+      key: "gpu",
+      status: !gpu ? "idle" : gpu.running || gpu.queued ? "running" : "ok",
+      primary: !gpu
+        ? "GPU: not checked yet"
+        : gpu.running || gpu.queued
+          ? `GPU busy · ${gpu.running} running, ${gpu.queued} queued${gpu.step ? ` · ${gpu.step}` : ""}${gpu.progress !== null ? ` ${gpu.progress}%` : ""}`
+          : "GPU free",
+      secondary:
+        gpu?.busyNote ||
+        "GPU agents (maler, klang, tischbereit) one after another",
+    }),
+  );
+  if (gpuRunning.length > 1)
+    out.push(
+      Row(k, {
+        key: "gpu-clash",
+        status: "warning",
+        primary: `${gpuRunning.map((r) => r.agent).join(" + ")} share the GPU at once`,
+        secondary: "let one finish before the next starts",
+      }),
+    );
   out.push(
     Section(k, {
       key: "pipeline",
@@ -212,6 +331,64 @@ export async function renderBuild(
       }),
     }),
   );
+  const planRun = latestPlanRun(mine);
+  if (planRun) {
+    const approved = isApproved(planRun, check.plan);
+    out.push(
+      Section(k, {
+        key: "plan",
+        title: "Plan",
+        count: approved
+          ? "approved"
+          : planRun.state === "running"
+            ? "drafting"
+            : "",
+        children: [
+          Row(k, {
+            key: "plan-row",
+            status:
+              planRun.state === "running"
+                ? "running"
+                : planRun.state === "failed"
+                  ? "failed"
+                  : approved
+                    ? "ok"
+                    : "warning",
+            primary:
+              planRun.state === "running"
+                ? "pnp-architekt is drafting the plan…"
+                : planRun.state === "failed"
+                  ? "pnp-architekt failed: start it again"
+                  : approved
+                    ? `Plan approved${check.plan?.at ? ` ${new Date(check.plan.at).toISOString().slice(0, 16).replace("T", " ")}` : ""}`
+                    : "Plan waiting for your sign-off",
+            secondary: planRun.planFile ?? "",
+            actions:
+              planRun.state === "done" && !approved
+                ? [
+                    {
+                      key: "plan-approve",
+                      label: "Approve plan",
+                      primary: true,
+                      onPress: () => void approvePlan($, planRun),
+                    },
+                    ...(planRun.planFile && !rules.spoilerSafe
+                      ? [
+                          {
+                            key: "plan-show",
+                            label: preview ? "Hide" : "Show",
+                            onPress: () =>
+                              void togglePreview($, planRun.planFile!),
+                          },
+                        ]
+                      : []),
+                  ]
+                : [],
+          }),
+        ],
+      }),
+    );
+  }
   const files = mine.filter((r) => r.findingsFile).slice(-4);
   out.push(
     Section(k, {
@@ -272,25 +449,29 @@ export async function renderBuild(
       ],
       children: campaign
         ? [
-            Row(k, {
-              key: "chk-broken",
-              status: campaign.broken ? "failed" : "ok",
-              primary: `Broken references: ${campaign.broken}`,
-            }),
             Line(
               k,
               `${campaign.scenes} scenes · ${campaign.npcs} NPCs · ${campaign.places} places`,
               { dim: true },
             ),
-            Row(k, {
-              key: "chk-prep",
-              status: live.prepared
-                ? /failed/.test(live.prepared)
-                  ? "failed"
-                  : "ok"
-                : "idle",
-              primary: `Voices prepared: ${live.prepared || "not run yet"}`,
-            }),
+            check.error
+              ? ErrorState(k, {
+                  key: "check-err",
+                  message: check.error,
+                  onRetry: () => void refreshCampaign($),
+                })
+              : null,
+            ...check.items.flatMap((it) => [
+              Row(k, {
+                key: `chk-${it.key}`,
+                status: it.status,
+                primary: `${it.label} · ${it.counts}`,
+                secondary: rules.spoilerSafe ? "" : it.detail,
+              }),
+              it.fix
+                ? Line(k, `fix: ${it.fix}`, { dim: true, indent: 2 })
+                : null,
+            ]),
             /meine familie/i.test(live.profile)
               ? ErrorState(k, {
                   key: "family",

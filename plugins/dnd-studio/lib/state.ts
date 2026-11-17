@@ -15,8 +15,15 @@ import type {
   TableLive,
   TableView,
   LookState,
+  BuildCheck,
+  EveningState,
 } from "../types";
-import { EMPTY_INITIATIVE, EMPTY_LIVE } from "./model";
+import {
+  EMPTY_CHECK,
+  EMPTY_EVENING,
+  EMPTY_INITIATIVE,
+  EMPTY_LIVE,
+} from "./model";
 
 export const DEFAULT_RULES: Rules = {
   annotate: true,
@@ -164,14 +171,68 @@ export async function setHealth(
   await update($, healthAtom, () => h);
 }
 
-const lookAtom = atom({ plugin: 'dnd-studio', key: 'look' } as const, { applied: '', overrides: {} } as LookState, {
-  shape: 'look-1',
-})
+const lookAtom = atom(
+  { plugin: "dnd-studio", key: "look" } as const,
+  { applied: "", overrides: {} } as LookState,
+  {
+    shape: "look-1",
+  },
+);
 export async function readLook($: EngineInterface): Promise<LookState> {
-  return read($, lookAtom)
+  return read($, lookAtom);
 }
-export async function patchLook($: EngineInterface, fn: (l: LookState) => Partial<LookState>): Promise<LookState> {
-  let out: LookState = { applied: '', overrides: {} }
-  await update($, lookAtom, l => (out = { ...l, ...fn(l) }))
-  return out
+export async function patchLook(
+  $: EngineInterface,
+  fn: (l: LookState) => Partial<LookState>,
+): Promise<LookState> {
+  let out: LookState = { applied: "", overrides: {} };
+  await update($, lookAtom, (l) => (out = { ...l, ...fn(l) }));
+  return out;
+}
+
+const eveningAtom = atom(
+  { plugin: "dnd-studio", key: "evening" } as const,
+  EMPTY_EVENING,
+  {
+    shape: "evening-1",
+  },
+);
+export async function readEvening($: EngineInterface): Promise<EveningState> {
+  return { ...EMPTY_EVENING, ...(await read($, eveningAtom)) };
+}
+export async function patchEvening(
+  $: EngineInterface,
+  fn: (s: EveningState) => Partial<EveningState>,
+): Promise<EveningState> {
+  let out = EMPTY_EVENING;
+  await update(
+    $,
+    eveningAtom,
+    (s) =>
+      (out = { ...EMPTY_EVENING, ...s, ...fn({ ...EMPTY_EVENING, ...s }) }),
+  );
+  return out;
+}
+
+const checkAtom = atom(
+  { plugin: "dnd-studio", key: "check" } as const,
+  EMPTY_CHECK,
+  {
+    shape: "check-1",
+  },
+);
+export async function readCheck($: EngineInterface): Promise<BuildCheck> {
+  return { ...EMPTY_CHECK, ...(await read($, checkAtom)) };
+}
+export async function patchCheck(
+  $: EngineInterface,
+  fn: (c: BuildCheck) => Partial<BuildCheck>,
+): Promise<BuildCheck> {
+  let out = EMPTY_CHECK;
+  await update(
+    $,
+    checkAtom,
+    (c) => (out = { ...EMPTY_CHECK, ...c, ...fn({ ...EMPTY_CHECK, ...c }) }),
+  );
+  return out;
 }

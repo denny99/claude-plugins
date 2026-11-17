@@ -5,6 +5,15 @@
  */
 import type { EngineInterface, On, RenderElement } from "claude-code";
 
+import {
+  bandEvening,
+  noteDiscord,
+  noteStale,
+  noteStudioStatus,
+  renderDiscord,
+  renderInterjections,
+  STALE_TEXT,
+} from "./evening";
 import { applyLook } from "./look";
 import { jsonOf, studioCall, textOf } from "../lib/studio";
 import {
@@ -20,6 +29,7 @@ import {
   patchInitiative,
   patchLive,
   readInitiative,
+  readEvening,
   readLive,
   readRules,
   readTable,
@@ -35,7 +45,13 @@ import {
   truncate,
 } from "../lib/ui";
 import type { Action, Kit } from "../lib/ui";
-import type { Initiative, Rules, TableLive, TableView } from "../types";
+import type {
+  EveningState,
+  Initiative,
+  Rules,
+  TableLive,
+  TableView,
+} from "../types";
 
 type Obj = Record<string, unknown>;
 
@@ -263,6 +279,9 @@ export async function observe(
       break;
     }
     case "roll_dice":
+      await patchLive($, () => touch(input.who));
+      if (input.whisper) await noteDiscord($, tool, input, json);
+      break;
     case "spotlight":
       await patchLive($, () => touch(input.who));
       break;
@@ -276,8 +295,17 @@ export async function observe(
         );
         await patchLive($, () => ({ warning: `discord ${problem}` }));
       }
-      if (input.action === "whisper" || input.action === "aside")
+      await noteDiscord($, tool, input, json);
+      if (input.action === "whisper" && json.delivered === false)
+        notes.push(
+          `**Whisper not delivered** (${String(json.reason ?? "failed")}): ${String(json.why ?? "")} — the secret is still pending.`,
+        );
+      else if (input.action === "whisper" || input.action === "aside")
         await patchLive($, () => ({ secretPending: "" }));
+      if (Array.isArray(json.stream_ended) && json.stream_ended.length)
+        notes.push(
+          `**Screen share ended** for ${json.stream_ended.map(String).join(", ")}: ask them to share the players' window again.`,
+        );
       if (input.action === "leave" && view?.speaker)
         notes.push("A line was still playing when the bot left.");
       break;
@@ -327,6 +355,11 @@ export async function observe(
             ? String((p as Obj).name ?? "")
             : "";
       if (profile) await patchLive($, () => ({ profile }));
+      await noteStudioStatus($, json);
+      if ((await readEvening($)).stale)
+        notes.push(
+          `**${STALE_TEXT}**: the Studio changed since this session started; its tools may take other arguments now.`,
+        );
       break;
     }
     case "prepare_table":
@@ -336,8 +369,10 @@ export async function observe(
         }));
       break;
     case "table_state":
-      if (Object.keys(json).length)
-        { await setTable($, toTableView(json, campaignCache ?? {}, now)); await applyLook($); }
+      if (Object.keys(json).length) {
+        await setTable($, toTableView(json, campaignCache ?? {}, now));
+        await applyLook($);
+      }
       break;
   }
   // Writes to the table: re-read it so the screen follows (one cheap read, no campaign).
@@ -366,7 +401,12 @@ export async function watch(
   const r = (await next(e as never)) as Obj;
   try {
     if (r.deny) return r as never;
-    const notes = await observe($, tool, inputOf(e), textOf(r.result ?? r));
+    const text = textOf(r.result ?? r);
+    const notes = await observe($, tool, inputOf(e), text);
+    if (await noteStale($, text))
+      notes.push(
+        `**${STALE_TEXT}**: the Studio refused arguments Claude's tool list offered (the app was updated). Ask the person to restart Claude Code; until then use only what the error says the tool takes.`,
+      );
     const rules = await readRules($);
     if (notes.length && rules.annotate) {
       const context = Array.isArray(r.context) ? (r.context as string[]) : [];
@@ -419,7 +459,11 @@ export async function guard(
 }
 
 /** A watcher that fails hands the call through unchanged: a note is never worth a stalled table. */
-export function passThrough(_: unknown, e: unknown, next: (e: never) => unknown): never {
+export function passThrough(
+  _: unknown,
+  e: unknown,
+  next: (e: never) => unknown,
+): never {
   return next(e as never) as never;
 }
 
@@ -553,6 +597,7 @@ export function registerTable(on: On): void {
     const live = await readLive($);
     const now = await $.clock.now();
     const band = bandParts(view, ini, live, now);
+    const ev = bandEvening(await readEvening($));
     const { Box, Text } = $.ui.resolve(e);
     const width = Math.max(20, e.props.bodyColumns ?? 80);
     return (
@@ -561,6 +606,8 @@ export function registerTable(on: On): void {
         {band.silence > SILENCE_WARN_S ? (
           <Text color="yellow">{`· ${band.silence}s silent — filler?`}</Text>
         ) : null}
+        <Text color={ev.watching ? "green" : "yellow"}>{`· ${ev.watch}`}</Text>
+        {ev.stale ? <Text color="red">{`· ${ev.stale}`}</Text> : null}
         {band.warning ? (
           <Text color="red">
             {truncate(`· ${band.warning}`, Math.floor(width * 0.3))}
@@ -594,9 +641,10 @@ export function renderTable(
     live: TableLive;
     rules: Rules;
     now: number;
+    evening: EveningState;
   },
 ): RenderElement[] {
-  const { view, ini, live, rules, now } = d;
+  const { view, ini, live, rules, now, evening } = d;
   const out: RenderElement[] = [];
   if (!view) {
     out.push(
@@ -624,6 +672,17 @@ export function renderTable(
     view.paused ? "paused" : "",
   ].filter(Boolean);
   out.push(Line(k, status.join(" · "), { dim: true }));
+  if (evening.stale) out.push(Line(k, `⚠ ${evening.stale}`, { color: "red" }));
+  if (isLive(view, ini))
+    out.push(
+      Line(
+        k,
+        evening.watcher.state === "running"
+          ? "● Watcher running (wait_for_players watch)"
+          : "○ No watcher: players' turns go unnoticed",
+        { color: evening.watcher.state === "running" ? "green" : "yellow" },
+      ),
+    );
   if (view.unheard)
     out.push(Line(k, `Unheard: ${view.unheard}`, { color: "yellow" }));
 
@@ -834,6 +893,8 @@ export function renderTable(
     }),
   );
 
+  out.push(renderDiscord($, k, { evening, view, rules, now }));
+
   // Pause / end of the evening
   out.push(
     Section(k, {
@@ -899,6 +960,7 @@ export function renderTable(
           "Then: recap & fade-out · canon cleanup · write_session · campaign set threads/party_at · debrief.",
           { dim: true },
         ),
+        ...renderInterjections($, k, evening),
       ],
     }),
   );
