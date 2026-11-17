@@ -1,11 +1,18 @@
 {
   "name": "unity",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Unity inside Claude Code: compile gate after C# edits, editor console, EditMode/PlayMode tests, play/stop and Game view screenshots through a small editor bridge package, batchmode runs when no editor is open. Works with any Unity project on macOS and Windows.",
   "author": {
     "name": "denny99"
   },
-  "keywords": ["unity", "gamedev", "csharp", "tests", "editor", "mod"],
+  "keywords": [
+    "unity",
+    "gamedev",
+    "csharp",
+    "tests",
+    "editor",
+    "mod"
+  ],
   "types": "./types/index.d.ts",
   "userConfig": {
     "compileGate": {
