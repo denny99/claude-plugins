@@ -124,6 +124,14 @@ test("the watcher: a background watch runs, ends with its task notification, and
         } as never)
       : (toolResult({ ok: true }) as never),
   );
+  on(
+    "tool.check",
+    () =>
+      ({
+        decision: "allow" as const,
+        value: { decision: "allow" as const },
+      }) as never,
+  );
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd", args: "table" } as never);
 
@@ -131,9 +139,31 @@ test("the watcher: a background watch runs, ends with its task notification, and
   expect(await b.find({ type: "Text", text: /no watcher/ })).toBeDefined();
   await b.unmount();
 
-  await $.tool.call({
+  // A permission query (no call) is not a watch.
+  await $.tool.check({
     tool: "Bash",
     input: { command: WATCH, run_in_background: true },
+  } as never);
+  b = await $.ui.mount({ ...band(), surface: "desktop" });
+  expect(await b.find({ type: "Text", text: /no watcher/ })).toBeDefined();
+  await b.unmount();
+
+  // The real call, seen at tool.check: its answer comes back untouched (no tool.call hook on Bash).
+  const ran = await $.tool.call({
+    tool: "Bash",
+    command: WATCH,
+    run_in_background: true,
+    description: "Watch the table",
+  } as never);
+  expect(JSON.stringify(ran)).toContain("bwatch1");
+  b = await $.ui.mount({ ...band(), surface: "desktop" });
+  expect(await b.find({ type: "Text", text: /· watching/ })).toBeDefined();
+  await b.unmount();
+
+  // Another background task ending does not end the watch.
+  await $.prompt.submit({
+    text: '<task-notification><task-id>bother</task-id><status>completed</status><summary>Background command "npm test" completed (exit code 0)</summary></task-notification>',
+    origin: { kind: "task-notification" },
   } as never);
   b = await $.ui.mount({ ...band(), surface: "desktop" });
   expect(await b.find({ type: "Text", text: /· watching/ })).toBeDefined();
@@ -151,7 +181,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
 
   // The watcher's task ends.
   await $.prompt.submit({
-    text: "<task-notification><task-id>bwatch1</task-id><status>completed</status></task-notification>",
+    text: '<task-notification><task-id>bwatch1</task-id><status>completed</status><summary>Background command "Watch the table" completed (exit code 0)</summary></task-notification>',
     origin: { kind: "task-notification" },
   } as never);
   b = await $.ui.mount({ ...band(), surface: "desktop" });

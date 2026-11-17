@@ -284,6 +284,28 @@ function asStatus(v: unknown): TestStatus {
   return 'Inconclusive'
 }
 
+/** Why an editor run that stopped without finishing is over. */
+export const TESTS_ABORTED = 'aborted — editor closed or crashed'
+
+/**
+ * An editor run (it has a bridge runId) still `running` while the bridge heartbeat is stale or missing: the editor
+ * went away mid-run and the run will never finish. It reads as an aborted run, so a new one can start.
+ */
+export function abortedIfBridgeDown<T extends Pick<TestRun, 'state' | 'runId' | 'error'>>(
+  run: T | undefined,
+  bridgeUp: boolean,
+): T | undefined {
+  if (!run || bridgeUp || run.state !== 'running' || !run.runId) return run
+  return { ...run, state: 'error', error: TESTS_ABORTED }
+}
+
+/** The run's error as one line: "aborted — …" or "failed to start: …". */
+export function testErrorLine(run: Pick<TestRun, 'error'>): string {
+  return run.error === TESTS_ABORTED
+    ? `Tests ${TESTS_ABORTED}`
+    : `Test run failed to start: ${run.error ?? 'unknown error'}`
+}
+
 /** Normalizes the bridge's `/tests` JSON (or Library/ClaudeBridge/tests.json). */
 export function parseBridgeTests(text: string): TestRun | undefined {
   let raw: Record<string, unknown>
@@ -385,7 +407,7 @@ export function countResults(results: TestResult[]): {
 
 /** A run as text for the model: counts, then failures with message, newly red marked. */
 export function testReport(run: TestRun, previous: Record<string, TestStatus>, maxFailures = 25): string {
-  if (run.state === 'error') return `Test run failed to start: ${run.error ?? 'unknown error'}`
+  if (run.state === 'error') return `${testErrorLine(run)}.`
   const c = countResults(run.results)
   const head = `${run.mode ?? 'Tests'}${run.filter ? ` (filter ${run.filter})` : ''}: ${run.state === 'running' ? 'running, ' : ''}${c.passed} passed, ${c.failed} failed, ${c.skipped} skipped of ${c.total}.`
   const failed = rankResults(run.results, previous).filter(r => r.status === 'Failed')

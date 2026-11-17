@@ -17,6 +17,7 @@ import { libraryCopyLine, WORKTREE_NAME, worktreeAddArgs, worktreePaths } from '
 import {
   batchAllowed,
   batchBuildArgs,
+  abortedIfBridgeDown,
   batchCompileArgs,
   batchTestArgs,
   compileContext,
@@ -114,6 +115,9 @@ export async function refreshModel($: EngineInterface, options: Options): Promis
     before.fullPending !== undefined &&
     live.tests?.runId === before.fullPending &&
     (live.tests.state === 'done' || live.tests.state === 'error')
+  // An editor run left `running` while the heartbeat is stale/missing: the editor closed or crashed mid-run.
+  const aborted = live.tests ? undefined : abortedIfBridgeDown(before.tests, live.bridge.up)
+  const wasAborted = !!aborted && aborted !== before.tests
   await patchModel($, m => ({
     phase: 'ok',
     sessionRoot,
@@ -126,8 +130,8 @@ export async function refreshModel($: EngineInterface, options: Options): Promis
     lock,
     ...(targetLock ? { targetLock } : {}),
     ...live,
-    tests: live.tests ?? m.tests,
-    ...(fullDone ? { fullPending: undefined } : {}),
+    tests: live.tests ?? (wasAborted ? aborted : m.tests),
+    ...(fullDone || wasAborted ? { fullPending: undefined } : {}),
     error: undefined,
   }))
   if (fullDone && live.tests && fullRunGreen(live.tests)) await recordFullRun($, options)
@@ -286,6 +290,8 @@ async function awaitBridgeTests(
       last = run
       if (run.state === 'done' || run.state === 'error') return run
     }
+    const beat = await readStatus(host.fs, project, await host.now())
+    if (!beat.up) return abortedIfBridgeDown(last ?? { runId, state: 'running', results: [] }, false)
     if ((await host.now()) >= deadline) return last
     await sleep(host, 1000)
   }

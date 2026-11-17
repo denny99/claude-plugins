@@ -310,7 +310,13 @@ export function buildPhase(runs: AgentRun[]): string {
 }
 
 export const EMPTY_EVENING: EveningState = {
-  watcher: { state: "none", taskId: "", startedAt: 0, endedAt: 0 },
+  watcher: {
+    state: "none",
+    watchId: "",
+    description: "",
+    startedAt: 0,
+    endedAt: 0,
+  },
   notes: [],
   notesFile: "",
   discord: null,
@@ -334,6 +340,11 @@ export const EMPTY_CHECK: BuildCheck = {
 /** A Bash command that runs the Studio's watch URL (`curl -s -m 1900 http://127.0.0.1:<port>/watch/<id>`). */
 export function isWatchCommand(command: string): boolean {
   return /\/watch\/[0-9a-z]{6,}/i.test(command);
+}
+
+/** The id in a watch URL (`…/watch/<id>`), or "". */
+export function watchIdOf(command: string): string {
+  return /\/watch\/([0-9a-z]{6,})/i.exec(command)?.[1] ?? "";
 }
 
 /** The app's version from a studio_status answer: an explicit app version, or `version` when it looks like one. */

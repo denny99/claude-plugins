@@ -287,7 +287,9 @@ export function Header(
   const { Box, Text, Button } = k
   const key = hd.key ?? 'header'
   const title = truncate(hd.title, k.cols)
-  const ctx = hd.context && !k.compact ? truncate(hd.context, Math.max(1, k.cols - [...title].length - 2)) : ''
+  // The context only fits beside a title that leaves room for it ("  " + a few chars); else the line overflows.
+  const room = k.cols - [...title].length - 2
+  const ctx = hd.context && !k.compact && room >= 4 ? truncate(hd.context, room) : ''
   return (
     <Box flexDirection="column">
       <Text bold>

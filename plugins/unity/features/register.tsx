@@ -314,13 +314,15 @@ export function registerUnity(on: On, options: Options): void {
       ...(input.height ? { height: input.height } : {}),
     })
     if ('error' in shot) return { result: `No screenshot: ${shot.error}` }
+    // The engine takes content blocks as the result itself (an MCP `{ content: [{ data, mimeType }] }` is refused).
     return {
-      result: {
-        content: [
-          { type: 'image', data: shot.base64, mimeType: 'image/png' },
-          { type: 'text', text: `Game view screenshot: ${shot.path}` },
-        ],
-      },
+      result: [
+        { type: 'text' as const, text: `Game view screenshot: ${shot.path}` },
+        {
+          type: 'image' as const,
+          source: { type: 'base64' as const, media_type: 'image/png' as const, data: shot.base64 },
+        },
+      ],
     }
   }).catch(() => ({ deny: 'unity: screenshot failed.' }))
 

@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { EDITOR, fakeWorld, PANE, PROJECT, ROOT, settle } from './world'
+import { BRIDGE, EDITOR, fakeWorld, PANE, PROJECT, ROOT, settle } from './world'
 
 test('compile gate: an Edit of a .cs gets the compile errors appended; a .md edit gets nothing', async ($, on) => {
   const world = fakeWorld(on)
@@ -70,15 +70,22 @@ test('tests through the bridge: area name resolves, failures first', async ($, o
   expect(JSON.parse(cmd?.[1] ?? '{}')).toMatchObject({ cmd: 'run-tests', mode: 'EditMode', filter: 'Game.Tests.Core' })
 })
 
-test('screenshot tool returns an image block and the path', async ($, on) => {
+test('screenshot tool returns a text block and a base64 image block, the shape the engine takes', async ($, on) => {
   const world = fakeWorld(on)
   await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
-  const res = (await settle(world, $.tool.call({ tool: 'mcp__unity__unity_screenshot' }))) as {
-    result?: { content?: { type: string; data?: string; text?: string }[] }
-  }
-  const content = res.result?.content ?? []
-  expect(content[0]).toMatchObject({ type: 'image', data: btoa('PNG!'), mimeType: 'image/png' })
-  expect(content[1]?.text).toMatch(/^Game view screenshot: \/g\/unity\/Temp\/ClaudeBridge\/shots\/shot-\d+\.png$/)
+  const res = (await settle(world, $.tool.call({ tool: 'mcp__unity__unity_screenshot' }))) as { result?: unknown }
+  expect(Array.isArray(res.result)).toBe(true)
+  const blocks = res.result as { type: string; text?: string }[]
+  expect(blocks).toHaveLength(2)
+  expect(blocks[0]?.type).toBe('text')
+  expect(blocks[0]?.text).toMatch(/^Game view screenshot: \/g\/unity\/Temp\/ClaudeBridge\/shots\/shot-\d+\.png$/)
+  expect(blocks[1]).toEqual({
+    type: 'image',
+    source: { type: 'base64', media_type: 'image/png', data: btoa('PNG!') },
+  })
+  // Not the MCP shape the engine refuses.
+  expect(JSON.stringify(res)).not.toContain('mimeType')
+  expect(JSON.stringify(res)).not.toContain('"content"')
 })
 
 test('lockfile rule: batch tests refused while an editor holds the lock, started as background Bash when free', async ($, on) => {
@@ -90,6 +97,34 @@ test('lockfile rule: batch tests refused while an editor holds the lock, started
   expect(refused).toContain('An editor holds Temp/UnityLockfile')
   expect(held.calls.some(c => c.tool === 'Bash')).toBe(false)
   expect(held.argv.some(a => a.startsWith('lsof -t /g/unity/Temp/UnityLockfile'))).toBe(true)
+})
+
+test('an editor run left running while the heartbeat goes stale reads as aborted; a new run can start', async ($, on) => {
+  const world = fakeWorld(on)
+  world.files[`${BRIDGE}/tests.json`] = JSON.stringify({
+    runId: 'r9',
+    state: 'running',
+    mode: 'EditMode',
+    results: [],
+  })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
+  await settle(world, $.tool.call({ tool: 'mcp__unity__unity_status' }))
+  expect(JSON.stringify(await $.tool.call({ tool: 'mcp__unity__unity_test_results' }))).toContain('running')
+
+  // The editor closes or crashes mid-run: the heartbeat is gone, tests.json still says running.
+  world.bridge.up = false
+  await settle(world, $.tool.call({ tool: 'mcp__unity__unity_status' }))
+  const results = JSON.stringify(await $.tool.call({ tool: 'mcp__unity__unity_test_results' }))
+  expect(results).toContain('Tests aborted — editor closed or crashed')
+  await settle(world, $.command.run({ command: 'unity', args: '' } as never))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /aborted — editor closed or crashed/ }))?.text).toBeDefined()
+  await ui.unmount()
+
+  const again = JSON.stringify(
+    await settle(world, $.tool.call({ tool: 'mcp__unity__unity_run_tests', mode: 'EditMode' })),
+  )
+  expect(again).toContain('background task')
 })
 
 test('batch tests start as a background shell with the editor env; exit 2 parses NUnit results', async ($, on) => {

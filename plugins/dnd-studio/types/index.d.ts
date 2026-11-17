@@ -126,8 +126,10 @@ export type Interjection = { at: number; text: string };
 
 export type WatcherState = {
   state: "none" | "running" | "ended";
-  /** The background Bash task that runs the watch URL. */
-  taskId: string;
+  /** The watch URL's id (`…/watch/<id>`), seen when the Bash call was checked. */
+  watchId: string;
+  /** The Bash call's description: a task notification names it when the watch ends. */
+  description: string;
   startedAt: number;
   endedAt: number;
 };

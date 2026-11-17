@@ -2,7 +2,7 @@
 import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
 import type { UnityModel } from '../types'
-import { batchAllowed, countResults, formatMessage, rankResults } from '../lib/unity'
+import { batchAllowed, countResults, formatMessage, rankResults, testErrorLine } from '../lib/unity'
 import { EmptyState, Header, kit, Line, LogBox, Row, Section, type Action, type Kit } from '../lib/ui'
 import {
   affectedTests,
@@ -376,7 +376,7 @@ function testsSection($: EngineInterface, k: Kit, x: Extra, m: UnityModel, optio
               t.state === 'running'
                 ? `${t.mode ?? ''} running…`
                 : t.state === 'error'
-                  ? `Run broke: ${t.error ?? ''}`
+                  ? testErrorLine(t)
                   : `${t.mode ?? ''} ${c?.passed ?? 0} passed, ${c?.failed ?? 0} failed, ${c?.skipped ?? 0} skipped`,
             secondary: t.filter ? `filter ${t.filter}` : undefined,
           })

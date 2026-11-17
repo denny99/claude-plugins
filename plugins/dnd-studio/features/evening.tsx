@@ -10,6 +10,7 @@ import {
   discordOf,
   isLive,
   isWatchCommand,
+  watchIdOf,
   slug,
   staleSchemaOf,
   versionOf,
@@ -187,36 +188,38 @@ async function discordAction(
 
 // --- the watcher ---------------------------------------------------------------------------------------------------
 
-/** A finished Bash call: a watch URL started in the background is the watcher. */
-export async function noteBash(
-  $: EngineInterface,
-  input: Obj,
-  result: Obj,
-): Promise<void> {
+/**
+ * A Bash call to a watch URL was allowed: that is the watcher. Seen at `tool.check` (observe only) — a `tool.call` or
+ * `tool.run` hook on Bash would turn off `run_in_background` for every Bash call of the session, the watch included.
+ */
+export async function noteBash($: EngineInterface, input: Obj): Promise<void> {
   const command = String(input.command ?? "");
   if (!isWatchCommand(command)) return;
   const now = await $.clock.now();
-  const out = obj(result.result ?? result);
-  const id = String(out.backgroundTaskId ?? result.backgroundTaskId ?? "");
-  const background = input.run_in_background === true || !!id;
+  const watchId = watchIdOf(command);
+  const description = String(input.description ?? "").trim();
+  // A foreground watch has ended by the time the model reads its answer; only a background one keeps watching.
+  const background = input.run_in_background !== false;
   await patchEvening($, () => ({
     watcher: background
-      ? { state: "running", taskId: id, startedAt: now, endedAt: 0 }
-      : { state: "ended", taskId: id, startedAt: now, endedAt: now },
+      ? { state: "running", watchId, description, startedAt: now, endedAt: 0 }
+      : { state: "ended", watchId, description, startedAt: now, endedAt: now },
     remindPending: false,
   }));
 }
 
-/** A task notification naming the watcher's task: the watch has ended (the players have something, or it timed out). */
+/** A task notification about the watcher (its URL id, its description or a watch URL): the watch has ended. */
 export async function noteTaskNotification(
   $: EngineInterface,
   text: string,
 ): Promise<boolean> {
   const s = await readEvening($);
   if (s.watcher.state !== "running") return false;
-  const hit = s.watcher.taskId
-    ? text.includes(s.watcher.taskId)
-    : /\/watch\//.test(text);
+  const { watchId, description } = s.watcher;
+  const hit =
+    (!!watchId && text.includes(watchId)) ||
+    (!!description && text.includes(description)) ||
+    /\/watch\//.test(text);
   if (!hit) return false;
   const now = await $.clock.now();
   await patchEvening($, (e) => ({
@@ -302,27 +305,23 @@ export function isPersonsPrompt(e: {
   );
 }
 
-/** A failing watcher hands the Bash call through unchanged. */
-export function passBash(
-  _: unknown,
-  e: unknown,
-  next: (e: never) => unknown,
-): never {
-  return next(e as never) as never;
-}
-
 export function registerEvening(on: On): void {
-  on("tool.call", { tool: "Bash" }, async ($, e, next) => {
-    const r = await next(e);
+  // Observe only: never tool.call/tool.run on Bash (that would end backgrounding for the whole session).
+  on("tool.check", { tool: "Bash" }, async ($, e, next) => {
+    const verdict = await next(e);
     try {
-      const input = obj((e as unknown as Obj).input ?? e);
-      if (isWatchCommand(String(input.command ?? "")))
-        await noteBash($, input, obj(r));
+      const input = obj(e.input);
+      if (
+        e.tool_use_id &&
+        verdict.decision !== "deny" &&
+        isWatchCommand(String(input.command ?? ""))
+      )
+        await noteBash($, input);
     } catch {
-      // watching never blocks a call
+      // watching never changes a verdict
     }
-    return r;
-  }).catch(passBash);
+    return verdict;
+  }).catch(($, e, next) => next(e));
 
   on("prompt.submit", async ($, e, next) => {
     let context: string[] = [];
