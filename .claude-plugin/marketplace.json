@@ -1,6 +1,15 @@
 {
   "name": "denny99",
-  "owner": { "name": "denny99" },
+  "owner": {
+    "name": "denny99"
+  },
   "description": "Private Claude Code plugins and mods: D&D Studio, Unity.",
-  "plugins": []
+  "plugins": [
+    {
+      "name": "dnd-studio",
+      "source": "./plugins/dnd-studio",
+      "description": "D&D Studio: GM screen, scene looks, build cockpit, the pnp-* skills and agents, and the Studio's MCP server.",
+      "version": "0.1.0"
+    }
+  ]
 }

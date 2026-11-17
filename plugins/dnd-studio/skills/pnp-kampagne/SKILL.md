@@ -1,0 +1,344 @@
+---
+name: pnp-kampagne
+description: Baut in D&D Studio (MCP-Server dnd-studio) eine spielfertige Pen-and-Paper-Kampagne oder ein Abenteuer, von der Idee bis zum Spielabend – Zusammenfassung, NPCs mit Porträt, Stimme und Standardsätzen, Orte mit Karten, Szenen mit Bild, Vorlesetexte, Würfe, Klänge aus echten Aufnahmen und ein Leitfaden für die KI-Spielleitung. Verwenden, sobald jemand ein Abenteuer, eine Kampagne, ein One-Shot, ein Solo-Abenteuer oder ein Testabenteuer für den Studio-Spieltisch anlegen, ausbauen, umbauen oder „spielfertig machen“ will, auch wenn nur grob („bau mir was Kleines im Breeland für heute Abend“, „mach aus der Idee eine Kampagne“, „ergänz NPCs und Szenen“, „bau das nächste Kapitel nach dem letzten Abend“). Auch für Karten mit Orts-Pins, Handouts und Bögen der Helden und das Review vor dem Spielabend. Einen Abend leiten: Skill pnp-spielleiter.
+---
+
+# Eine Kampagne in D&D Studio bauen
+
+Ziel ist nicht ein schöner Text, sondern ein **Abend, der läuft**: Eine KI-Spielleitung (Skill `pnp-spielleiter`) oder
+ein Mensch soll die Kampagne ohne Nachfragen leiten können, mit Bild, Stimme und Würfeln, und die Spieler hören sie,
+statt mitzulesen. Jede Entscheidung unten dient diesem Abend. Die Regeln mit Datum und Zitat sind Lehren aus echten
+Spielabenden mit Denny; das Zitat sagt, warum die Regel gilt.
+
+Schreibweise: `campaign set`, `map new`, `party sheet`, `results get` meinen das Werkzeug (`campaign`, `map` …) mit
+`action: "set"` usw.; die Werkzeuge des MCP-Servers heißen in Claude Code `mcp__plugin_dnd-studio_dnd-studio__<werkzeug>`.
+
+## 0. Klären, bevor gebaut wird
+
+Kurz fragen, was fehlt (nicht alles auf einmal, sinnvolle Vorgaben vorschlagen):
+- Spielsystem (`The One Ring`, `d20`, `other`) und Sprache (Deutsch/Englisch).
+- Umfang: One-Shot (1 Abend, 3–5 Szenen), Solo für einen Helden, oder Kampagne über mehrere Abende.
+- Welche Helden spielen (`party` lesen: Namen, Bögen, Fertigkeiten). Das Abenteuer soll **jedem** Helden einen eigenen
+  Weg geben, der zu seinen Stärken passt.
+- Ton (gemütlich, düster, Horror), Ort und Zeit, was auf keinen Fall vorkommen soll.
+- Wie tödlich (Helden können sterben, oder Fallen heißt bewusstlos, gefangen, verwundet), wie hart Misserfolge sind
+  (großzügig: schwerer, nie aussichtslos / echt: Pläne scheitern, Kämpfe finden statt) und wie lang ein Abend ist.
+  Tödlichkeit, Härte und Grenzen werden hier beim Aufsetzen entschieden, stehen im Leitfaden unter Rahmen und gelten
+  für die ganze Kampagne; die Spielleitung fragt sie am Abend nicht mehr (Denny 2026-11-13: „das Setting gibt das
+  vor“). Fehlt etwas davon bei einer bestehenden Kampagne im Leitfaden, beim Ausbau fragen.
+
+`studio_status` zeigt das offene Profil; alles entsteht dort. Wo eine Kampagne schon existiert: `campaign` lesen und
+ausbauen statt neu anlegen.
+
+**Wer was baut** (Denny 2026-11-13: feste Agents statt allgemeiner; Modell, Werkzeuge und Regeln stehen in ihrer
+Agent-Datei, der Auftrag nennt nur Kampagne, Dateien und Protokoll-Pfad). Der Erbauer koordiniert und schreibt
+selbst wenig; die Arbeit machen Agents (Agent-Tool mit diesem `subagent_type`):
+
+| Schritt | Agent | Modell |
+|---|---|---|
+| Vault-Welt auf Stand (nur Geändertes) | `pnp-lore` | Sonnet |
+| Bauplan | `pnp-architekt` | Opus |
+| Szenen, Texte, NPCs, Orte, Leitfaden | `pnp-texter` | Opus |
+| Bilder und Karten | `pnp-maler` | Sonnet |
+| Klänge suchen, prüfen, binden | `pnp-klang` | Sonnet |
+| Stimmen vorab (`prepare_table`) | `pnp-tischbereit` | Haiku |
+| Review | `pnp-review-technik`, `-konsistenz`, `-spielbarkeit` | Sonnet |
+| Mängel beheben | `pnp-nachbesserer` | Sonnet |
+
+Was die GPU braucht (Maler, Tischbereit, Bild-Edits des Nachbesserers), läuft nacheinander, nicht gleichzeitig: sonst
+laufen Stimmen in Timeouts. Fehlen die Agents (ältere App), bekommt ein allgemeiner Agent die Aufgabe, mit `model`
+wie in der Tabelle und den Regeln der Agent-Datei im Auftrag.
+
+## 1. Gerüst (Text zuerst, Bilder später)
+
+Vor dem Bauen entwirft der Agent `pnp-architekt` aus den Antworten von Abschnitt 0, der Gruppe und (bei einer
+Fortsetzung) dem Kanon einen Bauplan: Szenen mit den Wegen der Helden, Orte und Karten mit den Plätzen der Marker,
+NPCs, Zeitplan (Agent-Tool mit `subagent_type: "pnp-architekt"`; der Auftrag nennt die Antworten aus 0, ob der Mensch
+mitspielt, und den Pfad der Plan-Datei im Scratchpad). Der Mensch segnet ihn ab (spielt er mit, nur Zahlen und
+Rahmen), dann wird nach dem Plan gebaut.
+
+1. `campaign new`, dann `campaign set`: `about` (Setting, Zeit, Geschichte in 1–3 Absätzen, Stimmung), `language`,
+   `game`, `narrator` (Erzählerstimme in Worten, englisch beschrieben, mit Sprache am Ende: „a calm, warm narrator …,
+   German“). Ist das Spiel umgedeutet (Der Eine Ring im Ödland), bekommen die Sonderseiten der Würfel eigene Namen und
+   Zeichen: `dice_faces` (Ödland 2026-10-30: die Rune als Atom-Symbol ⚛, das Auge als Totenkopf 💀); die Regeln bleiben.
+2. **Orte** (`set_campaign_entry kind place`): `text` = was die Spieler dort erleben, `notes` = was nur die Spielleitung
+   weiß (Geheimnisse, welche Szene hier spielt). Orte, die in anderen liegen, mit `in`.
+3. **NPCs** (`kind npc`):
+   - `looks`: **englisch**, nur Sichtbares (Alter, Statur, Gesicht, Kleidung, ein Gegenstand) – daraus werden Porträts.
+   - `sheet`: wer sie sind, was sie wissen und wollen, wie sie reden, was sie verschweigen. Daraus spielt die
+     Spielleitung sie; Lücken hier werden am Tisch zu erfundenem Unsinn.
+   - `voice`: englisch, hörbar beschrieben (Alter, Stimmlage, Tempo, Eigenheit, „German“ am Ende). Jugendliche
+     ausdrücklich nicht kindlich beschreiben, sonst macht die Stimmerzeugung ein Kleinkind daraus (Ödland 2026-10-30:
+     „a young girl of fourteen …“ klang wie eine Vierjährige; „a teenage girl of fifteen, clear mid-pitched voice, not
+     childish, already sounds almost grown-up“ passte). Nach `set_voice` eine Probe anhören, bevor gespielt wird.
+   - `notes`: Werte (Kreaturen), Würfe, was sie geben, Geräusch-Dateien. Jedes Wesen, das auftreten kann, bekommt ein
+     eigenes Bild; ein gefährliches dazu, wie es sich ankündigt (Spur, Laut, Geruch), bevor es zu sehen ist. Wesen ohne Sprache: „spricht nicht, nur
+     Geräusche“ hineinschreiben. Gegner: Werte passend zur Gruppe (an `party` messen, solo deutlich schwächer) und
+     ihre **Moral**: wann sie fliehen oder sich ergeben („die Wölfe fliehen, wenn der Graue fällt“), und ob sie
+     überhaupt verhandeln („die Brut redet nicht“). Nicht jeder Gegner ist mit Worten zu gewinnen.
+   - `place`: wo man sie trifft.
+4. **Szenen** (`kind scene`, in Spielreihenfolge, `position`): `text` = Vorlesetext (3–5 Sätze, gesprochen klingend,
+   endet mit einem Haken: einer Frage, einem Geräusch, einer Person, die etwas will). `notes` = **das Rezept für die
+   Spielleitung**: Ziel der Szene, welche Würfe (Fertigkeit + ZW der Eigenschaft bzw. DC), was Erfolg und Misserfolg
+   bedeuten (so hart, wie der Rahmen sagt), wer hier welchen Weg hat. `variants` für Enden, die vom Spielverlauf
+   abhängen. Spielt die Szene auf einer Karte, gehören die **Startfelder** in die Notizen: wo die
+   Helden ankommen und wo die NPCs stehen, als Feld `gx,gy` des Kartenplans („Helden am Pfad 4,14; Bartel am Meiler
+   12,8“); auf einer Karte mit Orts-Markern genügt der Ortsname („Helden in Kesselheim“, `at: "Kesselheim"`). Damit
+   setzt die Spielleitung die Marker im Spielerfenster sofort (`show_players map markers`), statt am
+   Abend im Plan zu suchen.
+   - **Der Szenentext ist Erzählerstimme, nichts anderes.** Wörtliche Rede eines NPCs mit Stimme gehört nicht hinein:
+     der Text endet vor ihr („… kommt eine heisere, kleine Stimme.“), und die Worte stehen als eigener Vorlesetext in
+     der Stimme des NPCs bereit (Punkt 5). Sonst liest der Erzähler Miras Satz mit seiner tiefen Stimme vor (Spieltest
+     2026-10-29).
+   - **Kein Stand voraussetzen, den der Spieler ändern kann.** Ein Text, der Hannas Laterne in der Hand des Helden
+     beschreibt, passt nicht mehr, wenn er sie nie bekommen hat (Spieltest 2026-10-29). Neutral schreiben („dein
+     Licht“), oder den Fall als `variants` mit `when` anlegen.
+   - **Drei Wege zu jedem wichtigen Hinweis.** Was die Helden wissen müssen, um weiterzukommen, ist auf mindestens drei
+     Arten zu finden (ein NPC weiß es, eine Spur zeigt es, ein Fundstück verrät es). Hängt die Geschichte an einem
+     einzigen Wurf, bleibt der Abend stecken, sobald er scheitert.
+   - **Was, wenn sie es auslassen?** Ein Satz, wo der wichtige Inhalt in der Welt sonst noch zu finden ist (nicht als
+     Zufall, der sie zurückholt) oder was ohne die Helden geschieht, und ob die Szene kürzbar ist, wenn die Zeit knapp
+     wird.
+   - **Erfolgsstufen im Rezept:** Wichtige Proben bekommen neben Erfolg und Misserfolg je eine Zeile für den großen
+     Erfolg (welcher Bonus in der Welt) und für das Schiefgehen bei einem Wurf weit drunter oder einem Patzer (Stufen:
+     `pnp-spielleiter`, 5). Dann muss die Spielleitung am Tisch nicht erfinden.
+   - **Lage statt Weg.** Eine Szene beschreibt eine Lage, die die Helden antreffen (wer will was, was passiert ohne
+     sie), nicht den Weg, den sie gehen sollen. Keine Köder, die nur dazu da sind, die Gruppe zurück aufs Rezept zu
+     ziehen. Was ein Held tun könnte, steht als Möglichkeit in den Notizen, nicht als Auslöser, der ihn dazu bringt
+     (warum: `pnp-spielleiter` 4a, „Die Spieler entscheiden“).
+   - **Reisen mit Leben:** Jede Reise zwischen Szenen bekommt im Rezept ein, zwei Details am Weg und, wo die Lage
+     Zeit lässt, eine Reise-Lage oder einen Verweis auf den Vorrat (Zeichen, Begegnung, Wurf, Bild). Reisen unter
+     Zeitdruck bekommen keine Nebenorte, höchstens eine kurze Gefahr, die den Druck verschärft; nichts, was von der
+     Mission wegführt.
+   - **Kämpfe, die stattfinden.** So viele Begegnungen, die sich nicht wegreden lassen (Gegner ohne Verhandlung, ein
+     Hinterhalt, eine Bestie), wie Ton und Rahmen verlangen (Ödland: zwei, drei je Abend, weil die Gruppe in Kapitel 2
+     fast jeden Kampf umging), und bei den übrigen, was Ausweichen kostet (ein Wurf, Zeit, ein Gegenstand, ein
+     Verbündeter).
+   - **Haken der Helden:** Jeder Held bekommt irgendwo einen Haken aus seinem Hintergrund (eine Bekannte, ein altes
+     Versprechen, sein Volk), nicht nur einen Wurf, der zu seinen Fertigkeiten passt.
+5. **Vorlesetexte** (`kind text`, auch die Szenentexte): zwei, drei konkrete Sinnesdetails (Geruch, Geräusch, ein
+   Ding mit Geschichte) statt Stimmungswörtern, kurz wie in einem guten Roman, im Ton der Kampagne. Anfang und Ende
+   sind Szenen, kein Pflichtprogramm (Denny 2026-11-13: „Intros und Outros bissel flach“), darum gehören hinein:
+   - **Begrüßung** („Willkommen (zu Beginn)“): kurz, nur Organisatorisches.
+   - **Prolog** bei einer neuen Kampagne oder einer Welt, die die Spieler nicht kennen („bei neuen Kampagnen fehlt
+     fast immer ein Prolog“): sechs bis zehn Vorlesetexte („Prolog 1: Die Welt“ …), zusammen bis zu zehn Minuten (Denny 2026-11-13:
+     „Prolog ruhig 10 min“; etwa 1200–1400 Wörter), jeder
+     mit eigenem Bild und Musik: die Welt und wie es sich in ihr lebt, was jeder in ihr weiß, was gerade in der Luft
+     liegt, die Begriffe, die am Tisch fallen werden. Erzählt wie der Anfang eines guten Romans, ohne Spoiler; der
+     letzte endet dort, wo die Helden einsteigen. Dazu ein Handout „Was eure Figuren wissen“ mit Begriffen und Orten.
+   - **Heldenvorstellung** bei vorgefertigten Helden („Charakter-Vorstellungen im Detail, damit man sich entscheiden
+     kann“): je Held ein Vorlesetext von etwa einer Minute zu seinem Porträt: wer er ist, ein Moment aus seinem
+     Leben, was er kann und was ihm schwerfällt, was er will, und für wen er sich spielt („für jemanden, der gern
+     redet und handelt“). Ohne Geheimnis. Dazu die Tischkopie seines Bogens (`secret: false`).
+   - **Kapitelanfang** bei einer Fortsetzung: „Was bisher geschah“ als Erzählung mit Bild, die mitten in der Lage
+     endet, in der die Helden stehen.
+   - **Kapitelende:** ein Schlusstext je möglichem Ende (`variants`), der aufgreift, was die Helden getan haben, und
+     ein Ausblick (ein Bild, ein Geräusch, eine offene Frage), der bis zum nächsten Kapitel trägt.
+
+   Dazu Übergänge, feste erste Worte der NPCs (Titel
+   mit Stimme, z. B. „Hanna bittet um Hilfe (Szene 1, Hannas Stimme)“), Enden mit `variants`. Handouts mit `handout`.
+   **Handouts mit Geheimnis sind zum Flüstern** (Ödland-Abend 2026-10-30: die Bögen mit dem persönlichen Geheimnis
+   mussten zu je einem Spieler, das Spielerfenster zeigt aber allen alles): ein eigenes Handout je Held (der Bogen
+   mit seinem Geheimnis, ein Brief nur für ihn), im Titel für wen und wann („Handout: Jules Bogen (für Jule, nach der
+   Wahl)“). Die Spielleitung schickt es per `discord whisper handout` an den einen Spieler, nie mit `show_players`
+   oder `give_find`, die alle sehen. Im Leitfaden steht, welches Handout wem wann geflüstert wird, und welche Szene
+   ein Held besser unter vier Augen spielt, damit er es später selbst enthüllen kann: per DM (Text, Bild, die Worte des
+   NPCs als Sprachdatei), während die anderen weiterspielen (`pnp-spielleiter` 4c); einen Nebenraum mit Stimme
+   (`discord aside`), bei dem die anderen warten, nur wo das gesprochene Gespräch die Szene trägt.
+   **Bögen vorgefertigter Helden:** die Werte als `party set sheet_data`, dann `party sheet` je Held: ein PDF aus
+   einer Vorlage (`party templates` listet sie; eine eigene für die Kampagne mit `party save_template`),
+   `secret: false` für die Tischkopie ohne Geheimnis und Ziel. Am Abend flüstert die Spielleitung jedem seinen Bogen
+   als PDF (`discord whisper` mit `sheet: true`); ein Handout mit dem Geheimnis ist der Ersatz, wo es keinen Bogen
+   als PDF gibt.
+6. **Leitfaden** (`kind guide`): eine Seite „So leitest du …“: Ablauf der Szenen, Würfe in diesem System, wie großzügig,
+   welcher Held welchen Weg hat, Kampf vereinfacht. Dazu gehören hinein:
+   - **Rahmen:** wie tödlich, wie hart Misserfolge, wie lang ein Abend, was nicht vorkommen soll. Die Spielleitung liest es hier.
+   - **Was passiert, wenn die Helden nichts tun:** der Plan des Gegners als zwei, drei Schritte mit Zeitpunkt („nach
+     Szene 3 holen die Wölfe die erste Ziege, nach Szene 5 greifen sie das Dorf an“). So bewegt sich die Welt.
+   - **Vorrat zum Improvisieren:** fünf, sechs freie Namen in der Sprache des Settings, ein paar Gerüchte (wahr und
+     falsch) und drei kleine Begegnungen unterwegs. Dann erfindet die Spielleitung am Tisch stimmig statt beliebig.
+   - Bei Kampagnen: wo ein Abend gut endet (ein Haken zum Weiterspielen), und was es als Belohnung gibt (Erfahrung,
+     Schätze, Ansehen).
+   - Bei Discord: was wem geflüstert wird und welche Szene unter vier Augen spielt (Punkt 5). Soll die Gruppe in
+     Räumen nach Orten sitzen, schaltet `campaign set` mit `discord_rooms: true` sie ein (Standard aus); die
+     Spielleitung zieht dann bei jedem Ortswechsel einer Szene um (`pnp-spielleiter`, 4c).
+
+   Eine zweite Seite „Vor dem Abend vorbereiten“: welche Texte in welcher Stimme vorbereitet werden (siehe
+   `pnp-spielleiter`).
+
+**Mehr Strecke statt mehr Verzweigungen** (Ödland Kapitel 2, Abend 1, 2026-11-01, Denny: „wir waren jetzt schon viel
+zu schnell durch? doppelt so schnell XD“). Geplant waren 2:10 Pflicht mit Kann-Schwellen, Kürzen-Fassungen,
+Minutenplan und einem Spontan-Faden für einen Helden, der vielleicht kommt. Gespielt wurde etwa 12 Minuten je Szene,
+nach 1:25 war der Abend am Haken. Die Hälfte der Einträge lief nie, aber Stoff fehlte. Darum:
+- **Umfang an der Gruppe messen:** bei einer schnellen Gruppe 8–10 echte Szenen für 2,5 Stunden, nicht 5–6 mit vielen
+  Fassungen. Lieber eine Szene zu viel, die in den nächsten Abend wandert.
+- **Ein Vorrat kleiner Situationen** im Leitfaden (8–10 Stück: eine Begegnung unterwegs, ein NPC mit einer Bitte, ein
+  Fund, ein Mini-Kampf, eine Wetter- oder Strahlungslage), jede mit Wurf, Folge und optionalem Bild. Die passen
+  fast überall und füllen, wenn die Spieler schneller sind oder einen Weg gehen, den niemand geplant hat.
+- **Kein Überbau:** keine minutengenauen Zeitpläne, keine Kann-Schwellen, keine doppelten Kürzen-Fassungen, keine
+  eigenen Fäden für Helden, die vielleicht kommen. Eine Richtzeit je Szene genügt. Varianten nur, wo ein Text sonst
+  falsch wäre (vorausgesetzter Stand), nicht für jede denkbare Wahl. Ausweichszenen nur für die eine naheliegende
+  Abzweigung (im selben Abend lief genau die).
+- **Stark bleiben müssen** NPC-Bögen, der Plan des Gegners mit Uhr und der Kanon: Damit improvisiert die Spielleitung
+  stimmig, wenn die Spieler abweichen (sie taten es fast in jeder Szene). Bilder malt die Spielleitung am Tisch in
+  etwa 20 Sekunden nach (Denny); wird es wirklich abwegig, ruft sie offen eine Pause aus (`pnp-spielleiter`, 3).
+
+Nach dem Gerüst `campaign` lesen: `brokenReferences` muss leer sein (Erwähnungen ohne Eintrag reparieren).
+
+**Weiterspielen und Ausbauen einer gespielten Kampagne:** Was an den Abenden festgelegt wurde, steht im Kanon
+(`campaign`, Liste `canon`; der Chronist der Spielleitung schreibt ihn mit `set_campaign_entry kind canon`). Neue
+Szenen, Texte und NPCs bauen darauf auf und widersprechen ihm nicht (Preise, Versprechen, wer was weiß, der Stand der
+Helden). Kanon-Einträge sind Tatsachen vom Tisch, kein Bauplan: nicht umschreiben, nur den, der durch den Umbau
+wirklich nicht mehr gilt, mit `remove` wegnehmen. Die offenen Fäden und wo die Gruppe steht, setzt `campaign set` mit
+`threads` (ersetzt die Liste; was fehlt, gilt als gelöst) und `party_at` (ein Ortsname): bei einem neuen Kapitel die
+Fäden, mit denen es beginnt, und den Ort, an dem der Abend anfängt.
+
+## 2. Stimmen und Standardsätze
+
+- `set_voice` für Erzähler und jeden sprechenden NPC: `from: "description"` macht aus `voice` eine Stimme (etwa eine
+  Minute je Stimme), `ready` nimmt eine fertige, `creature` legt einen Klang darüber (Drache, Geist …). **Ohne eigene
+  Stimmprobe keine Standardsätze:** Für eine Figur ohne `set_voice` werden keine erzeugt (die Engine erfände sonst eine
+  fremde Stimme, Spieltest 2026-10-28), und ihre Füller fehlen am Tisch.
+- **Standardsätze** (`set_campaign_entry stock`, Erzähler: `campaign set narrator_stock`): NPCs `greet`, `bye`,
+  `think`, `yes`, `no`, `gesture`, der Erzähler dieselben mit `approach` statt `gesture`. Sie machen den Abend schnell,
+  weil sie vorab erzeugt werden und am Tisch sofort kommen. Wie viele, in welcher Art und über welche Stimmungen:
+  `references/standardsaetze.md` (die Quelle dafür).
+
+## 3. Bilder, Karten, Klang (die langsamen Teile, gesammelt)
+
+Bilder belegen die GPU minutenlang. Deshalb erst wenn der Text steht, gebündelt, und mit `jobs wait` abwarten statt
+einzeln:
+- `paint_campaign`: ein Aufruf je Art (`kind` npc, place, scene, text oder world), je bis ~5 `names`: NPC-Porträts, Orte,
+  Szenen. Jede Szene braucht ein Bild, das die
+  Spieler beim Vorlesen sehen. Jeder sprechende NPC braucht ein Porträt: Es erscheint im Spielerfenster, während er
+  spricht, und ist sein Marker auf der Karte. Mit `results get` prüfen; Schlechtes neu malen. Ein Handout
+  (`handout: true`, ein Gegenstand wie Horn oder Laterne) wird mit `kind: "text"` ein Close-up des Gegenstands, keine
+  Szene; antwortet `paint_campaign` mit `working`, schreibt das Sprachmodell noch die Bildworte: denselben Aufruf
+  noch einmal.
+- **Bekannte Orte bleiben wiedererkennbar** (Denny nach Ödland Kapitel 2, Abend 1, 2026-11-01: Orte, an denen die
+  Gruppe schon war, sahen auf neuen Bildern anders aus). Hat ein Ort schon ein Bild (Ort oder Szene, auch aus einem
+  früheren Kapitel), entsteht jedes neue Bild von ihm als Edit mit diesem Bild als Basis (`picture` mit dem alten
+  Bild, FLUX.2 Klein): nur Tageszeit, Licht, Wetter, Figuren oder Blickwinkel ändern. Neu aus Text nur, was noch nie
+  gezeigt wurde. Danach Alt und Neu nebeneinander ansehen: Bauten, Formen und Farben müssen dieselben sein.
+- **Karten gehören dazu, nicht nur Bilder.** Die Spieler wollen wissen, wo sie sind und wohin es geht; die Spielleitung
+  zeigt sie am Tisch. Zwei Ebenen:
+  1. **Kampagnenkarte** (die Gegend, alle Orte darauf): `paint_campaign` mit der Weltkarte (Kind world / Weltkarte),
+     oder als eigene Karte. Jeder Ort ohne `in` liegt auf ihr; `pin_place` setzt seinen Marker. Eine große Gegend
+     (mehr als 2×2 Kacheln) entsteht als **ein Bild**: `picture` (eine gedruckte Landkarte genau von oben, die Lage
+     der Orte in Worten, Stil etwa „D&D sourcebook illustration“, nicht ein Filmstil), mit `picture_tool resolution 2`
+     vergrößert, dann `map new` mit `picture` und `tiles` (Ödland 2026-11-14: Kachel für Kachel aus dem Plan gemalt
+     wurde die Weltkarte zweimal zu Äckern aus der Nähe; ein Bild las sich als echte Regionalkarte). Teilregionen
+     ebenso, je eine eigene Karte.
+  2. **Eine Karte pro wichtigem Ort** (Dorf, Lichtung, Ruine, Höhle): `map new` mit Typ (welche Art Ort: nie raten,
+     im Zweifel fragen), Look und Stil, dann `map plan` (was liegt wo, Feld für Feld: Wege, Gebäude, Wald, Wasser, der
+     Eingang, wo die Gefahr wartet), dann `paint_map` (ganz). Den Ort mit `set_campaign_entry kind place map "<Karte>"`
+     verknüpfen; Orte darin (`in`) bekommen ihren Marker dort.
+  - Karten zeigen, was die Szenen brauchen: in der Ruine der schmale Eingang und der Absatz oben, auf der Lichtung der
+    Meiler und der Pfad nach Nordosten. Steht etwas in den Szenen-Notizen, muss es auf der Karte zu finden sein.
+  - `map list` zeigt den Stand (gemalte und geplante Felder); `paint_map seams` glättet Kanten zwischen Kacheln.
+    Passt der `look` einer Karte nicht zum gemalten Bild, korrigiert ihn `map set` mit `look`.
+  - **Marker statt Beschriftung.** Karten bekommen keine aufgemalten Namen; was was ist, sagen die Orts-Marker. Darum
+    jeden Ort mit `pin_place` genau auf das setzen, was das gemalte Bild an dieser Stelle zeigt (die Mauer auf die
+    gemalte Talsperre, nicht daneben): die Karte mit `map list` und `map` ansehen und die Lage prüfen. Ein Ort, der
+    erst entdeckt werden soll, bekommt seinen Marker trotzdem: im Spielerfenster erscheint ein Ort erst, wenn die
+    Spielleitung ihn aufdeckt (`show_players reveal_places`). Was die Helden zu Beginn schon kennen (Heimatort, das
+    Ziel des Auftrags), mit `set_campaign_entry known: true` vormerken, sonst nichts. Ohne Marker versteht am Tisch
+    niemand die Karte (Ödland-Abend 2026-10-30, Denny: „i did not understand what what was and
+    there were no map markers placed“).
+- Geräusche und Musik macht **das Studio mit `make_sound`** (Stable Audio 3, seit 2026-11-17 deutlich besser; Denny).
+  Echte Aufnahmen, z. B. von Pixabay (pixabay.com/sound-effects, /music) oder Freesound, nur wenn das Erzeugte nach
+  Versuchen nicht gut genug ist. Herunterladen nur mit Freigabe des Menschen; dann mit `add_file` ins Studio.
+  Suchen mit kurzen Worten wie auf Freesound, eine Quelle je Klang („goat bleating, close“, „fire whoosh“), für eine
+  Schleife lange, gleichmäßige Aufnahmen. Vor dem Binden mit **`check_sound`** hören lassen: was der Klang sein soll und
+  zwei, drei Verwechslungen, die am Tisch stören würden („heavy rain on a metal roof“, „applause“, „music“); liegt
+  das Gewollte nicht vorn oder unter etwa 0,3 `cos`, einen anderen nehmen (nach Titeln allein fielen 5 von 14 durch).
+  Der Mensch hört vor dem Abend trotzdem einmal hinein. Dann an die Szene oder den Vorlesetext binden:
+  `set_campaign_entry` mit `sounds: [{sound: <Datei aus add_file>, name: "Wolfsheulen"}]` (Atmosphäre und Musik
+  laufen in Schleife, ein Effekt einmal; `volume` nach Bedarf). `sounds` ersetzt die ganze Liste: immer alle Klänge
+  der Szene mitschicken. In `campaign` erscheint jeder als `file`; diese `file` bekommen `play_sound` und
+  `say_line sound` am Tisch. Am Tisch hat jeder Klang einen Knopf, die Spielleitung – Mensch oder Claude – startet
+  ihn, wenn er passt; im Studio geht dasselbe im Dialog der Szene unter „Klänge“. Ein Klang, der zu keiner Szene
+  gehört (ein Wesen, das überall heult), in die Notizen des NPC.
+
+## 4. Abnahme: Ist der Abend spielfertig?
+
+Gehe den Abend im Kopf einmal als Spielleitung durch und prüfe:
+- Jede Szene hat Bild, Vorlesetext und Rezept in den Notizen; die Reihenfolge stimmt.
+- Es gibt eine Kampagnenkarte mit allen Orten als Marker, und jeder Ort, an dem eine Szene spielt, hat seine Karte.
+- Jeder sprechende NPC hat Porträt, Stimme (mit Stimmprobe), `sheet`, Standardsätze; jeder stumme hat Geräusche.
+- Jeder gebundene Klang ist eine Aufnahme, mit `check_sound` gegen das gehört, was er sein soll.
+- Bei einem Kapitel einer Kampagne: `threads` und `party_at` gesetzt (`campaign` zeigt `threads` und `partyAt`).
+- Jede Szene auf einer Karte nennt in den Notizen die Startfelder von Helden und NPCs.
+- Jeder Held hat einen Weg, der zu seinem Bogen passt, und jeder Wurf nennt die Fertigkeit, die er auch hat.
+- Jeder Hinweis, ohne den es nicht weitergeht, ist auf drei Wegen zu finden; jeder Gegner hat Werte und Moral.
+- Begrüßung, bei neuer Kampagne Prolog, bei vorgefertigten Helden ihre Vorstellung, Kapitelanfang und -ende und
+  Leitfaden (mit Rahmen, Plan des Gegners und Vorrat) sind da; `brokenReferences` ist leer.
+- `prepare_table` über `pnp-tischbereit`, damit am Abend alles sofort klingt (nach den Bildern, nicht gleichzeitig).
+
+## 5. Review: drei Prüfer, bis es sitzt
+
+Wer gebaut hat, übersieht die eigenen Lücken. Deshalb prüfen nach der Abnahme **drei Reviewer** in frischem Kontext
+(eigene Agenten, gleichzeitig), jeder mit einem Fachbereich, und die Kampagne geht erst zum Menschen, wenn alle drei
+nichts mehr finden (der Nutzer, 2026-10-30). Jeder Reviewer liest die Kampagne selbst (`campaign`, `results get`,
+`map list`, die Stimmbeschreibungen), nicht die Meinung des Erbauers, und prüft am Studio, nicht am Text allein. Die drei sind
+Agents von Claude Code, die die App mit diesem Skill nach `~/.claude/agents` installiert, jeder mit seiner Prüfliste und
+nur lesenden Werkzeugen: `pnp-review-technik`, `pnp-review-konsistenz`, `pnp-review-spielbarkeit` (Agent-Tool mit
+diesem `subagent_type`). Ihre Agent-Dateien tragen die vollständige Prüfliste; hier steht die Kurzfassung. Der Auftrag
+nennt die Kampagne, ob der Mensch mitspielt, die gewünschte Länge, den Pfad der Mängel-Datei und, für die Technik, die
+letzte Antwort von `prepare_table` (`done`, `made`, `total`, `failed`): Die Reviewer können nur lesen und rufen es
+nicht selbst auf. Stimmen hören können sie nicht: Die Probe nach `set_voice` hört der Erbauer oder der Mensch, die
+Reviewer prüfen die Beschreibung. Klänge hört die Technik mit `check_sound` selbst nach. Fehlen die Agents (ältere
+App, kein Claude Code), bekommt ein allgemeiner Agent die Prüfliste seines Bereichs und nur lesende Werkzeuge:
+
+1. **Vollständigkeit und Technik** (`pnp-review-technik`) – ist alles da und läuft es? Jedes Bild gemalt (Szenen,
+   Orte, sprechende NPCs, Helden), Karten ganz gemalt, ohne Nähte, alle Orte mit Marker, und jeder Marker sitzt auf
+   dem, was die Karte an der Stelle zeigt (Karte ansehen, nicht nur zählen); jede Szene auf einer Karte hat
+   Startfelder für Helden und NPCs, die auf begehbaren Feldern liegen; jede sprechende Figur mit eigener Stimmprobe,
+   Standardsätze erzeugt (`prepare_table` gelaufen, ohne Lücken und ohne `failed`); Klänge gebunden, ihre Dateien da,
+   mit `make_sound` gemacht (echte Aufnahmen nur, wo das nicht reichte), mit `check_sound` gegen ihren Namen gehört, Schleifen und Lautstärken
+   richtig; Handouts, Begrüßung, Leitfaden da, ein Handout mit Geheimnis zum Flüstern; bei einem Kapitel `threads`
+   und `party_at` gesetzt; `brokenReferences` leer.
+2. **Konsistenz und Korrektheit** (`pnp-review-konsistenz`) – stimmt es? Jeder Wurf nennt eine Fertigkeit, die die
+   Helden haben, mit passender Schwierigkeit; Gegnerwerte an der Party gemessen; ein umgebogenes Regelwerk überall
+   gleich umgebogen (auch `dice_faces`); Namen, Orte, Fraktionen und Zeitlinie widersprechen sich nicht, keine Reste
+   aus einem anderen Setting; Bilder passen zu `looks` (je Bild ansehen: falsche Person, kaputte Hände, falscher
+   Stil); Stimmbeschreibungen passen (Alter, Geschlecht, „German“, Jugendliche nicht kindlich); Standardsätze mit
+   niedrigem `how`, Rufname vorn; Szenentexte reine Erzählerstimme ohne wörtliche Rede und ohne vorausgesetzten Stand;
+   keine unabsichtlichen Spoiler in Texten, Bildern und Namen; was nur einen Helden angeht, steht im Handout zum
+   Flüstern statt in einem Text für alle.
+3. **Umfang und Spielbarkeit** (`pnp-review-spielbarkeit`) – trägt der Abend? Genug Stoff für die gewünschte Länge
+   im Tempo dieser Gruppe (Abschnitt 1, „Mehr Strecke statt mehr Verzweigungen“), dazu der Situations-Vorrat;
+   eine Ausweichszene für die naheliegende Abzweigung, kein Überbau aus Kann-Schwellen und Fassungen; drei Wege zu
+   jedem Hinweis; jeder Held mit Haken und großem Moment, ein Geheimnis lässt sich enthüllen oder bewusst behalten (beides belohnt); Plan des Gegners und Vorrat zum
+   Improvisieren; bei offenem Ende tragen die Fäden einen nächsten Abend, bei einer Fortsetzung passt alles zum Kanon.
+
+**Sparsam mit Tokens** (Denny, 2026-11-08: „token effizienz“; Bilder prüfen und eine Stunde Ausbau kosteten rund 3 Millionen):
+- `campaign` erst mit `overview: true`, dann nur mit `only` und `names` lesen. Die ganze Kampagne ist die größte Antwort
+  der Werkzeuge. `results list` mit `name` und `brief`, `settings` ohne `available`.
+- Viele Bilder ansehen: je 12–16 auf einen Kontaktbogen (`results sheet`), groß (`results get`) nur die Verdächtigen.
+- Jobs eines Stapels in einem `jobs wait` bündeln und zwischen den Wartezeiten nichts anderes lesen: Jede Runde schickt
+  den ganzen Kontext neu.
+- Vor einem langen Agenten mit einem Probeaufruf prüfen, ob sein Weg geht (ist die Ergebnisliste überhaupt gefüllt?).
+- **Jeden Eintrag einmal schreiben:** alles zu einem Eintrag sammeln, dann ein `set_campaign_entry` mit allen Feldern;
+  viele Einträge in einem Aufruf mit `entries`. Jeder Aufruf ist eine volle Runde (ein Bau schrieb 190-mal, ein
+  Nachbesserer 72-mal für 11 Einträge).
+- Karten-Plan lesen ohne Bilder: `map list` mit `map` und `pictures: false`.
+- Mechanische Arbeit (aufräumen, zählen) auf einem kleinen Modell. Prüfen nur, was sich geändert hat; ab Runde 2 nur
+  die offenen Punkte.
+
+Der Ablauf: Jeder Reviewer schreibt seine Mängel (was, wo, warum, wie zu beheben) in eine eigene Datei und meldet
+nur ihre Anzahl. `pnp-nachbesserer` behebt sie aus den Dateien. Ziel ist ein möglichst fehlerfreier Abend (Denny,
+2026-11-01: „es soll schon möglichst fehlerfrei sein“), darum prüfen die Reviewer danach erneut, die etwas gefunden
+hatten, **höchstens drei Runden**. Was gilt als erledigt: Text, Regeln, Logik, Kanon, Spoiler, Hinweise, Stimmen,
+Klänge und fehlende Bilder müssen stimmen. **Kosmetisches an Bildern** (ein Licht zu viel, ein Detail der Karte
+fehlt, eine leichte Naht) wird nach einem Versuch nicht mehr gejagt, sondern nur gelistet: Bildmodelle haben Grenzen,
+und jedes Nachmalen bringt eigene neue Fehler (Ödland, Talsperre, 2026-11-01). Was nach drei Runden offen bleibt,
+bekommt der Mensch als Liste.
+
+**Spielt der Mensch selbst mit, bleibt alles spoilerfrei:** Erbauer und Reviewer arbeiten in eigenen Agenten, Mängel
+stehen nur in den Dateien, und an den Menschen gehen nur Zahlen (Szenen, Orte, NPCs, Mängel je Bereich und Runde),
+nie Plot, Geheimnisse oder Gegner. Was die Spieler ohnehin sehen sollen (die Vorstellung der vorgefertigten Helden),
+darf in den Bericht.
+
+Dem Menschen am Ende kurz sagen, was steht, was fehlt (z. B. „Karten nicht gemalt, GPU war belegt“) und wie man
+startet. Für Weitergabe: `campaign export`.
