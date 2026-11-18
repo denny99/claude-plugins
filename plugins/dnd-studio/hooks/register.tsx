@@ -1,4 +1,10 @@
-import type { EngineInterface, PluginOptions, Register } from "claude-code";
+import type {
+  EngineInterface,
+  PluginOptions,
+  Register,
+  RenderElement,
+  RenderInput,
+} from "claude-code";
 
 import {
   loadPlanApproval,
@@ -15,6 +21,7 @@ import {
   renderLookPicker,
 } from "../features/look";
 import {
+  bandStatus,
   endInitiative,
   nextTurn,
   refreshTable,
@@ -41,7 +48,16 @@ import {
   setTab,
 } from "../lib/state";
 import { isLive } from "../lib/model";
-import { Tabs, kit } from "../lib/ui";
+import {
+  LauncherChip,
+  LauncherRow,
+  PaneBody,
+  Tabs,
+  kit,
+  mergeLauncherRows,
+  toneColor,
+  truncate,
+} from "../lib/ui";
 import type { IconName } from "../lib/ui";
 import type { Tab } from "../types";
 import {
@@ -56,6 +72,7 @@ import {
   REVIEW_TOOL,
   REVIEW_TOOL_DESCRIPTION,
   reviewTool,
+  startReviewSession,
 } from "../features/review";
 
 const TABS: { id: Tab; label: string; icon: IconName }[] = [
@@ -132,6 +149,83 @@ export function denyInitiative(): { deny: string } {
 
 export function denyReview(): { deny: string } {
   return { deny: "dnd-studio: review failed." };
+}
+
+async function probeQuietly(
+  $: EngineInterface,
+  options: PluginOptions,
+): Promise<void> {
+  try {
+    await probe($, options);
+  } catch {
+    // no chip is all a failed probe costs
+  }
+}
+
+/**
+ * The launcher row above the prompt (key launch:dnd-studio): the "D&D" chip while the Studio answers (or a table is
+ * live), and at a live table its state as a button to the Table tab, hints after it. Null: nothing to show.
+ */
+async function drawLauncher(
+  $: EngineInterface,
+  e: RenderInput<"AbovePrompt">,
+  options: PluginOptions,
+): Promise<RenderElement | null> {
+  const table = await bandStatus($);
+  const health = await readHealth($);
+  if (!table && health?.app !== "up") return null;
+  const k = await kit($, e, { brand: "dnd", lang: "de" });
+  const { Button, Text } = k;
+  const chips: RenderElement[] = [
+    LauncherChip(k, {
+      key: "launch-dnd",
+      icon: "dice",
+      label: "D&D",
+      onPress: () => void openPane($),
+    }),
+  ];
+  if (table) {
+    chips.push(
+      <Button
+        key="launch-dnd-table"
+        label={`Tisch: ${table.status}`}
+        plain
+        onPress={() => void openTable($, options)}
+      >
+        {k.graphical
+          ? table.status
+          : truncate(table.status, Math.max(12, Math.floor(k.cols * 0.6)))}
+      </Button>,
+    );
+    for (const [n, hint] of table.hints.entries())
+      chips.push(
+        <Text
+          key={`launch-dnd-hint-${n}`}
+          size={k.graphical ? "footnote" : undefined}
+          color={
+            k.graphical
+              ? toneColor(k, hint.tone)
+              : hint.tone === "bad"
+                ? "red"
+                : hint.tone === "ok"
+                  ? "green"
+                  : "yellow"
+          }
+          wrap="truncate-end"
+        >
+          {truncate(hint.text, Math.max(12, Math.floor(k.cols * 0.4)))}
+        </Text>,
+      );
+  }
+  return LauncherRow(k, { plugin: "dnd-studio", chips });
+}
+
+async function openTable(
+  $: EngineInterface,
+  options: PluginOptions,
+): Promise<void> {
+  await openPane($);
+  await selectTab($, "table", options);
 }
 
 export const register: Register = (on, options) => {
@@ -219,9 +313,12 @@ export const register: Register = (on, options) => {
       await loadRuns($);
       await loadPlanApproval($);
       await loadLookOverrides($);
+      startReviewSession(await $.clock.now());
     } catch (err) {
       $.ui.log(`dnd-studio: loading kept state failed: ${String(err)}`);
     }
+    // Whether the Studio answers decides the launcher chip; probed after start, outside the hook's budget.
+    $.clock.after(1500, () => void probeQuietly($, options));
     return next(e);
   });
 
@@ -252,6 +349,17 @@ export const register: Register = (on, options) => {
       result: await reviewTool($, e as unknown as Record<string, unknown>),
     };
   }).catch(denyReview);
+
+  on("ui.render", { component: "AbovePrompt" }, async ($, e, next) => {
+    if (e.props.hasSurvey) return next(e);
+    return (await drawLauncher($, e, options)) ?? next(e);
+  });
+  on(
+    "ui.render",
+    { component: "AbovePromptList" },
+    async ($, e, next) =>
+      (await mergeLauncherRows($, e, next as never)) as RenderElement,
+  );
 
   on("ui.render", { component: "Pane", requestId: PANE }, async ($, e) => {
     const k = await kit($, e, { brand: "dnd", lang: "de" });
@@ -304,25 +412,25 @@ export const register: Register = (on, options) => {
               });
     const tableLive = isLive(view, ini);
     const waiting = openCount(review);
-    return (
-      <Box flexDirection="column" gap={1}>
-        {DndHeader(k, {
-          title: campaign?.name || view?.scene?.title || "Studio",
-          pill: tableLive
-            ? { text: "am Tisch", tone: "ok", icon: "dice" }
-            : building
-              ? { text: "Bau", tone: "info", glyph: "◷" }
-              : undefined,
-          actions: [
-            {
-              key: "refresh",
-              icon: "refresh",
-              label: "Aktualisieren",
-              onPress: () => void refreshTab($, tab, options),
-            },
-          ],
-        })}
-        {Tabs(k, {
+    return PaneBody(k, {
+      header: DndHeader(k, {
+        title: campaign?.name || view?.scene?.title || "Studio",
+        pill: tableLive
+          ? { text: "am Tisch", tone: "ok", icon: "dice" }
+          : building
+            ? { text: "Bau", tone: "info", glyph: "◷" }
+            : undefined,
+        actions: [
+          {
+            key: "refresh",
+            icon: "refresh",
+            label: "Aktualisieren",
+            onPress: () => void refreshTab($, tab, options),
+          },
+        ],
+      }),
+      children: [
+        Tabs(k, {
           tabs: TABS.map((t) => ({
             ...t,
             count: t.id === "review" && waiting ? waiting : undefined,
@@ -331,9 +439,9 @@ export const register: Register = (on, options) => {
           maxVisible: 4,
           moreLabel: "Mehr",
           onSelect: (id) => void selectTab($, id, options),
-        })}
-        {body.filter(Boolean)}
-      </Box>
-    );
+        }),
+        ...body.filter(Boolean),
+      ],
+    });
   });
 };

@@ -71,10 +71,10 @@ test("listener mode: a running pnp-zuhoerer is the watcher, its return fills ban
     await b.unmount();
     return t;
   };
-  expect(await bandText()).toContain("no listener");
+  expect(await bandText()).toContain("kein Zuhörer");
 
   await $.agent.spawn(spawn("z1"));
-  expect(await bandText()).toContain("listener: waiting · 0 skipped");
+  expect(await bandText()).toContain("Zuhörer wartet · 0 übersprungen");
 
   // The listener's own foreground watch (a subagent's Bash) is no GM watcher.
   await $.tool.check({
@@ -93,7 +93,7 @@ test("listener mode: a running pnp-zuhoerer is the watcher, its return fills ban
 
   // The GM's answer ends while the listener runs: no reminder.
   await $.turn.complete(done(undefined, "", "m1"));
-  expect(w.toasts.filter((t) => /without a listener/.test(t))).toEqual([]);
+  expect(w.toasts.filter((t) => /ohne Zuhörer/.test(t))).toEqual([]);
 
   // It comes back without waking anyone: two skipped turns, the band asks for a new one.
   await $.turn.complete(
@@ -103,11 +103,11 @@ test("listener mode: a running pnp-zuhoerer is the watcher, its return fills ban
       "z1t",
     ),
   );
-  expect(await bandText()).toContain("no listener");
+  expect(await bandText()).toContain("kein Zuhörer");
   await w.clock.advance(1000);
   await $.turn.start({ text: "weiter", turnId: "m2" } as never);
   await $.turn.complete(done(undefined, "", "m2"));
-  expect(w.toasts.filter((t) => /without a listener/.test(t)).length).toBe(1);
+  expect(w.toasts.filter((t) => /ohne Zuhörer/.test(t)).length).toBe(1);
   const r = await $.prompt.submit({
     text: "weiter",
     origin: { kind: "composer" },
@@ -117,9 +117,9 @@ test("listener mode: a running pnp-zuhoerer is the watcher, its return fills ban
 
   // A new listener carries the skipped count; two at once are flagged.
   await $.agent.spawn(spawn("z2"));
-  expect(await bandText()).toContain("listener: waiting · 2 skipped");
+  expect(await bandText()).toContain("Zuhörer wartet · 2 übersprungen");
   await $.agent.spawn(spawn("z3"));
-  expect(await bandText()).toContain("2 listeners running");
+  expect(await bandText()).toContain("2 Zuhörer laufen");
   await $.turn.complete(done("z3", "kaputt, kein JSON", "z3t"));
 
   // It wakes the GM with a turn: band names why, the Table tab shows the turn and what was discussed.
@@ -131,13 +131,13 @@ test("listener mode: a running pnp-zuhoerer is the watcher, its return fills ban
     ),
   );
   expect(await bandText()).toContain(
-    "listener woke: Frage an die Spielleitung",
+    "Zuhörer hat geweckt: Frage an die Spielleitung",
   );
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   for (const text of [
-    /Last return: woke · Frage an die Spielleitung/,
+    /Zuletzt zurück: geweckt · Frage an die Spielleitung/,
     /Tobi: Hallo Wirt, ein Bier!/,
-    /Discussed without the GM: 3/,
+    /Ohne Spielleitung besprochen: 3/,
     /Pizza bestellt/,
     /Jule will bestechen/,
     /Zuhörer an/,
@@ -202,7 +202,7 @@ test("the listener switch: only a person's press calls discord listener on/off",
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   await ui.press({ key: "listener-on" });
   expect(sets()).toEqual([{ tool: "discord", args: { listener: "haiku" } }]);
-  expect(w.toasts.some((t) => /Listener on/.test(t))).toBe(true);
+  expect(w.toasts.some((t) => /Zuhörer an/.test(t))).toBe(true);
   // Off asks first.
   await ui.press({ key: "listener-off" });
   expect(sets().length).toBe(1);
@@ -273,7 +273,7 @@ test("a subagent's watch is never the GM's watcher, with or without listener mod
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd", args: "table" } as never);
   await $.tool.check(watchCheck("sub1"));
-  expect(await bandOf($)).toContain("no watcher");
+  expect(await bandOf($)).toContain("kein Wächter");
 });
 
 test("listener mode: a subagent's watch does not set the watcher running", async ($, on) => {
@@ -287,7 +287,7 @@ test("listener mode: a subagent's watch does not set the watcher running", async
   // Listener mode off again: the band shows the watcher, which the listener's watch never started.
   w.answers.table_state = TABLE;
   await $.command.run({ command: "dnd", args: "table" } as never);
-  expect(await bandOf($)).toContain("no watcher");
+  expect(await bandOf($)).toContain("kein Wächter");
 });
 
 test("a listener's quiet take with a secret turn leaves no secret note and no pending secret", async ($, on) => {
@@ -349,7 +349,7 @@ test("listener mode: the listener comes back during the GM's own turn, so the tu
     ),
   );
   await $.turn.complete(done(undefined, "", "m1"));
-  expect(w.toasts.filter((t) => /without a listener/.test(t))).toEqual([]);
+  expect(w.toasts.filter((t) => /ohne Zuhörer/.test(t))).toEqual([]);
   const r = await $.prompt.submit({
     text: "weiter",
     origin: { kind: "composer" },
@@ -373,7 +373,7 @@ test("listener mode: an aborted listener is an error, is no longer running, and 
     agentId: "z1",
     reason: "aborted",
   } as never);
-  expect(await bandOf($)).toContain("no listener");
+  expect(await bandOf($)).toContain("kein Zuhörer");
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   const texts = (await ui.findAll({ type: "Text" }))
     .map((x) => x.text)
@@ -381,5 +381,5 @@ test("listener mode: an aborted listener is an error, is no longer running, and 
   await ui.unmount();
   expect(texts).toContain("the listener stopped");
   await $.turn.complete(done(undefined, "", "m1"));
-  expect(w.toasts.filter((t) => /without a listener/.test(t)).length).toBe(1);
+  expect(w.toasts.filter((t) => /ohne Zuhörer/.test(t)).length).toBe(1);
 });

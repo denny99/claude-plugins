@@ -169,7 +169,7 @@ test("GM buttons call the right Studio tool only on press", async ($, on) => {
   await ui.unmount();
 });
 
-test("the band hides without a live table and shows scene, round and turn with one", async ($, on) => {
+test("the launcher row hides without a live table and shows scene, round and turn as a button with one", async ($, on) => {
   const calls: Call[] = [];
   engine(on, calls, { ...TABLE, players_window: false });
   on("ui.render", ($, e) => {
@@ -179,12 +179,16 @@ test("the band hides without a live table and shows scene, round and turn with o
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
 
   let band = await $.ui.mount({ ...BAND, surface: "desktop" });
-  expect(await band.find({ type: "Text", text: /⚔/ })).toBeUndefined();
+  expect(
+    await band.find({ type: "Button", key: "launch-dnd-table" }),
+  ).toBeUndefined();
   await band.unmount();
 
   await $.command.run({ command: "dnd-scene", args: "" } as never);
   band = await $.ui.mount({ ...BAND, surface: "desktop" });
-  expect(await band.find({ type: "Text", text: /⚔/ })).toBeUndefined();
+  expect(
+    await band.find({ type: "Button", key: "launch-dnd-table" }),
+  ).toBeUndefined();
   await band.unmount();
 
   await $.tool.call({
@@ -193,9 +197,11 @@ test("the band hides without a live table and shows scene, round and turn with o
     order: ["Thorin", "Wolf 1"],
   } as never);
   band = await $.ui.mount({ ...BAND, surface: "desktop" });
-  expect((await band.find({ type: "Text", text: /⚔/ }))?.text).toBe(
-    "⚔ Das Tor · R1",
-  );
+  expect(
+    (await band.find({ type: "Button", key: "launch-dnd-table" }))?.text,
+  ).toBe("Das Tor · Runde 1");
+  // The chip is the plugin's launcher row, keyed for the strip merger.
+  expect(await band.find({ type: "Button", key: "launch-dnd" })).toBeDefined();
   await band.unmount();
 
   // The first next after set gives the FIRST in line the turn (not the second).
@@ -205,9 +211,11 @@ test("the band hides without a live table and shows scene, round and turn with o
   } as never);
   expect(JSON.stringify(first)).toContain("Round 1: Thorin's turn.");
   band = await $.ui.mount({ ...BAND, surface: "desktop" });
-  expect((await band.find({ type: "Text", text: /⚔/ }))?.text).toBe(
-    "⚔ Das Tor · R1 · Thorin's turn",
-  );
+  expect(
+    (await band.find({ type: "Button", key: "launch-dnd-table" }))?.text,
+  ).toBe("Das Tor · Runde 1 · Thorin ist dran");
+  // Pressing the state opens the pane on the Table tab.
+  await band.press({ key: "launch-dnd-table" });
   await band.unmount();
   await $.tool.call({
     tool: "mcp__dnd-studio__initiative",

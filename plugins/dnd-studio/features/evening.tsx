@@ -33,14 +33,16 @@ import {
 } from "../lib/state";
 import { studioCall } from "../lib/studio";
 import {
-  EmptyState,
+  Actions,
+  CardTitle,
+  CopyButton,
   ErrorState,
-  Line,
-  Row,
-  Section,
   sanitize,
+  ListRow,
+  Sentence,
   truncate,
 } from "../lib/ui";
+import { Fold } from "./dnd-ui";
 import type { Kit } from "../lib/ui";
 import type {
   EveningState,
@@ -270,7 +272,7 @@ export async function noteTurnEnd($: EngineInterface): Promise<boolean> {
     }));
     if (!s.remindPending)
       $.ui.toast(
-        "⚠ Answer ended without a listener: start pnp-zuhoerer (listener mode).",
+        "⚠ Antwort ohne Zuhörer beendet: pnp-zuhoerer starten (Zuhörer-Modus).",
       );
     return true;
   }
@@ -278,7 +280,7 @@ export async function noteTurnEnd($: EngineInterface): Promise<boolean> {
   await patchEvening($, () => ({ remindPending: true, remindListener: false }));
   if (!s.remindPending)
     $.ui.toast(
-      "⚠ Turn ended without a watcher: players' turns go unnoticed (wait_for_players watch).",
+      "⚠ Zug ohne Wächter beendet: die Züge der Spieler gehen unter (wait_for_players watch).",
     );
   return true;
 }
@@ -428,8 +430,8 @@ export async function setListener(
     if (view) await setTable($, { ...view, listener: mode });
     $.ui.toast(
       mode === "haiku"
-        ? "Listener on: open mic, pnp-zuhoerer waits for the GM"
-        : "Listener off: talk buttons and the watch",
+        ? "Zuhörer an: offenes Mikro, pnp-zuhoerer wartet für die Spielleitung"
+        : "Zuhörer aus: Sprechknöpfe und der Wächter",
     );
   } catch (err) {
     $.ui.toast(
@@ -558,6 +560,9 @@ export function registerEvening(on: On): void {
 
 // --- rendering -----------------------------------------------------------------------------------------------------
 
+/** The band's words for stale tool schemas (the model's notes keep STALE_TEXT). */
+export const BAND_STALE = "Studio aktualisiert – Claude neu starten";
+
 /** The band's evening parts: watcher state and the stale-schema warning. */
 export function bandEvening(
   s: EveningState,
@@ -567,39 +572,39 @@ export function bandEvening(
   watching: boolean;
   stale: string;
 } {
-  const stale = s.stale ? STALE_TEXT : "";
+  const stale = s.stale ? BAND_STALE : "";
   if (listenerMode) {
     const l = s.listener;
     const skipped = l.returned && !l.woke ? l.between.length : 0;
     if (l.running.length > 1)
       return {
         watching: false,
-        watch: `${l.running.length} listeners running (one is enough)`,
+        watch: `${l.running.length} Zuhörer laufen (einer reicht)`,
         stale,
       };
     if (l.running.length)
       return {
         watching: true,
-        watch: `listener: waiting · ${skipped} skipped`,
+        watch: `Zuhörer wartet · ${skipped} übersprungen`,
         stale,
       };
     return {
       watching: false,
       watch:
         l.returned && l.woke
-          ? `listener woke: ${l.why || "a turn"}`
-          : "no listener",
+          ? `Zuhörer hat geweckt: ${l.why || "ein Zug"}`
+          : "kein Zuhörer",
       stale,
     };
   }
   return {
     watching: s.watcher.state === "running",
-    watch: s.watcher.state === "running" ? "watching" : "no watcher",
+    watch: s.watcher.state === "running" ? "Wächter läuft" : "kein Wächter",
     stale,
   };
 }
 
-/** The Listener section of the Table tab: switch, state, last wake and turn, what the group discussed without the GM. */
+/** The Zuhörer card of the Table tab: switch, state, last wake and turn, what the group discussed without the GM. */
 export function renderListener(
   $: EngineInterface,
   k: Kit,
@@ -610,65 +615,75 @@ export function renderListener(
   const children: RenderElement[] = [];
   if (!on && !l.returned && !l.running.length)
     children.push(
-      EmptyState(
+      Sentence(
         k,
-        "Off: talk buttons and the watch. On: open mic, pnp-zuhoerer (Haiku) wakes the GM only when needed.",
+        "Aus: Sprechknöpfe und der Wächter. An: offenes Mikro, pnp-zuhoerer (Haiku) weckt die Spielleitung nur, wenn es nötig ist.",
+        { faint: true },
       ),
     );
   else {
+    const n = l.running.length;
     children.push(
-      Row(k, {
+      ListRow(k, {
         key: "ls-state",
-        status: l.running.length === 1 ? "running" : "warning",
-        primary:
-          l.running.length > 1
-            ? `${l.running.length} listeners running: one is enough`
-            : l.running.length
-              ? "Listener waiting for the players"
+        status: n === 1 ? "running" : "warning",
+        title:
+          n > 1
+            ? `${n} Zuhörer laufen – einer reicht`
+            : n
+              ? "Zuhörer wartet auf die Spieler"
               : on
-                ? "No listener running"
-                : "Listener switched off",
+                ? "Kein Zuhörer läuft"
+                : "Zuhörer ist aus",
       }),
     );
     if (l.error)
-      children.push(Line(k, `✗ ${l.error}`, { color: "red", indent: 1 }));
+      children.push(
+        ListRow(k, { key: "ls-err", status: "failed", title: l.error }),
+      );
     if (l.returned)
       children.push(
-        Line(
+        Sentence(
           k,
-          `Last return: ${l.woke ? "woke" : "not woken"}${l.why ? ` · ${l.why}` : ""}${l.sent ? " · sent" : ""}`,
-          { dim: !l.woke },
+          `Zuletzt zurück: ${l.woke ? "geweckt" : "nicht geweckt"}${l.why ? ` · ${l.why}` : ""}${l.sent ? " · gesendet" : ""}`,
+          { faint: !l.woke },
         ),
       );
     if (l.turn.length) {
       const hide = l.secret && d.rules.spoilerSafe;
-      children.push(Line(k, "Last turn:", { bold: true }));
-      for (const t of hide ? ["(secret turn, hidden)"] : l.turn.slice(-6))
-        children.push(Line(k, t, { indent: 1 }));
+      children.push(Sentence(k, "Letzter Zug:"));
+      for (const t of hide ? ["(geheimer Zug, verborgen)"] : l.turn.slice(-6))
+        children.push(Sentence(k, t, { faint: true }));
     }
     children.push(
-      Line(k, `Discussed without the GM: ${l.between.length}`, { bold: true }),
+      Sentence(k, `Ohne Spielleitung besprochen: ${l.between.length}`),
     );
     for (const b of l.between.slice(-8))
-      children.push(Line(k, b, { dim: true, indent: 1 }));
+      children.push(Sentence(k, b, { faint: true }));
   }
-  return Section(k, {
+  return Fold(k, {
     key: "listener",
-    title: "Listener",
-    count: on ? "on" : "off",
-    collapsible: true,
+    icon: "mic",
+    title: "Zuhörer",
+    pill: on
+      ? { text: "an", tone: "ok" }
+      : { text: "aus", tone: "neutral", glyph: false },
     defaultOpen: on,
     actions: [
       on
         ? {
             key: "listener-off",
-            label: "Listener off",
-            confirm: "Really switch the listener off?",
+            label: "Zuhörer aus",
+            icon: "stop",
+            variant: "secondary",
+            confirm: "Zuhörer wirklich ausschalten?",
             onPress: () => void setListener($, "off"),
           }
         : {
             key: "listener-on",
-            label: "Listener on",
+            label: "Zuhörer an",
+            icon: "mic",
+            variant: "secondary",
             onPress: () => void setListener($, "haiku"),
           },
     ],
@@ -676,45 +691,57 @@ export function renderListener(
   });
 }
 
-/** The interjection list, inside the end-of-evening section. */
+/** The interjection list, inside the end-of-evening card. */
 export function renderInterjections(
   $: EngineInterface,
   k: Kit,
   s: EveningState,
 ): RenderElement[] {
-  const head = Line(
-    k,
-    `Interjections for the debrief: ${s.notes.length}${s.notesFile ? ` · ${s.notesFile}` : ""}`,
-    { bold: true },
-  );
+  const head = CardTitle(k, {
+    icon: "chat",
+    title: "Einwürfe für die Nachbesprechung",
+    count: s.notes.length,
+  });
+  const file = s.notesFile
+    ? CopyButton(k, {
+        key: "notes-file",
+        text: s.notesFile,
+        show: !k.graphical,
+      })
+    : null;
   if (!s.notes.length)
-    return [head, EmptyState(k, "Nothing typed at the live table yet.")];
+    return [
+      head,
+      Sentence(k, "Am laufenden Tisch noch nichts getippt.", { faint: true }),
+    ];
   const shown = s.notes.slice(-Math.max(3, Math.min(10, k.rows - 8)));
   return [
     head,
     ...shown.map((n) =>
-      Line(k, `${new Date(n.at).toISOString().slice(11, 16)} ${n.text}`, {
-        dim: true,
-        indent: 1,
+      Sentence(k, `${new Date(n.at).toISOString().slice(11, 16)} ${n.text}`, {
+        faint: true,
       }),
     ),
-    Row(k, {
-      key: "notes",
-      primary: "",
-      dim: true,
-      actions: [
+    Actions(
+      k,
+      "notes",
+      [
         {
           key: "notes-clear",
-          label: "Clear list",
-          confirm: "Really clear?",
+          label: "Liste leeren",
+          icon: "trash",
+          variant: "secondary",
+          confirm: "Wirklich leeren?",
           onPress: () => void clearInterjections($),
         },
       ],
-    }),
-  ];
+      3,
+    ),
+    file,
+  ].filter((x): x is RenderElement => !!x);
 }
 
-/** The Discord section of the Table tab: players, rooms, last whisper, warnings; buttons only on press. */
+/** The Discord card of the Table tab: players, rooms, last whisper, warnings; buttons only on press. */
 export function renderDiscord(
   $: EngineInterface,
   k: Kit,
@@ -731,11 +758,12 @@ export function renderDiscord(
   const children: RenderElement[] = [];
   if (!info)
     children.push(
-      EmptyState(
+      Sentence(
         k,
         atTable
-          ? "Press Status to read the bot."
-          : "The bot is not at the table.",
+          ? "„Stand lesen“ fragt den Bot."
+          : "Der Bot ist nicht am Tisch.",
+        { faint: true },
       ),
     );
   else {
@@ -743,17 +771,18 @@ export function renderDiscord(
       children.push(
         ErrorState(k, {
           key: "discord-err",
+          title: "Discord antwortet nicht",
           message: info.error,
           onRetry: () => void refreshDiscord($),
         }),
       );
     children.push(
-      Line(
+      Sentence(
         k,
         info.connected
-          ? `In ${info.channel || "the voice channel"}`
-          : "Not in a voice channel",
-        { dim: true },
+          ? `Im Sprachkanal ${info.channel || ""}`.trim()
+          : "In keinem Sprachkanal",
+        { faint: true },
       ),
     );
     const mappedChars = new Set(
@@ -761,84 +790,87 @@ export function renderDiscord(
     );
     for (const m of info.members)
       children.push(
-        Row(k, {
+        ListRow(k, {
           key: `dm-${m.name}`,
           status: m.character ? "ok" : "warning",
-          primary: m.character
+          title: m.character
             ? `${m.character} · ${m.name}`
-            : `${m.name} · not mapped`,
+            : `${m.name} · nicht zugeordnet`,
         }),
       );
     if (info.connected)
       for (const h of view?.party ?? [])
         if (!h.foe && !mappedChars.has(h.name))
           children.push(
-            Row(k, {
+            ListRow(k, {
               key: `dh-${h.name}`,
               status: "warning",
-              primary: `${h.name}: no player here`,
-              secondary: "party set discord, or the player says /ich-bin",
+              title: `${h.name}: kein Spieler da`,
+              meta: "party set discord, oder der Spieler sagt /ich-bin",
             }),
           );
     for (const r of info.rooms)
       children.push(
-        Line(
-          k,
-          `${r.bot ? "▶ " : "  "}${r.name}: ${r.members.join(", ") || "empty"}`,
-          { dim: !r.bot },
-        ),
+        ListRow(k, {
+          key: `dr-${r.name}`,
+          icon: r.bot ? "speaker" : "dots",
+          tone: r.bot ? "ok" : undefined,
+          title: `${r.bot ? "▶ " : ""}${r.name}: ${r.members.join(", ") || "leer"}`,
+        }),
       );
     if (info.missing.length)
       children.push(
-        Row(k, {
+        ListRow(k, {
           key: "d-missing",
           status: "warning",
-          primary: `Setup: ${info.missing.join(", ")}`,
+          title: `Einrichtung fehlt: ${info.missing.join(", ")}`,
         }),
       );
     if (info.streamEnded.length)
       children.push(
-        Row(k, {
+        ListRow(k, {
           key: "d-stream",
           status: "failed",
-          primary: `Screen share ended: ${info.streamEnded.join(", ")}`,
-          secondary: "ask them to share the players' window again",
+          title: `Bildschirmfreigabe beendet: ${info.streamEnded.join(", ")}`,
+          meta: "bitte das Spielerfenster wieder teilen lassen",
         }),
       );
     if (info.unheard.length)
       children.push(
-        Row(k, {
+        ListRow(k, {
           key: "d-unheard",
           status: "warning",
-          primary: `May not hear the bot: ${info.unheard.join(", ")}`,
-          secondary: "ask them to leave the room and come in again",
+          title: `Hört den Bot evtl. nicht: ${info.unheard.join(", ")}`,
+          meta: "Raum verlassen und neu betreten lassen",
         }),
       );
     if (info.warning && !info.streamEnded.length && !info.unheard.length)
       children.push(
-        Row(k, { key: "d-warn", status: "warning", primary: info.warning }),
+        ListRow(k, { key: "d-warn", status: "warning", title: info.warning }),
       );
   }
   const w = evening.whisper;
   if (w)
     children.push(
-      Row(k, {
+      ListRow(k, {
         key: "d-whisper",
         status: w.delivered ? "ok" : "failed",
-        primary: `Last whisper to ${w.to || "?"}: ${w.delivered ? "delivered" : `not delivered (${w.reason || "failed"})`}`,
-        secondary: w.delivered ? "" : truncate(w.why, 200),
+        title: `Letztes Flüstern an ${w.to || "?"}: ${w.delivered ? "zugestellt" : `nicht zugestellt (${w.reason || "fehlgeschlagen"})`}`,
+        meta: w.delivered ? "" : truncate(w.why, 200),
       }),
     );
-  return Section(k, {
+  return Fold(k, {
     key: "discord",
+    icon: "chat",
     title: "Discord",
-    count: info ? `${info.members.length} players` : "",
-    collapsible: true,
+    count: info ? `${info.members.length} Spieler` : "",
     defaultOpen: atTable,
     actions: [
       {
         key: "discord-status",
-        label: "Status",
+        label: "Stand lesen",
+        icon: "refresh",
+        variant: "secondary",
         onPress: () => void refreshDiscord($),
       },
       ...(info?.connected
@@ -846,10 +878,12 @@ export function renderDiscord(
           ? [
               {
                 key: "discord-merge",
-                label: "Merge rooms",
-                confirm: "Really merge?",
+                label: "Räume zusammenlegen",
+                icon: "link" as const,
+                variant: "secondary" as const,
+                confirm: "Wirklich zusammenlegen?",
                 onPress: () =>
-                  void discordAction($, "Party together again", {
+                  void discordAction($, "Gruppe wieder zusammen", {
                     action: "merge",
                   }),
               },
@@ -858,9 +892,11 @@ export function renderDiscord(
         : [
             {
               key: "discord-join",
-              label: "Join",
+              label: "Beitreten",
+              icon: "plug" as const,
+              variant: "secondary" as const,
               onPress: () =>
-                void discordAction($, "Bot joined the voice channel", {
+                void discordAction($, "Bot ist im Sprachkanal", {
                   action: "join",
                 }),
             },

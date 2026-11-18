@@ -217,12 +217,12 @@ export function bandParts(
 ): { text: string; silence: number; warning: string } {
   const parts: string[] = [];
   if (view?.scene) parts.push(view.scene.title);
-  if (ini.isActive) parts.push(`R${ini.round}`);
+  if (ini.isActive) parts.push(`Runde ${ini.round}`);
   const turn = currentTurn(ini) || view?.spotlight || "";
-  if (turn) parts.push(`${turn}'s turn`);
-  if (view?.paused) parts.push("paused");
+  if (turn) parts.push(`${turn} ist dran`);
+  if (view?.paused) parts.push("Pause");
   return {
-    text: parts.join(" · ") || "Table open",
+    text: parts.join(" · ") || "Tisch offen",
     silence: silentSeconds(live, now),
     warning: live.warning,
   };

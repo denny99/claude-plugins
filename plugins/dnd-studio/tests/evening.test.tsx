@@ -101,7 +101,7 @@ test("interjections at a live table go to the debrief list and file; other promp
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   await ui.press({ key: "sec-evening" });
   expect(
-    (await ui.find({ type: "Text", text: /Interjections for the debrief: 2/ }))
+    (await ui.find({ type: "Text", text: /Einwürfe für die Nachbesprechung/ }))
       ?.text,
   ).toBeDefined();
   expect(
@@ -136,7 +136,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
   await $.command.run({ command: "dnd", args: "table" } as never);
 
   let b = await $.ui.mount({ ...band(), surface: "desktop" });
-  expect(await b.find({ type: "Text", text: /no watcher/ })).toBeDefined();
+  expect(await b.find({ type: "Text", text: /kein Wächter/ })).toBeDefined();
   await b.unmount();
 
   // A permission query (no call) is not a watch.
@@ -145,7 +145,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
     input: { command: WATCH, run_in_background: true },
   } as never);
   b = await $.ui.mount({ ...band(), surface: "desktop" });
-  expect(await b.find({ type: "Text", text: /no watcher/ })).toBeDefined();
+  expect(await b.find({ type: "Text", text: /kein Wächter/ })).toBeDefined();
   await b.unmount();
 
   // The real call, seen at tool.check: its answer comes back untouched (no tool.call hook on Bash).
@@ -157,7 +157,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
   } as never);
   expect(JSON.stringify(ran)).toContain("bwatch1");
   b = await $.ui.mount({ ...band(), surface: "desktop" });
-  expect(await b.find({ type: "Text", text: /· watching/ })).toBeDefined();
+  expect(await b.find({ type: "Text", text: /Wächter läuft/ })).toBeDefined();
   await b.unmount();
 
   // Another background task ending does not end the watch.
@@ -166,7 +166,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
     origin: { kind: "task-notification" },
   } as never);
   b = await $.ui.mount({ ...band(), surface: "desktop" });
-  expect(await b.find({ type: "Text", text: /· watching/ })).toBeDefined();
+  expect(await b.find({ type: "Text", text: /Wächter läuft/ })).toBeDefined();
   await b.unmount();
 
   // A turn ends while the watcher runs: no reminder.
@@ -177,7 +177,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
     turnId: "t1",
     reason: "answer",
   } as never);
-  expect(w.toasts.filter((t) => /without a watcher/.test(t))).toEqual([]);
+  expect(w.toasts.filter((t) => /ohne Wächter/.test(t))).toEqual([]);
 
   // The watcher's task ends.
   await $.prompt.submit({
@@ -185,7 +185,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
     origin: { kind: "task-notification" },
   } as never);
   b = await $.ui.mount({ ...band(), surface: "desktop" });
-  expect(await b.find({ type: "Text", text: /no watcher/ })).toBeDefined();
+  expect(await b.find({ type: "Text", text: /kein Wächter/ })).toBeDefined();
   await b.unmount();
 
   // A subagent's turn is not the table's; the main thread's is.
@@ -197,7 +197,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
     agentId: "a9",
     reason: "answer",
   } as never);
-  expect(w.toasts.filter((t) => /without a watcher/.test(t))).toEqual([]);
+  expect(w.toasts.filter((t) => /ohne Wächter/.test(t))).toEqual([]);
   await $.turn.complete({
     answer: "",
     durationMs: 1,
@@ -212,7 +212,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
     turnId: "t4",
     reason: "answer",
   } as never);
-  expect(w.toasts.filter((t) => /without a watcher/.test(t)).length).toBe(1);
+  expect(w.toasts.filter((t) => /ohne Wächter/.test(t)).length).toBe(1);
 
   // The next prompt the person types carries the reminder once.
   const r = await $.prompt.submit({
@@ -262,7 +262,7 @@ test("a changed Studio version or a refused argument warns: MCP schemas stale", 
 
   const b = await $.ui.mount({ ...band(), surface: "desktop" });
   expect(
-    await b.find({ type: "Text", text: /MCP schemas stale — restart Claude/ }),
+    await b.find({ type: "Text", text: /Studio aktualisiert – Claude neu starten/ }),
   ).toBeDefined();
   await b.unmount();
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
@@ -324,20 +324,20 @@ test("Discord: players, rooms, last whisper with its reason, screen-share warnin
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   expect(await ui.find({ type: "Text", text: /Mara · anna/ })).toBeDefined();
   expect(
-    await ui.find({ type: "Text", text: /bob · not mapped/ }),
+    await ui.find({ type: "Text", text: /bob · nicht zugeordnet/ }),
   ).toBeDefined();
   expect(
-    await ui.find({ type: "Text", text: /Thorin: no player here/ }),
+    await ui.find({ type: "Text", text: /Thorin: kein Spieler da/ }),
   ).toBeDefined();
   expect(await ui.find({ type: "Text", text: /▶ Tisch: Mara/ })).toBeDefined();
   expect(
     await ui.find({
       type: "Text",
-      text: /Last whisper to Thorin: not delivered \(not_mapped\)/,
+      text: /Letztes Flüstern an Thorin: nicht zugestellt \(not_mapped\)/,
     }),
   ).toBeDefined();
   expect(
-    await ui.find({ type: "Text", text: /Screen share ended: Mara/ }),
+    await ui.find({ type: "Text", text: /Bildschirmfreigabe beendet: Mara/ }),
   ).toBeDefined();
   expect(
     await ui.find({ type: "Button", key: "discord-join" }),

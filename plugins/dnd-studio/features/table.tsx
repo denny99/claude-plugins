@@ -13,9 +13,11 @@ import {
   renderDiscord,
   renderInterjections,
   renderListener,
+  BAND_STALE,
   STALE_TEXT,
 } from "./evening";
-import { autoOpen, noteTableEnded } from "./dnd-ui";
+import { autoOpen, Fold, noteTableEnded } from "./dnd-ui";
+import { noteMadeResults } from "./review";
 import { applyLook } from "./look";
 import { jsonOf, studioCall, textOf } from "../lib/studio";
 import {
@@ -380,6 +382,11 @@ export async function observe(
         notes.push(
           "make_sound takes GPU time while the table waits: at a live table prefer the prepared, bound sounds.",
         );
+      await noteMadeResults($, tool, input, text);
+      break;
+    case "results":
+    case "jobs":
+      await noteMadeResults($, tool, input, text);
       break;
     case "studio_status": {
       const p = json.profile;
@@ -639,35 +646,40 @@ export function registerTable(on: On): void {
     ($, e, next) => guard($, e, next, "paint_campaign"),
   ).catch(denyOnFailure);
 
-  // The band above the prompt: scene · round · whose turn · silence; nothing outside a live table.
-  on("ui.render", { component: "AbovePrompt" }, async ($, e, next) => {
-    const view = await readTable($);
-    const ini = await readInitiative($);
-    if (e.props.hasSurvey || !isLive(view, ini)) return next(e);
-    const live = await readLive($);
-    const now = await $.clock.now();
-    const band = bandParts(view, ini, live, now);
-    const ev = bandEvening(await readEvening($), isListenerMode(view));
-    const { Box, Text } = $.ui.resolve(e);
-    const width = Math.max(20, e.props.bodyColumns ?? 80);
-    return (
-      <Box flexDirection="row" gap={1}>
-        <Text>{truncate(`⚔ ${band.text}`, Math.floor(width * 0.6))}</Text>
-        {band.silence > SILENCE_WARN_S ? (
-          <Text color="yellow">{`· ${band.silence}s silent — filler?`}</Text>
-        ) : null}
-        <Text color={ev.watching ? "green" : "yellow"}>
-          {truncate(`· ${ev.watch}`, Math.floor(width * 0.4))}
-        </Text>
-        {ev.stale ? <Text color="red">{`· ${ev.stale}`}</Text> : null}
-        {band.warning ? (
-          <Text color="red">
-            {truncate(`· ${band.warning}`, Math.floor(width * 0.3))}
-          </Text>
-        ) : null}
-      </Box>
-    );
-  });
+  on(
+    "tool.call",
+    { tool: "mcp__plugin_dnd-studio_dnd-studio__results" },
+    ($, e, next) => watch($, e, next, "results"),
+  ).catch(passThrough);
+  on(
+    "tool.call",
+    { tool: "mcp__plugin_dnd-studio_dnd-studio__jobs" },
+    ($, e, next) => watch($, e, next, "jobs"),
+  ).catch(passThrough);
+}
+
+/**
+ * What the launcher strip says about a live table (null: no live table): the status sentence ("Das Tor im Nebel ·
+ * Runde 3 · Thorin ist dran") and the hints after it (watcher, silence, stale schemas, the Studio's warning).
+ */
+export async function bandStatus($: EngineInterface): Promise<{
+  status: string;
+  hints: { text: string; tone: "ok" | "warn" | "bad" }[];
+} | null> {
+  const view = await readTable($);
+  const ini = await readInitiative($);
+  if (!isLive(view, ini)) return null;
+  const live = await readLive($);
+  const now = await $.clock.now();
+  const band = bandParts(view, ini, live, now);
+  const ev = bandEvening(await readEvening($), isListenerMode(view));
+  const hints: { text: string; tone: "ok" | "warn" | "bad" }[] = [];
+  if (band.silence > SILENCE_WARN_S)
+    hints.push({ text: `${band.silence} s still – Füller?`, tone: "warn" });
+  hints.push({ text: ev.watch, tone: ev.watching ? "ok" : "warn" });
+  if (ev.stale) hints.push({ text: BAND_STALE, tone: "bad" });
+  if (band.warning) hints.push({ text: band.warning, tone: "bad" });
+  return { status: band.text, hints };
 }
 
 // --- the Table tab ------------------------------------------------------------------------------------------------
@@ -1031,39 +1043,40 @@ export function renderTable(
   // Dice and secrets
   const rolls = view.rolls.slice(-5);
   out.push(
-    Section(k, {
+    Fold(k, {
       key: "dice",
-      title: "Dice",
+      icon: "dice",
+      title: "Würfel",
       count: view.rolls.length,
-      collapsible: true,
       children: rolls.length
         ? rolls.map((r, i) =>
-            Line(
+            Sentence(
               k,
               r.hidden && rules.spoilerSafe
-                ? `${r.who}: hidden roll`
-                : `${r.who}${r.label ? ` · ${r.label}` : ""}: ${r.total}${r.verdict ? ` · ${r.verdict}` : ""}${r.hidden ? " (hidden)" : ""}`,
-              { dim: i < rolls.length - 1 },
+                ? `${r.who}: verdeckter Wurf`
+                : `${r.who}${r.label ? ` · ${r.label}` : ""}: ${r.total}${r.verdict ? ` · ${r.verdict}` : ""}${r.hidden ? " (verdeckt)" : ""}`,
+              { faint: i < rolls.length - 1 },
             ),
           )
-        : [EmptyState(k, "No rolls yet.")],
+        : [Sentence(k, "Noch nicht gewürfelt.", { faint: true })],
     }),
   );
   out.push(
-    Section(k, {
+    Fold(k, {
       key: "secrets",
-      title: "Secrets & whispers",
+      icon: "eye",
+      title: "Geheimes und Geflüstertes",
       count: view.secrets.length,
-      collapsible: true,
       defaultOpen: false,
       children: rules.spoilerSafe
         ? [
-            EmptyState(
+            Sentence(
               k,
-              "Hidden (spoiler-safe). Turn it off under Health → Rules.",
+              "Verborgen (spoilerfrei). Abschalten unter Zustand → Regeln.",
+              { faint: true },
             ),
           ]
-        : view.secrets.slice(-5).map((s) => Line(k, `${s.who}: ${s.text}`)),
+        : view.secrets.slice(-5).map((s) => Sentence(k, `${s.who}: ${s.text}`)),
     }),
   );
 
@@ -1072,31 +1085,36 @@ export function renderTable(
 
   // Pause / end of the evening
   out.push(
-    Section(k, {
+    Fold(k, {
       key: "evening",
-      title: "Pause & end of evening",
-      collapsible: true,
+      icon: "moon",
+      title: "Pause und Abendende",
+      pill: view.paused ? { text: "Pause", tone: "warn" } : undefined,
       defaultOpen: false,
       actions: [
         view.paused
           ? {
               key: "pause-off",
-              label: "Resume",
+              label: "Weiter",
+              icon: "play",
+              variant: "secondary",
               onPress: () =>
-                void tableAction($, "Break over", "set_pause", { on: false }),
+                void tableAction($, "Pause vorbei", "set_pause", { on: false }),
             }
           : {
               key: "pause-on",
               label: "Pause",
+              icon: "stop",
+              variant: "secondary",
               onPress: () =>
-                void tableAction($, "Break", "set_pause", { on: true }),
+                void tableAction($, "Pause", "set_pause", { on: true }),
             },
       ],
       children: [
-        Line(
+        Sentence(
           k,
-          "Context full: Pause → chronist saves canon → /compact → re-read campaign + canon → Resume.",
-          { dim: true },
+          "Kontext voll: Pause → Chronist sichert den Kanon → /compact → Kampagne und Kanon neu lesen → Weiter.",
+          { faint: true },
         ),
         Actions(
           k,
@@ -1104,36 +1122,42 @@ export function renderTable(
           [
             {
               key: "end-clear",
-              label: "Clear window",
+              label: "Fenster leeren",
+              icon: "x",
+              variant: "secondary",
               onPress: () =>
-                void tableAction($, "Window cleared", "show_players", {
+                void tableAction($, "Fenster geleert", "show_players", {
                   clear: true,
                 }),
             },
             {
               key: "end-stop",
-              label: "Stop sound",
+              label: "Klang stoppen",
+              icon: "stop",
+              variant: "secondary",
               onPress: () =>
-                void tableAction($, "Sound stopped", "play_sound", {
+                void tableAction($, "Klang gestoppt", "play_sound", {
                   stop: true,
                 }),
             },
             {
               key: "end-leave",
-              label: "Leave Discord",
-              confirm: "Really leave?",
+              label: "Discord verlassen",
+              icon: "power",
+              variant: "secondary",
+              confirm: "Wirklich verlassen?",
               onPress: () =>
-                void tableAction($, "Bot left Discord", "discord", {
+                void tableAction($, "Bot hat Discord verlassen", "discord", {
                   action: "leave",
                 }),
             },
           ],
           3,
         ),
-        Line(
+        Sentence(
           k,
-          "Then: recap & fade-out · canon cleanup · write_session · campaign set threads/party_at · debrief.",
-          { dim: true },
+          "Danach: Rückblick und Ausklang · Kanon aufräumen · write_session · campaign set threads/party_at · Nachbesprechung.",
+          { faint: true },
         ),
         ...renderInterjections($, k, evening),
       ],

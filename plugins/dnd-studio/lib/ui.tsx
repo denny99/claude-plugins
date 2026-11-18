@@ -24,10 +24,10 @@ import { atom, read, update } from 'claude-code'
 import type { RenderInput, EngineInterface, RenderElement } from 'claude-code'
 
 import type { UiKitState } from '../types'
-import { iconSvg, TERM_GLYPHS, type IconName } from './icons'
+import { glyphLabel, ICON_GLYPHS, iconSvg, svgDocument, TERM_GLYPHS, type IconName } from './icons'
 import { modeFromTheme, terminalColor, themeTokens, type Brand, type Mode, type Tokens, type Tone } from './theme'
 
-export { ICONS, iconSvg, isIconName, TERM_GLYPHS, type IconName } from './icons'
+export { glyphLabel, ICON_GLYPHS, ICONS, iconSvg, isIconName, svgDocument, TERM_GLYPHS, type IconName } from './icons'
 export {
   modeFromTheme,
   terminalColor,
@@ -259,7 +259,11 @@ async function copyText($: EngineInterface, text: string, surface?: string): Pro
 }
 
 /** Builds the kit for one render: elements, body size, brand tokens and kit state (subscribes the drawing to it). */
-export async function kit($: EngineInterface, e: RenderInput<'Pane'>, opts: KitOptions = {}): Promise<Kit> {
+export async function kit(
+  $: EngineInterface,
+  e: RenderInput<'Pane'> | RenderInput<'AbovePrompt'>,
+  opts: KitOptions = {},
+): Promise<Kit> {
   const els = $.ui.resolve(e) as unknown as Els
   const state = await read($, uiAtom)
   const props = (e as { props?: { bodyColumns?: number; scroll?: { bodyRows?: number } } }).props ?? {}
@@ -372,20 +376,29 @@ export function Icon(
   )
 }
 
-/** Default mark of a pill per tone: ✓ ok, ⚠ warn, ✕ bad, ● info. Running states pass `glyph: '◷'`, updates `'↑'`. */
-const TONE_GLYPH: Record<Tone, string> = { ok: '✓', warn: '⚠', bad: '✕', info: '●', neutral: '', accent: '' }
+/**
+ * Default mark of a pill per tone: ✓ ok, ◷ warn (yellow means "running" here), ✕ bad, ● info. The mark follows the
+ * meaning, not the color: a real warning passes `icon: 'alert'` (or `glyph: '⚠'`), an update `glyph: '↑'`.
+ */
+const TONE_GLYPH: Record<Tone, string> = { ok: '✓', warn: '◷', bad: '✕', info: '●', neutral: '', accent: '' }
+/** Default icon of a pill per tone on graphical surfaces (in place of the glyph), unless `glyph` or `icon` is given. */
+const TONE_ICON: Partial<Record<Tone, IconName>> = { warn: 'clock' }
 
 export type PillProps = {
   text: string
   tone?: Tone
   /** The mark before the text; `false` for none. Default per tone (TONE_GLYPH). */
   glyph?: string | false
-  /** An icon in place of the glyph on graphical surfaces. */
+  /** An icon in place of the glyph on graphical surfaces. Default per tone (TONE_ICON: warn → clock). */
   icon?: IconName
 }
 
-/** A state pill: tinted chip with a mark (✓ ◷ ↑ ⚠ ✕) and a short sentence ("3 rot · 2 neu"). */
-export function Pill(k: Kit, p: PillProps): RenderElement {
+/**
+ * A state pill: tinted chip with a mark (✓ ◷ ↑ ⚠ ✕) and a short sentence ("3 rot · 2 neu"). Graphical: no border (a
+ * desktop draws a bordered Box a full cell row taller at the top and bottom, which made pills three rows high), one
+ * row high, and wrapped in a centering row so it neither stretches to a row's height nor to a column's width.
+ */
+export function Pill(k: Kit, p: PillProps & { shrink?: boolean }): RenderElement {
   const { Box, Text } = k
   const tone = p.tone ?? 'neutral'
   const glyph = p.glyph === false ? '' : (p.glyph ?? TONE_GLYPH[tone])
@@ -397,22 +410,25 @@ export function Pill(k: Kit, p: PillProps): RenderElement {
     )
   }
   const c = k.t.tones[tone]
-  const icon = p.icon ? Icon(k, p.icon, { size: 12, color: c.fg }) : null
+  const iconName = p.icon ?? (p.glyph === undefined ? TONE_ICON[tone] : undefined)
+  const icon = iconName ? Icon(k, iconName, { size: 12, color: c.fg }) : null
   return (
-    <Box
-      flexDirection="row"
-      alignItems="center"
-      gap={1}
-      paddingX={1}
-      backgroundColor={c.bg}
-      borderStyle="round"
-      borderColor={c.border}
-      flexShrink={0}
-    >
-      {icon}
-      <Text size="caption" weight="bold" color={c.fg} wrap="truncate-end">
-        {sanitize(!icon && glyph ? `${glyph} ${p.text}` : p.text)}
-      </Text>
+    <Box flexDirection="row" alignItems="center" flexShrink={p.shrink ? 1 : 0}>
+      <Box
+        flexDirection="row"
+        alignItems="center"
+        alignSelf="center"
+        gap={1}
+        paddingX={1}
+        paddingY={0}
+        backgroundColor={c.bg}
+        flexShrink={p.shrink ? 1 : 0}
+      >
+        {icon}
+        <Text size="caption" weight="bold" color={c.fg} wrap="truncate-end">
+          {sanitize(!icon && glyph ? `${glyph} ${p.text}` : p.text)}
+        </Text>
+      </Box>
     </Box>
   )
 }
@@ -481,7 +497,11 @@ export function CardTitle(
 }
 
 /** A sentence in a card ("409 von 412 grün · Lauf vor 4 min"): wrapped, muted. */
-export function Sentence(k: Kit, text: string, opts: { tone?: Tone; faint?: boolean } = {}): RenderElement {
+export function Sentence(
+  k: Kit,
+  text: string,
+  opts: { tone?: Tone; faint?: boolean; wrap?: 'wrap' | 'truncate-end' } = {},
+): RenderElement {
   const { Text } = k
   if (!k.graphical)
     return (
@@ -490,7 +510,11 @@ export function Sentence(k: Kit, text: string, opts: { tone?: Tone; faint?: bool
       </Text>
     )
   return (
-    <Text size="footnote" color={opts.tone ? k.t.tones[opts.tone].fg : ink(k, opts.faint ? 'faint' : 'muted')}>
+    <Text
+      size="footnote"
+      color={opts.tone ? k.t.tones[opts.tone].fg : ink(k, opts.faint ? 'faint' : 'muted')}
+      wrap={opts.wrap ?? 'wrap'}
+    >
       {sanitize(text)}
     </Text>
   )
@@ -499,9 +523,8 @@ export function Sentence(k: Kit, text: string, opts: { tone?: Tone; faint?: bool
 export type IconAction = { key: string; icon: IconName; label: string; onPress: () => void }
 
 /**
- * A header knob. Terminal: a one-glyph plain Button named by `label`. Graphical: a framed knob (hover tint) with the
- * `Svg` icon and the label as the pressable part (an `Svg` cannot be pressed nor sit in a Button); compact bodies keep
- * the frame but press on the glyph instead of the label.
+ * A header knob: a native Button, pressable as a whole. Graphical: "<glyph> <label>" (compact bodies: the glyph alone,
+ * `label` stays its accessible name), `variant` secondary. Terminal: a one-glyph plain Button named by `label`.
  */
 export function IconButton(k: Kit, a: IconAction): RenderElement {
   const { Button } = k
@@ -511,10 +534,12 @@ export function IconButton(k: Kit, a: IconAction): RenderElement {
         {TERM_GLYPHS[a.icon] ?? a.label}
       </Button>
     )
-  const glyph = TERM_GLYPHS[a.icon]
-  if (k.compact && glyph)
-    return FramedButton(k, { key: a.key, label: a.label, text: glyph, look: 'knob', onPress: a.onPress })
-  return FramedButton(k, { key: a.key, label: a.label, icon: a.icon, look: 'knob', onPress: a.onPress })
+  const glyph = ICON_GLYPHS[a.icon]
+  return (
+    <Button key={a.key} label={a.label} variant="secondary" onPress={a.onPress}>
+      {k.compact && glyph ? glyph : glyphLabel(a.icon, a.label)}
+    </Button>
+  )
 }
 
 /**
@@ -557,7 +582,7 @@ export function PaneHeader(
   const logo =
     typeof hd.logo === 'string' && Svg ? (
       <Svg
-        source={hd.logo}
+        source={svgDocument(hd.logo)}
         alt={hd.logoAlt ?? hd.label ?? 'logo'}
         width={hd.logoWidth ?? 18}
         height={hd.logoHeight ?? hd.logoWidth ?? 18}
@@ -566,7 +591,7 @@ export function PaneHeader(
       hd.logo
     ) : null
   return (
-    <Box flexDirection="row" alignItems="center" gap={1}>
+    <Box flexDirection="row" alignItems="center" gap={1} flexWrap="wrap">
       {logo}
       {hd.label && !k.narrow ? (
         <Text size="caption" weight="bold" color={k.t.faint}>
@@ -578,9 +603,55 @@ export function PaneHeader(
           {sanitize(hd.title)}
         </Text>
       </Box>
-      {hd.pill ? Pill(k, hd.pill) : null}
+      {hd.pill ? Pill(k, { ...hd.pill, shrink: true }) : null}
       <Box flexGrow={1} />
       {knobs}
+    </Box>
+  )
+}
+
+/** A hairline across the body: an Svg wider than any pane, clipped to the slot (graphical surfaces only). */
+function Rule(k: Kit): RenderElement | null {
+  const Svg = k.Svg
+  if (!Svg) return null
+  return (
+    <Svg
+      source={`<svg xmlns="http://www.w3.org/2000/svg" width="4000" height="1" viewBox="0 0 4000 1" preserveAspectRatio="none"><rect width="4000" height="1" fill="${k.t.line}"/></svg>`}
+      alt="divider"
+      height={1}
+    />
+  )
+}
+
+/** A Box spacing (d.ts `Space`): cells or a step the surface sizes itself. */
+export type Space = number | 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+
+/**
+ * The mandatory outermost box of every kit pane: spaces the sections (`gap`, `md`) and rules the header (usually
+ * `PaneHeader`) off with a hairline. It paints no surface and keeps no inner margin of its own: the app draws the
+ * pane's frame, fill and spacing (open the pane without `backgroundColor`). Terminal: one blank row between sections.
+ */
+export function PaneBody(
+  k: Kit,
+  b: { key?: string; header?: RenderElement | null; gap?: Space; children: Kids },
+): RenderElement {
+  const { Box } = k
+  if (!k.graphical)
+    return (
+      <Box key={b.key} flexDirection="column" gap={b.gap ?? 1}>
+        {b.header ?? null}
+        {kids(b.children)}
+      </Box>
+    )
+  return (
+    <Box key={b.key} flexDirection="column" gap={b.gap ?? 'md'}>
+      {b.header ? (
+        <Box flexDirection="column" gap="sm">
+          {b.header}
+          {Rule(k)}
+        </Box>
+      ) : null}
+      {kids(b.children)}
     </Box>
   )
 }
@@ -749,48 +820,62 @@ export function ListRow(
   )
 }
 
-/** Label / value rows; `copy` adds a copy button for raw data (paths, URLs, IDs). */
+/**
+ * Label / value rows; `copy` adds a framed copy knob for raw data (paths, URLs, IDs). Graphical: drawn as a card (it is
+ * one block of facts); `bare: true` leaves the frame off when it already sits in a Card.
+ */
 export function KeyValue(
   k: Kit,
-  kv: { key?: string; rows: { key?: string; label: string; value: string; copy?: boolean; tone?: Tone }[] },
+  kv: {
+    key?: string
+    bare?: boolean
+    rows: { key?: string; label: string; value: string; copy?: boolean; tone?: Tone }[]
+  },
 ): RenderElement {
   const { Box, Text } = k
   const width = Math.min(Math.floor(k.cols / 2), Math.max(0, ...kv.rows.map(r => [...sanitize(r.label)].length)))
+  const rows = kv.rows.map((r, i) => {
+    const id = r.key ?? `${kv.key ?? 'kv'}-${i}`
+    const copy = r.copy ? CopyButton(k, { key: `${id}-copy`, text: r.value, iconOnly: true }) : null
+    if (!k.graphical) {
+      const label = truncate(sanitize(r.label).padEnd(width), width)
+      const room = Math.max(4, k.cols - width - 2 - (copy ? 4 : 0))
+      return (
+        <Box key={id} flexDirection="row" gap={1}>
+          <Text dimColor>{label}</Text>
+          <Text color={r.tone ? terminalColor(k.brand, r.tone) : undefined}>{truncate(r.value, room)}</Text>
+          {copy}
+        </Box>
+      )
+    }
+    return (
+      <Box key={id} flexDirection="row" alignItems="center" gap={1}>
+        <Box flexShrink={0}>
+          <Text size="footnote" color={k.t.muted}>
+            {sanitize(r.label)}
+          </Text>
+        </Box>
+        <Box flexGrow={1} flexShrink={1} flexDirection="row" justifyContent="flex-end">
+          <Text size="footnote" tabular color={r.tone ? k.t.tones[r.tone].fg : k.t.text} wrap="truncate-middle">
+            {sanitize(r.value)}
+          </Text>
+        </Box>
+        {copy}
+      </Box>
+    )
+  })
+  if (k.graphical && !kv.bare) return Card(k, { key: kv.key, children: rows })
   return (
     <Box key={kv.key} flexDirection="column">
-      {kv.rows.map((r, i) => {
-        const id = r.key ?? `${kv.key ?? 'kv'}-${i}`
-        const copy = r.copy ? CopyButton(k, { key: `${id}-copy`, text: r.value, iconOnly: true }) : null
-        if (!k.graphical) {
-          const label = truncate(sanitize(r.label).padEnd(width), width)
-          const room = Math.max(4, k.cols - width - 2 - (copy ? 4 : 0))
-          return (
-            <Box key={id} flexDirection="row" gap={1}>
-              <Text dimColor>{label}</Text>
-              <Text color={r.tone ? terminalColor(k.brand, r.tone) : undefined}>{truncate(r.value, room)}</Text>
-              {copy}
-            </Box>
-          )
-        }
-        return (
-          <Box key={id} flexDirection="row" alignItems="center" gap={1}>
-            <Box flexGrow={1} flexShrink={1}>
-              <Text size="footnote" color={k.t.muted} wrap="truncate-end">
-                {sanitize(r.label)}
-              </Text>
-            </Box>
-            <Text size="footnote" tabular color={r.tone ? k.t.tones[r.tone].fg : k.t.text} wrap="truncate-middle">
-              {sanitize(r.value)}
-            </Text>
-            {copy}
-          </Box>
-        )
-      })}
+      {rows}
     </Box>
   )
 }
 
-/** A copy button for raw data; `show` prints the value (mono, cut in the middle) before it. */
+/**
+ * A copy button for raw data; `show` prints the value (mono, cut in the middle) before it. `iconOnly`: graphical, a
+ * small framed knob with the copy icon (the label is its click target, as on every framed knob); terminal, `⧉`.
+ */
 export function CopyButton(
   k: Kit,
   c: { key: string; text: string; label?: string; show?: boolean; iconOnly?: boolean },
@@ -798,17 +883,23 @@ export function CopyButton(
   const { Box, Text, Button } = k
   const label = c.label ?? k.s.copy
   const press = (e: { surface?: string }) => k.copy(c.text, e?.surface)
-  const btn = c.iconOnly ? (
-    <Button key={c.key} label={label} plain onPress={press}>
-      {TERM_GLYPHS.copy ?? label}
-    </Button>
-  ) : (
-    <Button key={c.key} plain onPress={press}>
-      {label}
-    </Button>
-  )
-  const icon = !c.iconOnly && k.graphical ? Icon(k, 'copy', { size: 14, color: k.t.muted }) : null
-  if (!c.show && !icon) return btn
+  const btn =
+    c.iconOnly && k.graphical ? (
+      IconButton(k, { key: c.key, icon: 'copy', label, onPress: press as () => void })
+    ) : c.iconOnly ? (
+      <Button key={c.key} label={label} plain onPress={press}>
+        {TERM_GLYPHS.copy ?? label}
+      </Button>
+    ) : k.graphical ? (
+      <Button key={c.key} label={label} variant="secondary" onPress={press}>
+        {glyphLabel('copy', label)}
+      </Button>
+    ) : (
+      <Button key={c.key} plain onPress={press}>
+        {label}
+      </Button>
+    )
+  if (!c.show) return btn
   return (
     <Box flexDirection="row" alignItems="center" gap={1}>
       {c.show ? (
@@ -818,7 +909,6 @@ export function CopyButton(
           </Text>
         </Box>
       ) : null}
-      {icon}
       {btn}
     </Box>
   )
@@ -855,9 +945,9 @@ export type Action = {
   confirm?: boolean | string
   /** v1 spelling of `variant: 'primary'`. */
   primary?: boolean
-  /** v2: icon left of the label (graphical surfaces). */
+  /** v2: the icon's text glyph in front of the label (graphical surfaces; `ICON_GLYPHS`). */
   icon?: IconName
-  /** v2: primary (one per view), secondary (framed), link (text, no icon). Absent with no icon: the v1 plain look. */
+  /** v2: primary (one per view), secondary, link (plain text button). Absent with no icon: the v1 plain look. */
   variant?: 'primary' | 'secondary' | 'link'
 }
 
@@ -923,10 +1013,10 @@ export function ConfirmButton(
 }
 
 /**
- * One action button. v1 (no `icon`/`variant`): plain, primary or two-step. v2: `variant` primary/secondary, `link` as
- * plain text. On graphical surfaces a v2 button is a framed `Box` (accent fill for primary, border for secondary, a
- * hover tint) holding the icon and a `plain` Button: the engine refuses an `Svg` inside a Button, so the icon sits in
- * the frame and the Button (the click target, named by `label`) carries the label. The terminal keeps `[ label ]`.
+ * One action button. v1 (no `icon`/`variant`): plain, primary or two-step. v2: the engine's own `variant`
+ * primary/secondary (the app paints it; a desktop ignores colors on a Button), `link` as a plain Button without glyph. Graphical
+ * surfaces put the icon's text glyph in front of the label ("↑ Pushen"): the whole native Button is the click target
+ * (`label` names it). The terminal keeps `[ label ]`.
  */
 export function ActionButton(k: Kit, a: Action): RenderElement {
   const { Button } = k
@@ -951,95 +1041,15 @@ export function ActionButton(k: Kit, a: Action): RenderElement {
   const variant = a.variant ?? (a.primary ? 'primary' : 'secondary')
   if (variant === 'link')
     return (
-      <Button key={a.key} plain onPress={a.onPress}>
+      <Button key={a.key} label={a.label} plain onPress={a.onPress}>
         {a.label}
       </Button>
     )
-  if (!k.graphical)
-    return (
-      <Button key={a.key} variant={variant} onPress={a.onPress}>
-        {a.label}
-      </Button>
-    )
-  return FramedButton(k, {
-    key: a.key,
-    label: a.label,
-    icon: a.icon,
-    look: variant === 'primary' ? 'primary' : 'secondary',
-    onPress: a.onPress,
-  })
-}
-
-type FrameLook = 'primary' | 'secondary' | 'tab' | 'tabActive' | 'knob'
-
-/** Fill, border, label color and hover fill per look, from the brand tokens. */
-function frameStyle(
-  k: Kit,
-  look: FrameLook,
-): { bg?: string; border?: string; fg: string; hoverBg: string; hoverBorder?: string; bold: boolean } {
-  const t = k.t
-  switch (look) {
-    case 'primary':
-      return {
-        bg: t.accent,
-        border: t.accent,
-        fg: t.onAccent,
-        hoverBg: t.accentTintText,
-        hoverBorder: t.accentTintText,
-        bold: true,
-      }
-    case 'secondary':
-      return { bg: t.card, border: t.border, fg: t.text, hoverBg: t.line, hoverBorder: t.faint, bold: false }
-    case 'tabActive':
-      return { bg: t.accentTint, fg: t.accentTintText, hoverBg: t.accentTint, bold: true }
-    case 'tab':
-      return { fg: t.muted, hoverBg: t.line, bold: false }
-    case 'knob':
-      return { border: t.border, fg: t.muted, hoverBg: t.line, hoverBorder: t.faint, bold: false }
-  }
-}
-
-/**
- * Graphical-only button chrome: a keyed `Box` (`${key}-frame`, the hover scope) painted per `look`, holding the `Svg`
- * icon and a `plain` Button keyed `key` whose `label` names it and whose `Text` child carries the color. Only the Button
- * is pressable (Box and Svg take no press), so the icon stays small and the label is the target. `text` overrides what
- * is drawn on the Button (a count, a glyph) while `label` stays its accessible name.
- */
-function FramedButton(
-  k: Kit,
-  b: {
-    key: string
-    label: string
-    text?: string
-    icon?: IconName
-    look: FrameLook
-    onPress: () => void
-    border?: boolean
-  },
-): RenderElement {
-  const { Box, Button, Text } = k
-  const st = frameStyle(k, b.look)
-  const framed = b.border !== false && st.border !== undefined
+  const text = k.graphical ? glyphLabel(a.icon, a.label) : a.label
   return (
-    <Box
-      key={`${b.key}-frame`}
-      flexDirection="row"
-      alignItems="center"
-      gap={1}
-      paddingX={1}
-      flexShrink={0}
-      backgroundColor={st.bg}
-      borderStyle={framed ? 'round' : undefined}
-      borderColor={framed ? st.border : undefined}
-      hover={framed ? { backgroundColor: st.hoverBg, borderColor: st.hoverBorder } : { backgroundColor: st.hoverBg }}
-    >
-      {b.icon ? Icon(k, b.icon, { size: 14, color: st.fg }) : null}
-      <Button key={b.key} label={b.label} plain onPress={b.onPress}>
-        <Text color={st.fg} bold={st.bold || undefined}>
-          {b.text ?? b.label}
-        </Text>
-      </Button>
-    </Box>
+    <Button key={a.key} label={a.label} variant={variant} onPress={a.onPress}>
+      {text}
+    </Button>
   )
 }
 
@@ -1201,7 +1211,7 @@ export function EmptyState(k: Kit, info: string | EmptyInfo): RenderElement {
   return (
     <Box flexDirection="column" alignItems="center" gap={1} paddingY={2}>
       {Icon(k, info.icon ?? 'circle', { size: 28, color: k.t.faint })}
-      <Text weight="bold" color={k.t.text}>
+      <Text weight="bold" color={k.t.text} wrap="truncate-end">
         {sanitize(info.title)}
       </Text>
       {info.text ? Sentence(k, info.text) : null}
@@ -1357,7 +1367,6 @@ export function LogBox(
             {k.graphical ? last || ' ' : truncate(last || ' ', Math.max(4, k.cols - [...k.s.log].length - 3))}
           </Text>
         </Box>
-        {k.graphical ? Icon(k, 'log', { size: 14, color: k.t.muted }) : null}
         {btn}
       </Box>
     )
@@ -1401,9 +1410,10 @@ export type TabItem<T extends string> = {
 
 /**
  * Tab bar: one Button per tab keyed `${keyPrefix ?? 'tab-'}${id}`, the active one primary; wraps on narrow bodies (v1).
- * v2 (any `icon` or `maxVisible`): a strip with icons and counts; past `maxVisible` the rest sit behind a "More" tab
- * (`${prefix}more`) whose menu lists them under the strip (same keys); the active tab always stays in the strip.
- * Narrow bodies drop the icons and keep the strip on one line.
+ * v2 (any `icon` or `maxVisible`): one row of native Buttons, the active one `variant: 'primary'`, the rest plain, each
+ * "<glyph> <label> · <count>"; past `maxVisible` the rest sit behind a "More" tab (`${prefix}more`) whose menu lists them
+ * under the strip (same keys); the active tab always stays in the strip. Narrow bodies drop the glyphs and keep the
+ * strip on one line.
  */
 export function Tabs<T extends string>(
   k: Kit,
@@ -1454,14 +1464,17 @@ export function Tabs<T extends string>(
       t.onSelect(tab.id)
     }
     if (k.graphical)
-      return FramedButton(k, {
-        key: `${prefix}${tab.id}`,
-        label: tab.label,
-        text: text(tab),
-        icon: tab.icon && (!k.narrow || inMenu) ? tab.icon : undefined,
-        look: on ? 'tabActive' : 'tab',
-        onPress: press,
-      })
+      return (
+        <Button
+          key={`${prefix}${tab.id}`}
+          label={tab.label}
+          plain={on ? undefined : true}
+          variant={on ? 'primary' : undefined}
+          onPress={press}
+        >
+          {glyphLabel(tab.icon && (!k.narrow || inMenu) ? tab.icon : undefined, text(tab))}
+        </Button>
+      )
     return (
       <Button
         key={`${prefix}${tab.id}`}
@@ -1475,14 +1488,9 @@ export function Tabs<T extends string>(
   }
   const moreText = `${t.moreLabel ?? k.s.more}${menuOpen ? ' ▴' : ' ▾'}`
   const moreTab = !rest.length ? null : k.graphical ? (
-    FramedButton(k, {
-      key: `${prefix}more`,
-      label: t.moreLabel ?? k.s.more,
-      text: moreText,
-      icon: k.narrow ? undefined : 'dots',
-      look: menuOpen ? 'tabActive' : 'tab',
-      onPress: () => k.toggleMore(menuKey),
-    })
+    <Button key={`${prefix}more`} label={t.moreLabel ?? k.s.more} plain onPress={() => k.toggleMore(menuKey)}>
+      {moreText}
+    </Button>
   ) : (
     <Box flexDirection="row" alignItems="center" gap={1} flexShrink={0}>
       <Button key={`${prefix}more`} plain onPress={() => k.toggleMore(menuKey)}>
@@ -1494,13 +1502,9 @@ export function Tabs<T extends string>(
     <Box
       flexDirection="row"
       alignItems="center"
-      gap={0}
-      padding={0}
+      gap={1}
       flexWrap={k.narrow ? 'nowrap' : 'wrap'}
       overflow={k.narrow ? 'hidden' : undefined}
-      backgroundColor={k.t.well}
-      borderStyle="round"
-      borderColor={k.t.well}
     >
       {strip.map(tab => one(tab))}
       {moreTab}
@@ -1513,7 +1517,7 @@ export function Tabs<T extends string>(
   )
   if (!menuOpen) return bar
   const menu = k.graphical ? (
-    <Box flexDirection="column" padding={1} backgroundColor={k.t.card} borderStyle="round" borderColor={k.t.border}>
+    <Box flexDirection="row" gap={1} flexWrap="wrap">
       {rest.map(tab => one(tab, true))}
     </Box>
   ) : (
@@ -1525,6 +1529,123 @@ export function Tabs<T extends string>(
     <Box flexDirection="column" gap={k.graphical ? 1 : 0}>
       {bar}
       {menu}
+    </Box>
+  )
+}
+
+// --- launcher strip above the prompt ---
+
+/** Key prefix that marks a plugin's band row as a launcher row (`launch:<plugin>`), so a merger can find it. */
+export const LAUNCH_PREFIX = 'launch:'
+
+export type LauncherChipProps = {
+  key: string
+  icon?: IconName
+  label: string
+  /** A short state next to the chip ("Termin in 8 min", "Tests laufen", "Tisch aktiv"). */
+  status?: string
+  /** Colors the status (state only: ok, warn, bad, info). */
+  tone?: Tone
+  /** The chip that matters now: `variant: 'primary'` (at most one per row). */
+  primary?: boolean
+  onPress: () => void
+}
+
+/**
+ * One starter chip of the strip above the prompt: a native Button "<glyph> <label>" (pressable as a whole) and its
+ * status after it. The terminal draws `[ label ]` and the status dim.
+ */
+export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
+  const { Box, Text, Button } = k
+  const btn = (
+    <Button
+      key={c.key}
+      label={c.label}
+      variant={c.primary ? 'primary' : k.graphical ? 'secondary' : undefined}
+      plain={!c.primary && !k.graphical ? true : undefined}
+      onPress={c.onPress}
+    >
+      {k.graphical ? glyphLabel(c.icon, c.label) : c.label}
+    </Button>
+  )
+  if (!c.status) return btn
+  const status = k.graphical ? (
+    <Text size="footnote" color={c.tone ? k.t.tones[c.tone].fg : k.t.faint} wrap="truncate-end">
+      {sanitize(c.status)}
+    </Text>
+  ) : (
+    <Text color={c.tone ? terminalColor(k.brand, c.tone) : undefined} dimColor={c.tone ? undefined : true}>
+      {truncate(c.status, Math.max(6, Math.floor(k.cols / 3)))}
+    </Text>
+  )
+  return (
+    <Box key={`${c.key}-chip`} flexDirection="row" alignItems="center" gap={1} flexShrink={1}>
+      {btn}
+      {status}
+    </Box>
+  )
+}
+
+/**
+ * A plugin's launcher row for its `AbovePrompt` hook: chips in one wrapping row, keyed `launch:<plugin>` so
+ * `mergeLauncherRows` (any installed plugin's) puts the rows of every plugin into one strip.
+ */
+export function LauncherRow(k: Kit, r: { plugin: string; chips: Kids }): RenderElement {
+  const { Box } = k
+  return (
+    <Box
+      key={`${LAUNCH_PREFIX}${r.plugin}`}
+      flexDirection="row"
+      alignItems="center"
+      gap={k.graphical ? 2 : 1}
+      flexWrap="wrap"
+    >
+      {kids(r.chips)}
+    </Box>
+  )
+}
+
+type BandRow = { plugin: string; tree: RenderElement }
+
+/** Whether a band row is a launcher row (its root Box keyed `launch:…`). */
+export function isLauncherRow(row: BandRow): boolean {
+  const key = (row.tree as { props?: { key?: unknown } }).props?.key
+  return typeof key === 'string' && key.startsWith(LAUNCH_PREFIX)
+}
+
+/**
+ * The `AbovePromptList` hook that lays every plugin's launcher row side by side in one wrapping strip on top of the
+ * band; other rows stay stacked under it, in their order. The engine lets a hook only reorder rows and wrap what
+ * `next(e)` returns (never re-place another plugin's tree), so each launcher row goes through `next` alone and the
+ * strip wraps those results; presses stay with the plugin that drew the chip. Fewer than two launcher rows: passes.
+ * Safe when several plugins install it (an inner one sees single rows and passes).
+ *
+ *   on('ui.render', { component: 'AbovePromptList' }, ($, e, next) => mergeLauncherRows($, e, next))
+ */
+export async function mergeLauncherRows(
+  $: EngineInterface,
+  e: RenderInput<'AbovePromptList'>,
+  next: (e: RenderInput<'AbovePromptList'>) => Promise<unknown>,
+): Promise<unknown> {
+  const rows = e.props.rows
+  const launch = rows.filter(isLauncherRow)
+  if (launch.length < 2) return next(e)
+  const others = rows.filter(row => !isLauncherRow(row))
+  const only = (subset: readonly BandRow[]) => next({ ...e, props: { ...e.props, rows: subset } })
+  const parts: RenderElement[] = []
+  for (const row of launch) parts.push((await only([row])) as RenderElement)
+  const rest = others.length ? ((await only(others)) as RenderElement) : null
+  const { Box } = $.ui.resolve(e) as unknown as Els
+  const strip = (
+    <Box key="launch-strip" flexDirection="row" alignItems="center" columnGap={2} flexWrap="wrap">
+      {parts}
+    </Box>
+  )
+  if (!rest) return strip
+  return (
+    <Box key="launch-band" flexDirection="column">
+      {strip}
+      {rest}
     </Box>
   )
 }

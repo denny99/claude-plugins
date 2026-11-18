@@ -113,6 +113,89 @@ export const TERM_GLYPHS: Partial<Record<IconName, string>> = {
   info: 'ℹ',
 }
 
+const VS15 = '\uFE0E'
+
+/**
+ * Text glyph per icon for the label of a native `Button` (a desktop draws every Button natively and refuses an `Svg`
+ * inside one, so a clickable icon is a character in front of its label: "↑ Pushen"). Only characters the system
+ * fonts of macOS (SF/Menlo/Apple Symbols) and Windows (Segoe UI Symbol) carry; those with an emoji form get U+FE0E
+ * so they stay text, never a color emoji.
+ */
+export const ICON_GLYPHS: Record<IconName, string> = {
+  play: `▶${VS15}`,
+  stop: '■',
+  refresh: '⟳',
+  rerun: '↺',
+  up: '↑',
+  push: '↑',
+  commit: '◉',
+  log: '≡',
+  claude: '✻',
+  camera: '◎',
+  flag: '⚑',
+  gauge: '◔',
+  external: `↗${VS15}`,
+  check: '✓',
+  x: '✕',
+  diff: '±',
+  copy: '⧉',
+  download: '↓',
+  power: '⊙',
+  plug: '↯',
+  list: '≡',
+  wand: '✦',
+  trash: '⌫',
+  globe: '⊕',
+  branch: '⎇',
+  eye: '◉',
+  flask: `⚗${VS15}`,
+  terminal: '❯',
+  grid: '▦',
+  folder: '▤',
+  server: '☰',
+  dots: '…',
+  phone: `☎${VS15}`,
+  app: '▢',
+  speaker: '♪',
+  dice: '⚄',
+  hammer: `⚒${VS15}`,
+  heart: `♥${VS15}`,
+  scroll: '§',
+  next: '→',
+  book: '❐',
+  ticket: '⌗',
+  box: '▣',
+  container: '⬚',
+  alert: `⚠${VS15}`,
+  tag: '◈',
+  activity: '∿',
+  sliders: '☷',
+  translate: '⇄',
+  stethoscope: `⚕${VS15}`,
+  link: '⊸',
+  moon: '☾',
+  pin: '⌖',
+  pen: '✎',
+  bookmark: '◫',
+  user: '◯',
+  chat: '❝',
+  arrow: '→',
+  mic: '●',
+  gear: `⚙${VS15}`,
+  music: '♫',
+  xCircle: '⊗',
+  checkCircle: '✓',
+  clock: '◷',
+  circle: '○',
+  info: `ℹ${VS15}`,
+}
+
+/** `"<glyph> <label>"` for a native Button (just `label` without an icon). */
+export function glyphLabel(icon: IconName | undefined, label: string): string {
+  const g = icon ? ICON_GLYPHS[icon] : ''
+  return g ? `${g} ${label}` : label
+}
+
 /** The `<svg>` markup of an icon in one color (`currentColor` replaced), sized `size` CSS pixels. */
 export function iconSvg(name: IconName, color: string, size = 16): string {
   const body = (ICONS[name] ?? '').replace(/currentColor/g, color)
@@ -125,4 +208,25 @@ export function iconSvg(name: IconName, color: string, size = 16): string {
 /** Whether `name` is a kit icon. */
 export function isIconName(name: unknown): name is IconName {
   return typeof name === 'string' && Object.prototype.hasOwnProperty.call(ICONS, name)
+}
+
+/**
+ * Makes an SVG string a standalone document a desktop can draw as an image: adds `xmlns` (without it the image loader
+ * refuses the markup and draws a broken-image placeholder), `xmlns:xlink` when `xlink:href` is used, and `width` /
+ * `height` from the `viewBox` when missing. A data-URI `<image href="data:image/webp;base64,…">` inside works then too.
+ */
+export function svgDocument(source: string): string {
+  const src = source.trim()
+  const m = /^<svg\b([^>]*)>/i.exec(src)
+  if (!m) return src
+  let attrs = m[1] ?? ''
+  if (!/\sxmlns\s*=/.test(attrs)) attrs = ` xmlns="http://www.w3.org/2000/svg"${attrs}`
+  if (/xlink:href/.test(src) && !/\sxmlns:xlink\s*=/.test(attrs))
+    attrs = `${attrs} xmlns:xlink="http://www.w3.org/1999/xlink"`
+  const vb = /\sviewBox\s*=\s*["']\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)\s*["']/.exec(attrs)
+  const w = vb?.[1]
+  const hgt = vb?.[2]
+  if (w && !/\swidth\s*=/.test(attrs)) attrs = `${attrs} width="${w}"`
+  if (hgt && !/\sheight\s*=/.test(attrs)) attrs = `${attrs} height="${hgt}"`
+  return `<svg${attrs}>${src.slice(m[0].length)}`
 }

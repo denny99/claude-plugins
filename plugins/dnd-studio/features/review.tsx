@@ -102,6 +102,163 @@ export async function reviewTool(
     : "The review queue is empty.";
 }
 
+// --- results Claude makes in this session go into the queue by themselves ---
+
+const SOUND_EXT = /\.(wav|mp3|ogg|flac|m4a|opus)$/i;
+const IMAGE_EXT = /\.(png|jpe?g|webp|gif)$/i;
+const VIDEO_EXT = /\.(mp4|webm|mov|mkv)$/i;
+const SOUND_KINDS: Record<string, string> = {
+  effect: "Geräusch",
+  signal: "Signal",
+  ambience: "Atmosphäre",
+  bgmusic: "Hintergrundmusik",
+  music: "Musik",
+};
+
+let sessionStart = 0;
+/** make_sound jobs of this session: job id → name and meta from the call. */
+const madeJobs = new Map<string, { name: string; meta: string }>();
+
+/** session.start: results older than now are not this session's. */
+export function startReviewSession(now: number): void {
+  sessionStart = now;
+  madeJobs.clear();
+}
+
+function parsed(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+function mediaOf(o: Obj): { source: string; kind: ReviewKind } | null {
+  for (const v of [o.file, o.path, o.url, o.files]) {
+    const f = Array.isArray(v) ? str(v[0]) : str(v);
+    if (!f) continue;
+    if (SOUND_EXT.test(f)) return { source: f, kind: "sound" };
+    if (VIDEO_EXT.test(f)) return { source: f, kind: "video" };
+    if (IMAGE_EXT.test(f)) return { source: f, kind: "image" };
+  }
+  return null;
+}
+
+function timeOf(v: unknown): number {
+  if (typeof v === "number") return v < 1e12 ? v * 1000 : v;
+  const t = Date.parse(str(v));
+  return Number.isFinite(t) ? t : 0;
+}
+
+function walk(
+  v: unknown,
+  visit: (o: Obj, job: string) => void,
+  job = "",
+): void {
+  if (Array.isArray(v)) for (const x of v) walk(x, visit, job);
+  else if (v && typeof v === "object") {
+    const o = v as Obj;
+    visit(o, job);
+    const own = Array.isArray(o.results) ? str(o.id ?? o.job_id) : "";
+    for (const x of Object.values(o)) walk(x, visit, own || job);
+  }
+}
+
+function baseName(source: string): string {
+  return (source.split(/[\\/]/).pop() ?? source).replace(/\.[^.]+$/, "");
+}
+
+/**
+ * Observes a finished make_sound / results / jobs call (after `next`, never changing it): a sound make_sound made, or
+ * a result of a make_sound job of this session, or a result made through the Studio's tools since this session began,
+ * goes into the review queue unless it is there already.
+ */
+export async function noteMadeResults(
+  $: EngineInterface,
+  tool: string,
+  input: Obj,
+  text: string,
+): Promise<number> {
+  const data = parsed(text);
+  if (data === undefined) return 0;
+  const fromCall =
+    tool === "make_sound"
+      ? {
+          name: str(input.name) || str(input.idea).slice(0, 40),
+          meta: [
+            SOUND_KINDS[str(input.kind)] ?? "",
+            input.seconds ? `${str(input.seconds)} s` : "",
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        }
+      : null;
+  const found: {
+    source: string;
+    kind: ReviewKind;
+    name: string;
+    meta: string;
+  }[] = [];
+  walk(data, (o, job) => {
+    const media = mediaOf(o);
+    const id = str(o.id ?? o.job_id);
+    if (!media) {
+      if (fromCall && id) madeJobs.set(id, fromCall);
+      return;
+    }
+    const known = madeJobs.get(job) ?? madeJobs.get(str(o.job ?? o.job_id));
+    const mine =
+      fromCall ??
+      known ??
+      (tool === "results" &&
+      sessionStart &&
+      timeOf(o.time ?? o.created ?? o.at) >= sessionStart &&
+      (o.who || o.prompt || o.viaMcp)
+        ? {
+            name: str(o.name ?? o.title) || baseName(media.source),
+            meta: SOUND_KINDS[str(o.mode)] ?? str(o.mode),
+          }
+        : null);
+    if (mine)
+      found.push({
+        ...media,
+        name: mine.name || baseName(media.source),
+        meta: mine.meta,
+      });
+  });
+  if (!found.length) return 0;
+  const now = await $.clock.now();
+  let added = 0;
+  await patchReview($, (s) => {
+    const fresh = found.filter(
+      (f, n) =>
+        !s.items.some((i) => i.source === f.source) &&
+        found.findIndex((g) => g.source === f.source) === n,
+    );
+    added = fresh.length;
+    return {
+      items: [
+        ...s.items,
+        ...fresh.map((f, n): ReviewItem => ({
+          id: `r${now.toString(36)}a${n}`,
+          kind: f.kind,
+          name: f.name,
+          meta: f.meta,
+          source: f.source,
+          agent: f.kind === "sound" ? "pnp-klang" : "pnp-maler",
+          scene: "",
+          verdict: "",
+          note: "",
+          revealed: false,
+          addedAt: now,
+        })),
+      ],
+    };
+  });
+  if (added) await autoOpen($, "build", "review");
+  return added;
+}
+
 // --- playing and opening locally ---
 
 let player: AsyncIterator<unknown> | null = null;
