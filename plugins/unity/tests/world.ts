@@ -9,7 +9,9 @@ export const BRIDGE = `${PROJECT}/Temp/ClaudeBridge`
 export const EDITOR = '/Applications/Unity/Hub/Editor/6000.6.7f1/Unity.app/Contents/MacOS/Unity'
 
 export type World = {
-  git: { status: string; diff: string; untracked: string; head: string; count: string; top: string }
+  git: { status: string; diff: string; untracked: string; head: string; count: string; top: string; worktrees: string }
+  /** Extra folder listings for fs.list (name → dirs in it). */
+  dirs: Record<string, string[]>
   files: Record<string, string>
   calls: Record<string, unknown>[]
   argv: string[]
@@ -46,7 +48,8 @@ export function fakeWorld(
   }
   if (opts.lock && opts.lock !== 'none') files[`${PROJECT}/Temp/UnityLockfile`] = ''
   const world: World = {
-    git: { status: '', diff: '', untracked: '', head: 'abc123', count: '0', top: ROOT },
+    git: { status: '', diff: '', untracked: '', head: 'abc123', count: '0', top: ROOT, worktrees: '' },
+    dirs: {},
     files,
     calls: [],
     argv: [],
@@ -85,7 +88,9 @@ export function fakeWorld(
   })
   on('fs.list', (_, e) => ({
     value:
-      e.path === ROOT ? [{ name: 'unity', kind: 'dir' as const, size: 0, mtimeMs: 1, isLink: false } as never] : [],
+      e.path === ROOT
+        ? [{ name: 'unity', kind: 'dir' as const, size: 0, mtimeMs: 1, isLink: false } as never]
+        : (world.dirs[e.path] ?? []).map(name => ({ name, kind: 'dir' as const, size: 0, mtimeMs: 1, isLink: false }) as never),
   }))
   on('fs.write', (_, e) => {
     files[e.path] = String(e.text ?? '')
@@ -98,7 +103,11 @@ export function fakeWorld(
       const fail = (error: string, code: string) => {
         files[`${BRIDGE}/result-${m[1]}.json`] = JSON.stringify({ id: m[1], ok: false, error, code })
       }
-      if (cmd.cmd === 'refresh' && world.bridge.nothingToCompile) done({})
+      if (cmd.cmd === 'cancel-tests') {
+        const t = JSON.parse(files[`${BRIDGE}/tests.json`] ?? '{}') as Record<string, unknown>
+        files[`${BRIDGE}/tests.json`] = JSON.stringify({ ...t, state: 'error', error: 'Cancelled', current: '' })
+        done({ runId: t.runId })
+      } else if (cmd.cmd === 'refresh' && world.bridge.nothingToCompile) done({})
       else if (cmd.cmd === 'refresh') {
         world.bridge.compileSeq++
         files[`${BRIDGE}/compile.json`] = JSON.stringify({
@@ -192,6 +201,10 @@ export function fakeWorld(
       const a = e.argv.slice(1)
       const out = a.includes('--show-toplevel')
         ? `${world.git.top}\n`
+        : a.includes('worktree') && a.includes('list')
+          ? world.git.worktrees
+          : a.includes('--show-toplevel')
+        ? `${world.git.top}\n`
         : a.includes('rev-parse')
           ? `${world.git.head}\n`
           : a.includes('status')
@@ -203,7 +216,7 @@ export function fakeWorld(
                 : a.includes('rev-list')
                   ? `${world.git.count}\n`
                   : ''
-      if (a.includes('worktree')) files[String(a[a.length - 1])] = ''
+      if (a.includes('worktree') && a.includes('add')) files[String(a[a.length - 1])] = ''
       if (out) yield { stream: 'stdout' as const, text: out }
       return { value: { code: 0, signal: null } }
     }

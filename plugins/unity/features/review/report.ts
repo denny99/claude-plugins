@@ -24,6 +24,7 @@ import {
 } from './store'
 import { describeMarks } from './viewer'
 import { newView, saveMarks } from './tab'
+import { bridgeUpdateAction } from '../pane/common'
 
 type El = (props: Record<string, unknown>) => RenderElement
 
@@ -179,6 +180,9 @@ export async function sendStoredReport($: EngineInterface, _options: Options, r:
   await $.prompt.submit({ text })
 }
 
+/** The error text of lib/play.ts playError for code `outdated`. */
+const OUTDATED = /Update com\.denny99\.claude-bridge/
+
 /** The report card (above the viewer that shows the picture to paint on). */
 export async function reportCard(
   $: EngineInterface,
@@ -195,12 +199,15 @@ export async function reportCard(
       title: 'Kein Screenshot',
       cause: r.error,
       tone: 'warn',
-      action: {
-        key: 'rv-report-retry',
-        label: 'Nochmal versuchen',
-        icon: 'camera',
-        onPress: () => void openReport($, options),
-      },
+      // An old bridge cannot capture: trying again changes nothing, updating it does.
+      action: OUTDATED.test(r.error)
+        ? bridgeUpdateAction($, options)
+        : {
+            key: 'rv-report-retry',
+            label: 'Nochmal versuchen',
+            icon: 'camera',
+            onPress: () => void openReport($, options),
+          },
       more: [
         { key: 'rv-report-cancel', label: 'Abbrechen', onPress: () => void patchReview($, { report: undefined }) },
       ],

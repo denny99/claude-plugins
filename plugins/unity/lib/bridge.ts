@@ -4,7 +4,7 @@
  * the editor closes, so a stale folder never outlives the editor for long):
  *
  * - `status.json`  — heartbeat the bridge rewrites every second: `{ updatedAt, pid, unityVersion, projectPath,
- *                    isCompiling, isPlaying, isPaused, compileSeq, scene, batchmode? }`. Older than {@link STALE_MS} → bridge down (10 s: a domain reload pauses the heartbeat for a few seconds).
+ *                    isCompiling, isPlaying, isPaused, compileSeq, scene, batchmode?, bridgeVersion? }`. Older than {@link STALE_MS} → bridge down (10 s: a domain reload pauses the heartbeat for a few seconds).
  * - `cmd-<id>.json` — written by the mod: one flat object `{ id, cmd, mode?, filter?, path?, width?, height?, spot?,
  *                    seconds?, sound?, group?, db? }`. The
  *                    bridge picks it up on EditorApplication.update and deletes it.
@@ -33,6 +33,23 @@ export interface BridgeStatus {
   scene?: string
   /** The editor runs with -batchmode (no window: Play-mode screenshots cannot work). Absent from older bridges. */
   batchmode?: boolean
+  /** The package version of the bridge itself (absent from bridges before it reported one). */
+  bridgeVersion?: string
+}
+
+/** The bridge version this plugin ships (bridge/com.denny99.claude-bridge/package.json; a test keeps them equal). */
+export const BRIDGE_VERSION = '0.2.0'
+
+/** `a` is an older version than `b` (numeric x.y.z compare; anything unparsable counts as not older). */
+export function versionOlder(a: string, b: string): boolean {
+  const pa = /^(\d+)\.(\d+)\.(\d+)/.exec(a)
+  const pb = /^(\d+)\.(\d+)\.(\d+)/.exec(b)
+  if (!pa || !pb) return false
+  for (let i = 1; i <= 3; i++) {
+    const d = Number(pa[i]) - Number(pb[i])
+    if (d) return d < 0
+  }
+  return false
 }
 
 export interface ConsoleEntry {
@@ -85,6 +102,7 @@ export async function readStatus(
   if (raw.projectPath) status.projectPath = String(raw.projectPath)
   if (raw.scene) status.scene = String(raw.scene)
   if (typeof raw.batchmode === 'boolean') status.batchmode = raw.batchmode
+  if (typeof raw.bridgeVersion === 'string' && raw.bridgeVersion) status.bridgeVersion = raw.bridgeVersion
   if (now - status.updatedAt > STALE_MS) return { up: false, why: 'stale', status }
   return { up: true, status }
 }
@@ -147,6 +165,7 @@ export type BridgeCommand =
   | { cmd: 'stop' }
   | { cmd: 'pause' }
   | { cmd: 'run-tests'; mode: 'EditMode' | 'PlayMode'; filter?: string }
+  | { cmd: 'cancel-tests' }
   | { cmd: 'screenshot'; path: string; width?: number; height?: number }
   | { cmd: 'open-scene'; path: string }
   | { cmd: 'select'; path: string }

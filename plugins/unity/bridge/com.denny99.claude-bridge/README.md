@@ -30,7 +30,7 @@ No sockets, no network: a socket does not survive a domain reload. The bridge po
 | File in `<project>/Temp/ClaudeBridge/` | Written by | Content |
 | --- | --- | --- |
 | `status.json` | bridge, every second | heartbeat: Unity version, compiling, playing, paused, compile counter, scene |
-| `cmd-<id>.json` | plugin | one command: `refresh`, `play`, `stop`, `pause`, `run-tests` (`mode`, `filter`), `screenshot` (`path`, `width`, `height`), `open-scene` (`path`), `select` (`path`), `clear-console`; provider commands below |
+| `cmd-<id>.json` | plugin | one command: `refresh`, `play`, `stop`, `pause`, `run-tests` (`mode`, `filter`), `cancel-tests` (Test Framework 1.4+, else needs the run id), `screenshot` (`path`, `width`, `height`), `open-scene` (`path`), `select` (`path`), `clear-console`; provider commands below |
 | `result-<id>.json` | bridge | `{ id, ok, error, code, runId, path, compileSeq }` (provider commands: their own fields, below); removed after 10 minutes |
 | `compile.json` | bridge | messages of the last compile, written before the domain reload |
 | `console.json` | bridge | last 300 console entries with stack traces |

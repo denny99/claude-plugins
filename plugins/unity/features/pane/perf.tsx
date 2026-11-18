@@ -8,7 +8,7 @@ import type { ModelPerf, UnityModel } from '../../types'
 import { isPlayError } from '../../lib/play'
 import { Actions, Card, CardTitle, ProblemCard, Sentence, sanitize, truncate, type Kit } from '../../lib/ui'
 import { gotoSpot, patchModel, type Options } from '../state'
-import { clockTime, dec, thousands } from './common'
+import { bridgeUpdateAction, clockTime, dec, thousands } from './common'
 import { measure, measuringSeconds } from './measure'
 import { playActions } from './overview'
 
@@ -179,9 +179,11 @@ export function perfTab($: EngineInterface, k: Kit, m: UnityModel, options: Opti
             title: err.code === 'not-playing' ? 'Messen geht nur im Play-Modus' : 'Messung ging nicht',
             cause: err.error,
             action:
-              err.code === 'not-playing' && m.bridge.up && !m.bridge.isPlaying
-                ? playActions($, m, options).find(a => a.key === 'play')
-                : undefined,
+              err.code === 'outdated'
+                ? bridgeUpdateAction($, options)
+                : err.code === 'not-playing' && m.bridge.up && !m.bridge.isPlaying
+                  ? playActions($, m, options).find(a => a.key === 'play')
+                  : undefined,
             more: [
               {
                 key: 'perf-error-ok',

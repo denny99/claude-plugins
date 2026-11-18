@@ -5,7 +5,7 @@ import type { UnityModel } from '../../types'
 import { batchAllowed, countResults, rankResults, testErrorLine } from '../../lib/unity'
 import { Actions, Card, CardTitle, ListRow, Sentence, type Action, type Kit } from '../../lib/ui'
 import { affectedTests, batchTarget, landingsLine, patchModel, runTests, type Options } from '../state'
-import { ago, dec, fixWithClaude, run, type Extra } from './common'
+import { ago, dec, fixWithClaude, run, stopTestsAction, testsProgress, type Extra } from './common'
 
 export function testsTab(
   $: EngineInterface,
@@ -19,7 +19,7 @@ export function testsTab(
   return (
     <Box flexDirection="column" gap={1}>
       {startCard($, k, x, m, options)}
-      {resultCard($, k, m, now)}
+      {resultCard($, k, m, options, now)}
     </Box>
   )
 }
@@ -27,12 +27,24 @@ export function testsTab(
 function startCard($: EngineInterface, k: Kit, x: Extra, m: UnityModel, options: Options): RenderElement {
   const { Input, Select } = x
   const filter = m.filterInput.trim() || undefined
+  // Nothing is preselected: a filter, an area or "Alle Tests" chosen on purpose (that one asks once more).
+  const all = !filter && m.testScope === 'all'
+  const chosen = !!filter || all
   const start = (mode: 'EditMode' | 'PlayMode'): (() => void) =>
     run($, `${mode} tests`, () => runTests($, options, mode, filter, 0))
   const target = batchTarget(m)
   const canRun = m.bridge.up || batchAllowed({ lock: target.lock, bridgeUp: false }).ok
   const reminder = landingsLine(m)
-  const acts: Action[] = canRun
+  const lastAll = (mode: 'EditMode' | 'PlayMode'): string => {
+    const t = m.tests
+    const n = t && !t.filter && t.mode === mode && t.state !== 'running' ? t.results.length : 0
+    return n ? `${n} Tests` : 'die ganze Suite'
+  }
+  const askAll = (mode: 'EditMode' | 'PlayMode'): string =>
+    m.bridge.up
+      ? `Alle ${mode}-Tests (${lastAll(mode)})? Der Editor ist bis zum Ende blockiert.`
+      : `Alle ${mode}-Tests (${lastAll(mode)}) im Hintergrund? Kann lange dauern.`
+  const startActs: Action[] = chosen
     ? [
         {
           key: 'edit-tests',
@@ -40,9 +52,22 @@ function startCard($: EngineInterface, k: Kit, x: Extra, m: UnityModel, options:
           icon: 'play',
           variant: 'primary',
           primary: true,
+          ...(all ? { confirm: askAll('EditMode') } : {}),
           onPress: start('EditMode'),
         },
-        { key: 'play-tests', label: 'PlayMode', icon: 'play', variant: 'secondary', onPress: start('PlayMode') },
+        {
+          key: 'play-tests',
+          label: 'PlayMode',
+          icon: 'play',
+          variant: 'secondary',
+          ...(all ? { confirm: askAll('PlayMode') } : {}),
+          onPress: start('PlayMode'),
+        },
+      ]
+    : []
+  const acts: Action[] = canRun
+    ? [
+        ...startActs,
         {
           key: 'affected-tests',
           label: 'Betroffene',
@@ -65,26 +90,39 @@ function startCard($: EngineInterface, k: Kit, x: Extra, m: UnityModel, options:
             { faint: true },
           )
         : null,
-      m.presets.length ? (
-        <Select
-          key="preset"
-          label="Bereich"
-          value={preset?.name ?? ''}
-          options={[{ value: '', label: 'Alle Tests' }, ...m.presets.map(p => ({ value: p.name, label: p.name }))]}
-          onSelect={(v: string) => void patchModel($, { filterInput: m.presets.find(p => p.name === v)?.filter ?? '' })}
-        />
-      ) : null,
+      <Select
+        key="preset"
+        label="Bereich"
+        value={preset?.name ?? (all ? ALL : '')}
+        options={[
+          { value: '', label: 'Bereich wählen …' },
+          ...m.presets.map(p => ({ value: p.name, label: p.name })),
+          { value: ALL, label: 'Alle Tests' },
+        ]}
+        onSelect={(v: string) =>
+          void patchModel($, {
+            filterInput: m.presets.find(p => p.name === v)?.filter ?? '',
+            testScope: v === ALL ? 'all' : undefined,
+          })
+        }
+      />,
       <Input
         key="filter"
         label="Eigener Filter"
         placeholder="Regex auf volle Testnamen; ';' trennt"
         value={m.filterInput}
-        onSubmit={(v: string) => void patchModel($, { filterInput: v })}
+        onSubmit={(v: string) => void patchModel($, { filterInput: v, testScope: undefined })}
       />,
       canRun
-        ? Sentence(k, m.bridge.up ? 'Läuft im offenen Editor.' : 'Läuft im Hintergrund ohne Editor-Fenster.', {
-            faint: true,
-          })
+        ? Sentence(
+            k,
+            !chosen
+              ? 'Erst einen Bereich wählen oder einen Filter eingeben — dann lassen sich die Tests starten.'
+              : m.bridge.up
+                ? 'Läuft im offenen Editor und blockiert ihn bis zum Ende.'
+                : 'Läuft im Hintergrund ohne Editor-Fenster.',
+            { faint: true },
+          )
         : Sentence(k, 'Tests brauchen die Editor-Bridge oder ein Projekt, das kein Editor offen hat.', {
             tone: 'warn',
           }),
@@ -93,7 +131,9 @@ function startCard($: EngineInterface, k: Kit, x: Extra, m: UnityModel, options:
   })
 }
 
-function resultCard($: EngineInterface, k: Kit, m: UnityModel, now: number): RenderElement | null {
+const ALL = '*all*'
+
+function resultCard($: EngineInterface, k: Kit, m: UnityModel, options: Options, now: number): RenderElement | null {
   const t = m.tests
   if (!t) return null
   const c = countResults(t.results)
@@ -104,7 +144,7 @@ function resultCard($: EngineInterface, k: Kit, m: UnityModel, now: number): Ren
   const secs = t.results.reduce((s, r) => s + (r.duration ?? 0), 0)
   const head =
     t.state === 'running'
-      ? `${t.mode ?? ''} läuft …`
+      ? `${t.mode ?? ''} läuft${testsProgress(t, now) ? ` · ${testsProgress(t, now)}` : ' …'}`
       : t.state === 'error'
         ? testErrorLine(t)
         : `Letzter Lauf${t.finishedAt ? ` ${ago(now, t.finishedAt)}` : ''} · ${total} Tests${secs ? ` · ${dec(secs, 0)} s` : ''}`
@@ -136,6 +176,8 @@ function resultCard($: EngineInterface, k: Kit, m: UnityModel, now: number): Ren
         tone: t.state === 'running' ? 'warn' : c.failed || t.state === 'error' ? 'bad' : 'ok',
       }),
       t.filter ? Sentence(k, `Filter ${t.filter}`, { faint: true }) : null,
+      t.state === 'running' && t.current ? Sentence(k, `Gerade: ${t.current}`, { faint: true }) : null,
+      t.state === 'running' ? Actions(k, 'tests-running-acts', [stopTestsAction($, options)]) : null,
       fresh.length ? Sentence(k, `Neu rot · ${fresh.length}`, { tone: 'bad' }) : null,
       ...fresh.slice(0, 8).flatMap((r, i) => [row(r, i, 'new'), msgLine(r)]),
       still.length ? Sentence(k, `Weiterhin rot · ${still.length}`, { faint: true }) : null,

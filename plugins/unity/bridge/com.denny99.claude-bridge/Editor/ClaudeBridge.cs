@@ -92,6 +92,25 @@ namespace Denny99.ClaudeBridge
             public int compileSeq;
             public string scene;
             public bool batchmode;
+            public string bridgeVersion;
+        }
+
+        static string bridgeVersion;
+
+        /// <summary>This package's version from its package.json (via the Package Manager); empty when unknown.</summary>
+        static string BridgeVersion()
+        {
+            if (bridgeVersion != null) return bridgeVersion;
+            try
+            {
+                var info = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(ClaudeBridge).Assembly);
+                bridgeVersion = info != null && info.version != null ? info.version : "";
+            }
+            catch
+            {
+                bridgeVersion = "";
+            }
+            return bridgeVersion;
         }
 
         public static long Now() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -110,6 +129,7 @@ namespace Denny99.ClaudeBridge
                 compileSeq = SessionState.GetInt(SeqKey, 0),
                 scene = SceneManager.GetActiveScene().path,
                 batchmode = Application.isBatchMode,
+                bridgeVersion = BridgeVersion(),
             };
             WriteAtomic("status.json", JsonUtility.ToJson(s));
         }
@@ -230,6 +250,9 @@ namespace Denny99.ClaudeBridge
                     break;
                 case "run-tests":
                     Answer(new Result { id = c.id, ok = true, runId = BridgeTests.Run(c.mode, c.filter) });
+                    break;
+                case "cancel-tests":
+                    Answer(new Result { id = c.id, ok = true, runId = BridgeTests.Cancel() });
                     break;
                 case "screenshot":
                     Screenshot(c);

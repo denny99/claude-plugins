@@ -282,6 +282,12 @@ export interface TestRun {
   results: TestResult[]
   error?: string
   finishedAt?: number
+  /** Leaf tests the run started with (bridge: RunStarted's TestCaseCount). */
+  total?: number
+  /** When the run started (Unix ms). */
+  startedAt?: number
+  /** The test running right now (bridge: TestStarted). */
+  current?: string
 }
 
 function asStatus(v: unknown): TestStatus {
@@ -299,6 +305,9 @@ export const TESTS_ABORTED = 'aborted — editor closed or crashed'
  * An editor run (it has a bridge runId) still `running` while the bridge heartbeat is stale or missing: the editor
  * went away mid-run and the run will never finish. It reads as an aborted run, so a new one can start.
  */
+/** The error of a run stopped on purpose (bridge `cancel-tests` writes the same word). */
+export const TESTS_CANCELLED = 'Cancelled'
+
 export function abortedIfBridgeDown<T extends Pick<TestRun, 'state' | 'runId' | 'error'>>(
   run: T | undefined,
   bridgeUp: boolean,
@@ -309,6 +318,7 @@ export function abortedIfBridgeDown<T extends Pick<TestRun, 'state' | 'runId' | 
 
 /** The run's error as one line: "aborted — …" or "failed to start: …". */
 export function testErrorLine(run: Pick<TestRun, 'error'>): string {
+  if (run.error === TESTS_CANCELLED) return 'Testlauf abgebrochen'
   return run.error === TESTS_ABORTED
     ? `Tests ${TESTS_ABORTED}`
     : `Test run failed to start: ${run.error ?? 'unknown error'}`
@@ -342,7 +352,10 @@ export function parseBridgeTests(text: string): TestRun | undefined {
   if (raw.mode === 'EditMode' || raw.mode === 'PlayMode') run.mode = raw.mode
   if (raw.filter) run.filter = String(raw.filter)
   if (raw.error) run.error = String(raw.error)
-  if (typeof raw.finishedAt === 'number') run.finishedAt = raw.finishedAt
+  if (typeof raw.finishedAt === 'number' && raw.finishedAt > 0) run.finishedAt = raw.finishedAt
+  if (typeof raw.total === 'number' && raw.total > 0) run.total = raw.total
+  if (typeof raw.startedAt === 'number' && raw.startedAt > 0) run.startedAt = raw.startedAt
+  if (typeof raw.current === 'string' && raw.current) run.current = raw.current
   return run
 }
 

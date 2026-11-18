@@ -198,10 +198,27 @@ export async function sendView($: EngineInterface, options: Options, fits: boole
   await $.prompt.submit({ text: text.join('\n') })
 }
 
-export async function loadSounds($: EngineInterface, options: Options): Promise<void> {
+/** Pending automatic re-fetch after a failed load (one chain at a time). */
+let soundRetry = false
+const SOUND_RETRY_MS = 5000
+const SOUND_RETRIES = 24
+
+/**
+ * Fetches list + mix from the sound board. When the bridge is down or busy (a test run blocks the editor), it tries
+ * again on its own every 5 s for two minutes, as long as the error card still stands.
+ */
+export async function loadSounds($: EngineInterface, options: Options, tries = SOUND_RETRIES): Promise<void> {
   const list = await soundList($, options)
-  const mix = await mixGet($, options)
-  const err = play.isPlayError(list) ? list.error : play.isPlayError(mix) ? mix.error : undefined
+  const mix = play.isPlayError(list) ? list : await mixGet($, options)
+  const failed = play.isPlayError(list) ? list : play.isPlayError(mix) ? mix : undefined
+  const err = failed?.error
+  if (failed && (failed.code === 'bridge-down' || failed.code === 'bridge-busy') && tries > 0 && !soundRetry) {
+    soundRetry = true
+    $.clock.after(SOUND_RETRY_MS, () => {
+      soundRetry = false
+      void readReview($).then(s => (s.sounds?.error ? loadSounds($, options, tries - 1) : undefined))
+    })
+  }
   await patchReview($, s => ({
     sounds: {
       list: play.isPlayError(list) ? [] : list.sounds.map(x => ({ ...x, group: x.group ?? '' })),
@@ -466,7 +483,19 @@ function soundsBody(
       Card(k, {
         key: 'rv-snd-err',
         tone: 'warn',
-        children: [CardTitle(k, { icon: 'alert', title: 'Soundboard nicht erreichbar' }), Sentence(k, snd.error)],
+        children: [
+          CardTitle(k, { icon: 'alert', title: 'Soundboard nicht erreichbar' }),
+          Sentence(k, snd.error),
+          Actions(k, 'rv-snd-err-acts', [
+            {
+              key: 'rv-snd-retry',
+              label: 'Nochmal holen',
+              icon: 'refresh',
+              variant: 'secondary',
+              onPress: () => void loadSounds($, options),
+            },
+          ]),
+        ],
       }),
     )
   if (snd.mix.length)

@@ -35,6 +35,9 @@ export type ModelTestRun = {
   results: ModelTestResult[]
   error?: string
   finishedAt?: number
+  total?: number
+  startedAt?: number
+  current?: string
 }
 
 export type ModelConsoleEntry = {
@@ -115,7 +118,17 @@ export type UnityModel = {
     scene?: string
     batchmode?: boolean
     compileSeq?: number
+    /** Version the bridge reports in its heartbeat (newer bridges only). */
+    version?: string
+    /** Stale heartbeat: milliseconds since its last write. */
+    age?: number
   }
+  /** Bridge package version found in the project (heartbeat, else Library/PackageCache). */
+  bridgeInstalled?: string
+  /** No editor here, but one runs for another checkout of the same repo (git worktree list). */
+  editorElsewhere?: { project: string; checkout: string; name: string; main: boolean; here: string; hereMain: boolean }
+  /** Tests tab: "Alle Tests" chosen on purpose (no filter, no area). */
+  testScope?: 'all'
   compile?: { seq: number; at: number; source: 'bridge' | 'log'; messages: ModelCompilerMessage[] }
   console: ModelConsoleEntry[]
   tests?: ModelTestRun

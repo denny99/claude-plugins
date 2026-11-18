@@ -212,6 +212,34 @@ test('sounds: list, play near, mix nudge through mix_set, verdict appended as to
   await ui.unmount()
 })
 
+test('sounds after an error: "Nochmal holen", Aktualisieren and the bridge coming back each load the board again', async ($, on) => {
+  const world = reviewWorld(on)
+  await openReview($, world)
+  world.bridge.up = false
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await settle(world, ui.press({ key: 'tab-review' }))
+  await settle(world, ui.press({ key: 'rv-tab-sounds' }))
+  await ui.press({ key: 'rv-snd-load' })
+  await world.clock.advance(100)
+  expect((await findShown(ui, 'Soundboard nicht erreichbar'))?.text).toBeDefined()
+  expect((await findShown(ui, /Die Editor-Bridge läuft nicht/))?.text).toBeDefined()
+  world.bridge.up = true
+  await ui.press({ key: 'rv-snd-retry' })
+  await world.clock.advance(100)
+  expect((await findShown(ui, /Fackel zünden/))?.text).toBeDefined()
+  expect(await findShown(ui, 'Soundboard nicht erreichbar')).toBeUndefined()
+
+  world.bridge.up = false
+  await ui.press({ key: 'refresh' })
+  await world.clock.advance(100)
+  expect((await findShown(ui, 'Soundboard nicht erreichbar'))?.text).toBeDefined()
+  world.bridge.up = true
+  await world.clock.advance(5200) // the automatic re-fetch
+  expect(await findShown(ui, 'Soundboard nicht erreichbar')).toBeUndefined()
+  expect((await findShown(ui, /Fackel zünden/))?.text).toBeDefined()
+  await ui.unmount()
+})
+
 test('viewer: unity_review_show draws the frame as Svg with a paint Client; a stroke becomes a mark; feedback returns the image', async ($, on) => {
   const world = reviewWorld(on)
   await openReview($, world)

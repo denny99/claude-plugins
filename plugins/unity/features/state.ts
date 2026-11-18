@@ -8,6 +8,7 @@ import type { EngineInterface } from 'claude-code'
 
 import type { ModelJob, UnityModel } from '../types'
 import {
+  BRIDGE_VERSION,
   readCompile,
   readConsole,
   readStatus,
@@ -16,18 +17,20 @@ import {
   sleep,
   type BridgeCommand,
   type BridgeResult,
+  versionOlder,
 } from '../lib/bridge'
 import * as play from '../lib/play'
 import { createHost, type Host } from '../lib/host'
 import { lockState } from '../lib/lock'
 import { affectedAreas, affectedText, changedFiles, landingsReminder } from '../lib/affected'
-import { join, relative } from '../lib/path'
+import { basename, join, relative } from '../lib/path'
 import { backgroundInfo, exitCodeOf, shJoin, shQuote, tailLines, wrapCommand } from '../lib/shell'
 import { libraryCopyLine, WORKTREE_NAME, worktreeAddArgs, worktreePaths } from '../lib/worktree'
 import {
   batchAllowed,
   batchBuildArgs,
   abortedIfBridgeDown,
+  TESTS_CANCELLED,
   batchCompileArgs,
   batchTestArgs,
   compileContext,
@@ -123,12 +126,19 @@ export async function refreshModel($: EngineInterface, options: Options): Promis
   const targetLock =
     before.worktree?.status === 'ready' ? await lockState(host, before.worktree.projectRoot) : undefined
   const live = await readBridge(host, project.root)
+  const installed = live.bridge.version ?? (await installedBridgeVersion(host, project.root))
+  const elsewhere =
+    !live.bridge.up && live.bridge.why === 'missing'
+      ? await findEditorElsewhere(host, sessionRoot, project.root)
+      : undefined
   const fullDone =
     before.fullPending !== undefined &&
     live.tests?.runId === before.fullPending &&
     (live.tests.state === 'done' || live.tests.state === 'error')
   // An editor run left `running` while the heartbeat is stale/missing: the editor closed or crashed mid-run.
-  const aborted = live.tests ? undefined : abortedIfBridgeDown(before.tests, live.bridge.up)
+  // A heartbeat only a little stale with a run going: the editor's main thread is busy running the tests.
+  const busy = live.bridge.why === 'stale' && (live.bridge.age ?? Infinity) < BUSY_MS
+  const aborted = live.tests ? undefined : abortedIfBridgeDown(before.tests, live.bridge.up || busy)
   const wasAborted = !!aborted && aborted !== before.tests
   await patchModel($, m => ({
     phase: 'ok',
@@ -141,6 +151,8 @@ export async function refreshModel($: EngineInterface, options: Options): Promis
     presets: loaded.presets,
     lock,
     ...(targetLock ? { targetLock } : {}),
+    bridgeInstalled: installed,
+    editorElsewhere: elsewhere,
     ...live,
     tests: live.tests ?? (wasAborted ? aborted : m.tests),
     ...(fullDone || wasAborted ? { fullPending: undefined } : {}),
@@ -155,7 +167,18 @@ async function readBridge(
   project: string,
 ): Promise<Pick<UnityModel, 'bridge' | 'console'> & Partial<UnityModel>> {
   const s = await readStatus(host.fs, project, await host.now())
-  if (!s.up) return { bridge: { up: false, why: s.why }, console: [] }
+  if (!s.up) {
+    const age = s.status ? Math.max(0, (await host.now()) - s.status.updatedAt) : undefined
+    return {
+      bridge: {
+        up: false,
+        why: s.why,
+        ...(age !== undefined ? { age } : {}),
+        ...(s.status?.bridgeVersion ? { version: s.status.bridgeVersion } : {}),
+      },
+      console: [],
+    }
+  }
   const st = s.status
   const out: Pick<UnityModel, 'bridge' | 'console'> & Partial<UnityModel> = {
     bridge: {
@@ -167,6 +190,7 @@ async function readBridge(
       ...(st.unityVersion ? { unityVersion: st.unityVersion } : {}),
       ...(st.scene ? { scene: st.scene } : {}),
       ...(st.batchmode ? { batchmode: true } : {}),
+      ...(st.bridgeVersion ? { version: st.bridgeVersion } : {}),
     },
     console: (await readConsole(host.fs, project)).slice(-200),
   }
@@ -176,6 +200,148 @@ async function readBridge(
   const tests = await readTests(host.fs, project)
   if (tests) out.tests = tests
   return out
+}
+
+/** How long a stale heartbeat still counts as "editor busy" while a test run goes (then: aborted). */
+export const BUSY_MS = 15 * 60 * 1000
+
+const BRIDGE_PACKAGE = 'com.denny99.claude-bridge'
+
+/** The bridge package version in the project: a local `file:` package, else Library/PackageCache (highest found). */
+async function installedBridgeVersion(host: Host, root: string): Promise<string | undefined> {
+  const version = async (dir: string): Promise<string | undefined> => {
+    try {
+      const v = (JSON.parse(await host.fs.read(join(dir, 'package.json'))) as { version?: unknown }).version
+      return typeof v === 'string' && v ? v : undefined
+    } catch {
+      return undefined
+    }
+  }
+  try {
+    const manifest = JSON.parse(await host.fs.read(join(root, 'Packages', 'manifest.json'))) as {
+      dependencies?: Record<string, string>
+    }
+    const dep = manifest.dependencies?.[BRIDGE_PACKAGE]
+    if (!dep) return undefined
+    if (dep.startsWith('file:')) {
+      const p = dep.slice(5)
+      return version(/^([A-Za-z]:)?[\\/]/.test(p) ? p : join(root, 'Packages', p))
+    }
+  } catch {
+    return undefined
+  }
+  let best: string | undefined
+  try {
+    for (const e of await host.fs.list(join(root, 'Library', 'PackageCache')))
+      if (e.kind === 'dir' && e.name.startsWith(`${BRIDGE_PACKAGE}@`)) {
+        const v = await version(join(root, 'Library', 'PackageCache', e.name))
+        if (v && (!best || versionOlder(best, v))) best = v
+      }
+  } catch {
+    return undefined
+  }
+  return best
+}
+
+/**
+ * No bridge here: does an editor run for another checkout of the same repo (main checkout or another worktree)?
+ * `git worktree list --porcelain` names every checkout; the first one is the main checkout.
+ */
+async function findEditorElsewhere(
+  host: Host,
+  sessionRoot: string,
+  projectRoot: string,
+): Promise<UnityModel['editorElsewhere']> {
+  const top = (await gitOut(host, sessionRoot, ['rev-parse', '--show-toplevel']))?.trim()
+  if (!top) return undefined
+  const list = await gitOut(host, sessionRoot, ['worktree', 'list', '--porcelain'])
+  if (!list) return undefined
+  const trees = list
+    .split(/\r?\n/)
+    .filter(l => l.startsWith('worktree '))
+    .map(l => l.slice(9).trim().replace(/\\/g, '/'))
+  const rel = relative(top, projectRoot)
+  const sub = rel && rel !== projectRoot ? rel : ''
+  const now = await host.now()
+  for (const [i, tree] of trees.entries()) {
+    if (tree === top) continue
+    const project = sub ? join(tree, sub) : tree
+    const s = await readStatus(host.fs, project, now)
+    if (s.up)
+      return {
+        project,
+        checkout: tree,
+        name: basename(tree),
+        main: i === 0,
+        here: basename(top),
+        hereMain: trees[0] === top,
+      }
+  }
+  return undefined
+}
+
+/** The installed bridge is older than the one this plugin ships (unknown version: not outdated). */
+export function bridgeOutdated(m: Pick<UnityModel, 'bridgeInstalled'>): boolean {
+  return !!m.bridgeInstalled && versionOlder(m.bridgeInstalled, BRIDGE_VERSION)
+}
+
+/** A test run goes (editor run or batch job). */
+export function testsRunning(m: Pick<UnityModel, 'tests' | 'jobs'>): boolean {
+  return m.tests?.state === 'running' || m.jobs.some(j => j.kind === 'tests' && j.status === 'running')
+}
+
+/** The heartbeat is a little stale because the editor runs tests (its main thread is blocked). */
+export function editorBusyWithTests(m: Pick<UnityModel, 'tests' | 'jobs' | 'bridge'>): boolean {
+  const b = m.bridge
+  return !b.up && b.why === 'stale' && (b.age ?? Infinity) < BUSY_MS && m.tests?.state === 'running'
+}
+
+/**
+ * "Bridge aktualisieren": drops the bridge's entry from Packages/packages-lock.json, so Unity resolves the git URL
+ * again (a git package stays on its locked commit otherwise). Only on a click, after a confirm.
+ */
+export async function unlockBridgePackage($: EngineInterface, options: Options): Promise<string> {
+  const m = await readModel($)
+  if (!m.project) return 'Kein Unity-Projekt hier.'
+  const host = await createHost($)
+  const file = join(m.project.root, 'Packages', 'packages-lock.json')
+  let lock: { dependencies?: Record<string, unknown> }
+  try {
+    lock = JSON.parse(await host.fs.read(file)) as typeof lock
+  } catch {
+    return 'Packages/packages-lock.json fehlt oder ist kaputt: im Package Manager → + → Add package from git URL die Adresse erneut eintragen.'
+  }
+  if (!lock.dependencies?.[BRIDGE_PACKAGE])
+    return 'Die Bridge ist nicht gesperrt: im Package Manager → + → Add package from git URL die Adresse erneut eintragen.'
+  delete lock.dependencies[BRIDGE_PACKAGE]
+  await host.fs.write(file, `${JSON.stringify(lock, null, 2)}\n`)
+  await refreshModel($, options)
+  return 'Sperre gelöst: wechsle in den Unity-Editor, er lädt die Bridge neu (dauert einen Moment).'
+}
+
+/** Stops the running test run: the editor run through the bridge (`cancel-tests`), a batch run through its job. */
+export async function cancelTests($: EngineInterface, options: Options): Promise<string> {
+  const m = await refreshModel($, options)
+  const job = [...m.jobs].reverse().find(j => j.kind === 'tests' && j.status === 'running')
+  if (job) return (await stopJob($, job.key)) ?? 'Testlauf gestoppt.'
+  if (m.tests?.state !== 'running') return 'Es läuft kein Testlauf.'
+  if (!m.project || !m.bridge.up)
+    return editorBusyWithTests(m)
+      ? 'Der Editor ist gerade mit den Tests beschäftigt und nimmt den Stopp an, sobald er wieder antwortet.'
+      : 'Die Editor-Bridge antwortet nicht; der Lauf lässt sich nicht stoppen.'
+  const host = await createHost($)
+  const res = await sendCommand(host, m.project.root, { cmd: 'cancel-tests' })
+  if (!res.ok)
+    return /unknown command/i.test(res.error)
+      ? 'Die Bridge im Projekt kann Testläufe noch nicht stoppen: Bridge aktualisieren.'
+      : `Nicht gestoppt: ${res.error}`
+  const at = await host.now()
+  await patchModel($, x => ({
+    tests: x.tests ? { ...x.tests, state: 'error', error: TESTS_CANCELLED, finishedAt: at } : x.tests,
+    fullPending: undefined,
+  }))
+  await refreshModel($, options)
+  return 'Testlauf gestoppt.'
 }
 
 /** The model, detected once per session on first use. */
@@ -200,12 +366,21 @@ export async function bridgeCommand(
       error: 'No Unity project here (no ProjectSettings/ProjectVersion.txt at the root or one level down).',
     }
   if (!m.bridge.up)
-    return {
-      ok: false,
-      code: 'bridge-down',
-      error:
-        'The editor bridge is not running. Open the project in Unity with the com.denny99.claude-bridge package installed (/unity shows how).',
-    }
+    return editorBusyWithTests(m)
+      ? { ok: false, code: 'bridge-busy', error: 'Editor beschäftigt (Tests laufen) — gleich wieder da.' }
+      : m.bridge.why === 'stale'
+        ? {
+            ok: false,
+            code: 'bridge-down',
+            error: 'Der Editor antwortet gerade nicht (Import, Kompilieren oder geschlossen) — gleich nochmal versuchen.',
+          }
+        : {
+            ok: false,
+            code: 'bridge-down',
+            error: m.editorElsewhere
+              ? `Der Editor läuft für ${m.editorElsewhere.name}, nicht für diesen Checkout (${m.editorElsewhere.here}).`
+              : 'Die Editor-Bridge läuft nicht. Öffne das Projekt in Unity mit dem Paket com.denny99.claude-bridge (/unity zeigt, wie).',
+          }
   const host = await createHost($)
   const res = await sendCommand(host, m.project.root, command, timeoutMs)
   await refreshModel($, options)
@@ -357,7 +532,7 @@ export async function runTests(
     const runId = String(res.data.runId ?? '')
     await patchModel($, {
       previous,
-      tests: { runId, state: 'running', mode, ...(filter ? { filter } : {}), results: [] },
+      tests: { runId, state: 'running', mode, ...(filter ? { filter } : {}), results: [], startedAt: await host.now() },
       fullPending: filter ? undefined : runId,
     })
     if (waitMs <= 0) return `Started ${mode} tests in the editor (run ${runId}). The unity pane shows the results.`

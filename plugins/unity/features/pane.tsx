@@ -5,8 +5,18 @@ import type { UnityModel, UnityTab } from '../types'
 import { HOUNDSRIDGE_LOGO, LOGO_HEIGHT, LOGO_WIDTH } from '../lib/brand'
 import { countResults } from '../lib/unity'
 import { ErrorState, kit, LoadingState, EmptyState, PaneHeader, Tabs, type Kit, type PillProps } from '../lib/ui'
-import { reviewBadge, reviewTab } from './review/tab'
-import { patchModel, readModel, refreshLandings, refreshModel, type Options } from './state'
+import { loadSounds, reviewBadge, reviewTab } from './review/tab'
+import { readReview } from './review/store'
+import {
+  bridgeOutdated,
+  editorBusyWithTests,
+  patchModel,
+  readModel,
+  refreshLandings,
+  refreshModel,
+  testsRunning,
+  type Options,
+} from './state'
 import { BRIDGE_GIT_URL, BRIDGE_README, fixWithClaude, run, selectTab, type Extra } from './pane/common'
 import { consoleTab } from './pane/console'
 import { overviewTab } from './pane/overview'
@@ -25,14 +35,19 @@ export async function openPane($: EngineInterface, options: Options): Promise<vo
   $.clock.after(0, () => void refreshModel($, options).then(() => refreshLandings($, options)))
 }
 
-/** The one status pill of the header. */
-function statusPill(m: UnityModel): PillProps {
+/** The one status pill of the header (exported for tests). */
+export function statusPill(m: UnityModel): PillProps {
   if (m.phase === 'unknown') return { text: 'verbindet …', tone: 'warn', glyph: '◷' }
   if (m.phase !== 'ok') return { text: 'kein Projekt', tone: 'neutral', glyph: false }
   const b = m.bridge
+  if (editorBusyWithTests(m)) return { text: 'Tests laufen', tone: 'warn', glyph: '◷' }
+  if (!b.up && m.editorElsewhere)
+    return { text: `Editor in ${m.editorElsewhere.main ? 'Haupt-Checkout' : m.editorElsewhere.name}`, tone: 'warn' }
   if (!b.up) return { text: b.why === 'stale' ? 'antwortet nicht' : 'nicht verbunden', tone: 'bad' }
   if (b.isCompiling) return { text: 'kompiliert', tone: 'warn', glyph: '◷' }
+  if (testsRunning(m)) return { text: 'Tests laufen', tone: 'warn', glyph: '◷' }
   if (b.isPlaying) return { text: b.isPaused ? 'pausiert' : 'Play-Modus', tone: 'info', icon: 'play' }
+  if (bridgeOutdated(m)) return { text: `Bridge ${m.bridgeInstalled} veraltet`, tone: 'warn' }
   return { text: 'Editor bereit', tone: 'ok' }
 }
 
@@ -43,6 +58,8 @@ export async function renderPane($: EngineInterface, e: RenderInput<'Pane'>, opt
   const m = await readModel($)
   const refresh = run($, 'refresh', async () => {
     await refreshModel($, options)
+    // The sound board is loaded on demand; once loaded, Aktualisieren fetches it again (also out of an error).
+    if ((await readReview($)).sounds) await loadSounds($, options)
   })
   const header = PaneHeader(k, {
     logo: HOUNDSRIDGE_LOGO,

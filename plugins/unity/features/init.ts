@@ -53,7 +53,9 @@ export async function draftConfig(
     const text = await read(join(sessionRoot, doc))
     if (text) for (const j of jobsFromDocs(text)) if (!jobs.some(x => x.name === j.name)) jobs.push(j)
   }
-  if (jobs.length) cfg.customJobs = jobs.slice(0, 20)
+  // tools/unity.mjs starts Unity itself: `batch: true` hides the job while an editor holds the project.
+  if (jobs.length)
+    cfg.customJobs = jobs.slice(0, 20).map(j => (/tools\/unity\.mjs\b/.test(j.command) ? { ...j, batch: true } : j))
   for (const d of ['.worktrees', 'worktrees'])
     if (await fs.exists(join(sessionRoot, d))) {
       cfg.worktreeDir = d

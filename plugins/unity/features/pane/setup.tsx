@@ -4,8 +4,9 @@ import type { EngineInterface, RenderElement } from 'claude-code'
 import type { UnityModel } from '../../types'
 import { batchAllowed } from '../../lib/unity'
 import { Actions, Card, CardTitle, CopyButton, Sentence, Stepper, type Kit } from '../../lib/ui'
-import { batchTarget, runTests, type Options } from '../state'
-import { BRIDGE_GIT_URL, BRIDGE_README, run, type Extra } from './common'
+import { BRIDGE_VERSION } from '../../lib/bridge'
+import { batchTarget, bridgeOutdated, editorBusyWithTests, type Options } from '../state'
+import { BRIDGE_GIT_URL_TAGGED, BRIDGE_README, bridgeUpdateCard, selectTab, type Extra } from './common'
 import { jobsCard, testsCard } from './overview'
 
 const BRIDGE_PACKAGE = 'com.denny99.claude-bridge'
@@ -33,8 +34,31 @@ export async function setupView(
   const stale = m.bridge.why === 'stale'
   const target = batchTarget(m)
   const batchOk = batchAllowed({ lock: target.lock, bridgeUp: false }).ok
+  const old = bridgeOutdated(m)
+  const busy = editorBusyWithTests(m)
+  const away = m.editorElsewhere
   return (
     <Box flexDirection="column" gap={1}>
+      {away
+        ? Card(k, {
+            key: 'setup-elsewhere-editor',
+            tone: 'info',
+            children: [
+              CardTitle(k, {
+                icon: 'info',
+                title: `Editor läuft für ${away.name}${away.main ? ' (Haupt-Checkout)' : ''} — diese Session ist ${away.hereMain ? 'im Haupt-Checkout' : 'im Worktree'} ${away.here}`,
+                tone: 'info',
+              }),
+              Sentence(
+                k,
+                'Claude sieht nur den Editor dieses Checkouts. Öffne diesen Ordner in Unity, oder arbeite im Checkout, den der Editor offen hat. Tests ohne Editor laufen hier trotzdem im Hintergrund.',
+                { faint: true },
+              ),
+              Sentence(k, away.project, { faint: true }),
+            ],
+          })
+        : null}
+      {old ? bridgeUpdateCard($, k, m, options) : null}
       {Card(k, {
         key: 'setup',
         tone: 'warn',
@@ -42,8 +66,10 @@ export async function setupView(
           CardTitle(k, { icon: 'plug', title: 'Claude sieht den Unity-Editor nicht', tone: 'warn' }),
           Sentence(
             k,
-            stale
-              ? 'Der Editor antwortet nicht mehr: geschlossen, abgestürzt oder gerade beschäftigt (Import, Kompilieren).'
+            busy
+              ? 'Editor beschäftigt (Tests laufen) — gleich wieder da. Solange die Tests laufen, antwortet er nicht.'
+              : stale
+                ? 'Der Editor antwortet nicht mehr: geschlossen, abgestürzt oder gerade beschäftigt (Import, Kompilieren).'
               : 'Ohne die Verbindung kann Claude nicht kompilieren lassen, die Konsole lesen oder Screenshots machen. Zwei Schritte:',
             { faint: true },
           ),
@@ -51,11 +77,15 @@ export async function setupView(
             key: 'setup-steps',
             steps: [
               {
-                title: 'Bridge-Paket ist im Projekt',
-                detail: installed
-                  ? 'steht in Packages/manifest.json'
-                  : 'Package Manager → + → Add package from git URL',
-                state: installed ? 'done' : 'active',
+                title: old
+                  ? `Bridge ${m.bridgeInstalled} — Plugin braucht ${BRIDGE_VERSION}`
+                  : 'Bridge-Paket ist im Projekt',
+                detail: old
+                  ? 'Bridge aktualisieren (Karte oben)'
+                  : installed
+                    ? 'steht in Packages/manifest.json'
+                    : 'Package Manager → + → Add package from git URL',
+                state: old ? 'failed' : installed ? 'done' : 'active',
               },
               {
                 title: `Unity-Editor mit ${name} öffnen`,
@@ -78,20 +108,18 @@ export async function setupView(
             { faint: true },
           ),
           batchOk
+            ? Sentence(k, 'Wähl im Tab Tests einen Bereich: die ganze Suite kann ohne Library 30–60 min dauern.', {
+                faint: true,
+              })
+            : null,
+          batchOk
             ? Actions(k, 'setup-batch-acts', [
                 {
-                  key: 'edit-tests',
-                  label: 'EditMode-Tests',
-                  icon: 'play',
+                  key: 'setup-choose-tests',
+                  label: 'Tests wählen',
+                  icon: 'flask',
                   variant: 'secondary',
-                  onPress: run($, 'EditMode tests', () => runTests($, options, 'EditMode', undefined, 0)),
-                },
-                {
-                  key: 'play-tests',
-                  label: 'PlayMode-Tests',
-                  icon: 'play',
-                  variant: 'secondary',
-                  onPress: run($, 'PlayMode tests', () => runTests($, options, 'PlayMode', undefined, 0)),
+                  onPress: selectTab($, 'tests'),
                 },
               ])
             : null,
@@ -109,7 +137,7 @@ export async function setupView(
             { faint: true },
           ),
           <Box key="setup-links" flexDirection="row" gap={1} flexWrap="wrap">
-            {CopyButton(k, { key: 'copy-bridge-url', text: BRIDGE_GIT_URL, label: 'Paket-Adresse kopieren' })}
+            {CopyButton(k, { key: 'copy-bridge-url', text: BRIDGE_GIT_URL_TAGGED, label: 'Paket-Adresse kopieren' })}
             <x.Link href={BRIDGE_README} label="Anleitung" />
           </Box>,
         ],

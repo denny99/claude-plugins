@@ -14,7 +14,7 @@ export type Send = (command: BridgeCommand, timeoutMs: number) => Promise<Bridge
 /**
  * `no-provider` the project registered no provider for this · `not-playing` needs Play mode · `busy` one already runs ·
  * `batchmode` no Game view in a batchmode editor · `aborted` / `no-frames` perf_record ended without (full) data ·
- * `bad-input` · `outdated` the installed bridge does not know the command · `timeout` · `no-project` · `bridge-down`.
+ * `bad-input` · `outdated` the installed bridge does not know the command · `timeout` · `no-project` · `bridge-down` · `bridge-busy` the editor is busy running tests (stale heartbeat).
  */
 export type PlayErrorCode =
   | 'no-provider'
@@ -28,6 +28,7 @@ export type PlayErrorCode =
   | 'timeout'
   | 'no-project'
   | 'bridge-down'
+  | 'bridge-busy'
 
 export type PlayError = { error: string; code?: PlayErrorCode | (string & {}) }
 

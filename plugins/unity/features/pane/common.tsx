@@ -2,8 +2,10 @@
 import type { EngineInterface, RenderElement } from 'claude-code'
 
 import type { UnityModel, UnityTab } from '../../types'
+import { BRIDGE_VERSION } from '../../lib/bridge'
 import { batchAllowed } from '../../lib/unity'
-import { batchTarget, patchModel } from '../state'
+import { Card, CardTitle, CopyButton, Actions, Sentence, type Action, type Kit } from '../../lib/ui'
+import { batchTarget, cancelTests, patchModel, unlockBridgePackage, type Options } from '../state'
 
 /** Elements the kit does not wrap. */
 export type Extra = {
@@ -14,6 +16,10 @@ export type Extra = {
 
 export const BRIDGE_GIT_URL =
   'https://github.com/denny99/claude-plugins.git?path=/plugins/unity/bridge/com.denny99.claude-bridge'
+/** The git tag of the bridge version this plugin ships (set it when releasing the plugin). */
+export const BRIDGE_TAG = `unity-bridge-v${BRIDGE_VERSION}`
+/** Install address pinned to {@link BRIDGE_TAG}: Unity locks a git package to one commit, a tag names it. */
+export const BRIDGE_GIT_URL_TAGGED = `${BRIDGE_GIT_URL}#${BRIDGE_TAG}`
 export const BRIDGE_README =
   'https://github.com/denny99/claude-plugins/tree/main/plugins/unity/bridge/com.denny99.claude-bridge'
 
@@ -92,4 +98,66 @@ export function targetSentence(m: UnityModel): { text: string; ok: boolean } {
 /** Regex-escapes a full test name for an exact filter. */
 export function exactFilter(names: string[]): string {
   return names.map(n => `^${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`).join(';')
+}
+
+/** "Bridge aktualisieren": frees the bridge's lock entry (two-step; writes only on the second press). */
+export function bridgeUpdateAction($: EngineInterface, options: Options, primary = true): Action {
+  return {
+    key: 'bridge-update',
+    label: 'Bridge aktualisieren',
+    icon: 'download',
+    variant: primary ? 'primary' : 'secondary',
+    confirm: 'Sperre in packages-lock.json lösen?',
+    onPress: run($, 'bridge update', () => unlockBridgePackage($, options)),
+  }
+}
+
+/** The way out of an old bridge: what is installed, what is needed, the button and the manual way. */
+export function bridgeUpdateCard($: EngineInterface, k: Kit, m: UnityModel, options: Options): RenderElement {
+  const { Box } = k
+  return Card(k, {
+    key: 'bridge-outdated',
+    tone: 'warn',
+    children: [
+      CardTitle(k, {
+        icon: 'download',
+        title: `Bridge ${m.bridgeInstalled ?? 'zu alt'} — Plugin braucht ${BRIDGE_VERSION}`,
+        tone: 'warn',
+      }),
+      Sentence(
+        k,
+        'Unity aktualisiert Git-Pakete nicht von selbst. „Bridge aktualisieren“ löst die Sperre in Packages/packages-lock.json, dann lädt der Editor die neue Bridge. Von Hand: Package Manager → + → Add package from git URL → dieselbe Adresse erneut eintragen.',
+        { faint: true },
+      ),
+      <Box key="bridge-outdated-acts" flexDirection="row" gap={1} flexWrap="wrap">
+        {Actions(k, 'bridge-outdated-btn', [bridgeUpdateAction($, options)])}
+        {CopyButton(k, { key: 'copy-bridge-url-update', text: BRIDGE_GIT_URL_TAGGED, label: 'Paket-Adresse kopieren' })}
+      </Box>,
+    ],
+  })
+}
+
+/** A running run's progress: "12 von 80 · 1:05" (count once the bridge reported the total, time once started). */
+export function testsProgress(t: NonNullable<UnityModel['tests']>, now: number): string {
+  const done = t.results.length
+  const parts: string[] = []
+  if (t.total) parts.push(`${Math.min(done, t.total)} von ${t.total}`)
+  else if (done) parts.push(`${done} fertig`)
+  if (t.startedAt && now >= t.startedAt) {
+    const s = Math.floor((now - t.startedAt) / 1000)
+    parts.push(`${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`)
+  }
+  return parts.join(' · ')
+}
+
+/** "Stopp" for the running test run (two-step). */
+export function stopTestsAction($: EngineInterface, options: Options): Action {
+  return {
+    key: 'tests-stop',
+    label: 'Stopp',
+    icon: 'stop',
+    variant: 'secondary',
+    confirm: 'Testlauf wirklich stoppen?',
+    onPress: run($, 'stop tests', () => cancelTests($, options)),
+  }
 }

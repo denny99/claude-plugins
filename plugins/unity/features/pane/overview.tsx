@@ -19,6 +19,7 @@ import { openReport } from '../review/report'
 import {
   batchTarget,
   bridgeCommand,
+  bridgeOutdated,
   configOf,
   patchModel,
   runTests,
@@ -27,7 +28,18 @@ import {
   stopJob,
   type Options,
 } from '../state'
-import { ago, exactFilter, fixWithClaude, msg, run, selectTab, targetSentence } from './common'
+import {
+  ago,
+  bridgeUpdateCard,
+  exactFilter,
+  fixWithClaude,
+  msg,
+  run,
+  selectTab,
+  stopTestsAction,
+  targetSentence,
+  testsProgress,
+} from './common'
 import { measure } from './measure'
 
 export function overviewTab($: EngineInterface, k: Kit, m: UnityModel, options: Options, now: number): RenderElement {
@@ -35,6 +47,7 @@ export function overviewTab($: EngineInterface, k: Kit, m: UnityModel, options: 
   const target = targetSentence(m)
   return (
     <Box flexDirection="column" gap={1}>
+      {bridgeOutdated(m) ? bridgeUpdateCard($, k, m, options) : null}
       {editorCard($, k, m, options, now)}
       {testsCard($, k, m, options, now)}
       {consoleCard($, k, m)}
@@ -178,14 +191,7 @@ export function testsCard($: EngineInterface, k: Kit, m: UnityModel, options: Op
         CardTitle(k, { icon: 'flask', title: 'Tests' }),
         Sentence(k, 'Noch kein Lauf in dieser Sitzung.', { faint: true }),
         Actions(k, 'tests-card-acts', [
-          {
-            key: 'edit-tests',
-            label: 'EditMode-Tests',
-            icon: 'play',
-            variant: 'secondary',
-            onPress: run($, 'EditMode tests', () => runTests($, options, 'EditMode', undefined, 0)),
-          },
-          { key: 'tests-open', label: 'Alle Tests', variant: 'link', onPress: selectTab($, 'tests') },
+          { key: 'tests-open', label: 'Tests wählen', icon: 'flask', variant: 'secondary', onPress: selectTab($, 'tests') },
         ]),
       ],
     })
@@ -202,8 +208,9 @@ export function testsCard($: EngineInterface, k: Kit, m: UnityModel, options: Op
         ? { text: `${c.failed} rot${fresh ? ` · ${fresh} neu` : ''}`, tone: 'bad' as const }
         : { text: 'grün', tone: 'ok' as const }
   const total = c.passed + c.failed + c.skipped
+  const progress = running ? testsProgress(t, now) : ''
   const sentence = running
-    ? `Läuft${t.filter ? ` mit Filter ${t.filter}` : ''} …`
+    ? `Läuft${t.filter ? ` mit Filter ${t.filter}` : ' · alle Tests'}${progress ? ` · ${progress}` : ' …'}`
     : t.state === 'error'
       ? testErrorLine(t)
       : `${c.passed} von ${total} grün${t.finishedAt ? ` · Lauf ${ago(now, t.finishedAt)}` : ''}`
@@ -216,6 +223,7 @@ export function testsCard($: EngineInterface, k: Kit, m: UnityModel, options: Op
       variant: 'secondary',
       onPress: run($, 'rerun red', () => runTests($, options, mode, exactFilter(ranked.map(r => r.fullName)), 0)),
     })
+  if (running) acts.push(stopTestsAction($, options))
   acts.push({ key: 'tests-open', label: 'Alle Tests', variant: 'link', onPress: selectTab($, 'tests') })
   return Card(k, {
     key: 'tests-card',
@@ -301,6 +309,8 @@ export function jobsCard($: EngineInterface, k: Kit, m: UnityModel, options: Opt
         onPress: run($, 'build', () => startBatchJob($, options, 'build', {})),
       })
   }
+  // A project job may start Unity itself (e.g. node tools/unity.mjs): with an editor holding the project, only after a
+  // second press. Jobs marked `batch` are hidden then (they always start Unity).
   for (const j of cfg.customJobs ?? [])
     if (!j.batch || allowed)
       actions.push({
@@ -308,6 +318,7 @@ export function jobsCard($: EngineInterface, k: Kit, m: UnityModel, options: Opt
         label: j.name,
         icon: 'terminal',
         variant: 'secondary',
+        ...(allowed ? {} : { confirm: 'Editor ist offen — trotzdem starten?' }),
         onPress: run($, j.name, () => startBatchJob($, options, 'custom', { custom: j.name })),
       })
   if (!actions.length && !m.jobs.length) return null
