@@ -647,7 +647,7 @@ export async function loadProjectConfig(
       name,
       filter: n.filter,
       source: 'config' as const,
-      ...(n.changed ? { note: n.note } : {}),
+      ...(n.note ? { note: n.note } : {}),
       ...(config.areaPaths?.[name] ? { paths: config.areaPaths[name] } : {}),
     }
   })
@@ -659,7 +659,7 @@ export async function loadProjectConfig(
         if (await fs.exists(file))
           for (const p of filtersFromDoc(await fs.read(file))) {
             const n = normalizeFilter(p.filter)
-            presets.push({ ...p, filter: n.filter, ...(n.changed ? { note: n.note } : {}) })
+            presets.push({ ...p, filter: n.filter, ...(n.note ? { note: n.note } : {}) })
           }
       } catch {
         // unreadable doc: no presets from it
@@ -684,17 +684,28 @@ export function normalizeFilter(raw: string): { filter: string; parts: string[];
     .filter(Boolean)
   const filter = parts.join(';')
   const changed = filter !== raw
-  const note = changed
+  // A test name has no blanks between words; a part with several is a sentence pasted by mistake (left as is).
+  const prose = parts.filter(p => (p.match(/\s+/g) ?? []).length >= 2)
+  const proseNote = prose.length
+    ? `Bereich in .claude/unity.json sieht nach Satz statt Testnamen aus („${short(prose[0]!)}“) – Filter prüfen.`
+    : ''
+  const cleanNote = changed
     ? hadFlag
       ? 'Bereich in .claude/unity.json war als Kommandozeile geschrieben (-testFilter …); bereinigt.'
       : 'Bereich in .claude/unity.json bereinigt (Anführungszeichen, leere Teile).'
     : ''
+  const note = [cleanNote, proseNote].filter(Boolean).join(' ')
   return { filter, parts, changed, note }
+}
+
+function short(text: string): string {
+  return text.length > 40 ? `${text.slice(0, 39)}…` : text
 }
 
 /** Filter parts (of a finished run) that matched none of its results: the area misses them. */
 export function unmatchedParts(filter: string | undefined, fullNames: string[]): string[] {
-  return splitFilter(filter).filter(part => {
+  // A run started before the cleanup can still carry the raw command line (`-testFilter "Cozy…`): name the class.
+  return splitFilter(filter === undefined ? undefined : normalizeFilter(filter).filter).filter(part => {
     let re: RegExp
     try {
       re = new RegExp(part)

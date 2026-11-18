@@ -233,6 +233,13 @@ export type Kit = Els & {
   isConfirming: (key: string) => boolean
   askConfirm: (key: string) => void
   clearConfirm: () => void
+  /**
+   * One press of a two-step button, decided on the kit state at press time (not at render time): asks when nothing is
+   * pending, confirms when this key's question already stands. A desktop button can keep the handler of the step
+   * before (same key, re-rendered as the question): with this, such a press confirms instead of asking again
+   * (unity Runde 3: the first click on „Sperre … lösen?“ did nothing).
+   */
+  pressConfirm: (key: string, onConfirm: () => void) => void
   hasDetails: (key: string) => boolean
   toggleDetails: (key: string) => void
   isLogMore: (key: string) => boolean
@@ -243,6 +250,14 @@ export type Kit = Els & {
 
 function flip(list: string[], key: string): string[] {
   return list.includes(key) ? list.filter(k => k !== key) : [...list, key]
+}
+
+/**
+ * A press of a two-step button with key `key` while `pending` is the question standing now: confirm (and clear) when
+ * it is this key's, else ask. Decided at press time, see {@link Kit.pressConfirm}.
+ */
+export function confirmStep(pending: string | undefined, key: string): { fire: boolean; confirm: string | undefined } {
+  return pending === key ? { fire: true, confirm: undefined } : { fire: false, confirm: key }
 }
 
 /** Patches the kit state (exported for tests and for actions that reset a confirm). */
@@ -316,6 +331,16 @@ export async function kit(
     isConfirming: key => state.confirm === key,
     askConfirm: key => void patchUi($, { confirm: key }),
     clearConfirm: () => void patchUi($, { confirm: undefined }),
+    pressConfirm: (key, onConfirm) =>
+      void (async () => {
+        let fire = false
+        await patchUi($, s => {
+          const step = confirmStep(s.confirm, key)
+          fire = step.fire
+          return { confirm: step.confirm }
+        })
+        if (fire) onConfirm()
+      })(),
     hasDetails: key => state.details.includes(key),
     toggleDetails: key => void patchUi($, s => ({ details: flip(s.details, key) })),
     isLogMore: key => state.logMore.includes(key),
@@ -1145,24 +1170,17 @@ export function ConfirmButton(
   // Graphical: a real (secondary) button like its neighbours, not bare text; the terminal keeps the plain one.
   if (!k.isConfirming(a.key))
     return k.graphical ? (
-      <Button key={a.key} label={a.label} variant="secondary" onPress={() => k.askConfirm(a.key)}>
+      <Button key={a.key} label={a.label} variant="secondary" onPress={() => k.pressConfirm(a.key, a.onConfirm)}>
         {a.label}
       </Button>
     ) : (
-      <Button key={a.key} plain onPress={() => k.askConfirm(a.key)}>
+      <Button key={a.key} plain onPress={() => k.pressConfirm(a.key, a.onConfirm)}>
         {a.label}
       </Button>
     )
   return (
     <Box flexDirection="row" gap={1}>
-      <Button
-        key={a.key}
-        variant="primary"
-        onPress={() => {
-          k.clearConfirm()
-          a.onConfirm()
-        }}
-      >
+      <Button key={a.key} variant="primary" onPress={() => k.pressConfirm(a.key, a.onConfirm)}>
         {a.confirmLabel ?? k.s.really(a.label)}
       </Button>
       <Button key={`${a.key}-cancel`} plain onPress={() => k.clearConfirm()}>
