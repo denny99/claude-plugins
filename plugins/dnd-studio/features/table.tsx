@@ -308,7 +308,13 @@ export async function observe(
         typeof unheardRaw === "string"
           ? unheardRaw
           : Array.isArray(unheardRaw)
-            ? unheardRaw.map(String).join(" ")
+            ? // parts come as {voice, text, how} (say_line with parts): their words, not "[object Object]"
+              unheardRaw
+                .map((p) =>
+                  typeof p === "string" ? p : String(obj(p).text ?? ""),
+                )
+                .filter(Boolean)
+                .join(" ")
             : "";
       const listenerCut =
         cut.interrupted === true &&

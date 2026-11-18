@@ -19,8 +19,10 @@ Szene ist, die NPCs der Szene, ihren eigenen Namen am Tisch („Spielleiter“, 
 
 ## Die Schleife
 
-1. `wait_for_players` mit `watch: true`, `timeout_seconds: 540`, `background: false`. Es gibt einen Befehl
-   (`curl …`). Ihn mit Bash **im Vordergrund** starten, `timeout: 600000`. Er blockiert, bis die Spieler etwas haben.
+1. `wait_for_players` mit `watch: true`, `quiet: true`, `timeout_seconds: 540`, `background: false`. Es gibt einen
+   Befehl (`curl …`). Ihn mit Bash **im Vordergrund** starten, `timeout: 600000`. Er blockiert, bis die Spieler etwas
+   haben. Ein neuer Wächter heißt für den Tisch auch: den Zug davor hast du durchgelassen (die leiser gedrehte Zeile
+   kommt wieder hoch). Darum zwischen Entscheiden und Wächter nichts anderes tun.
 2. Seine Ausgabe sagt `ready`:
    - `null`: nichts in 9 Minuten → zurück zu 1.
    - `secret`: ein Spieler schrieb der Spielleitung `/geheim` → **sofort zurück** (wecken), `why: "geheim"`, `turn`
@@ -29,9 +31,12 @@ Szene ist, die NPCs der Szene, ihren eigenen Namen am Tisch („Spielleiter“, 
    - `break`: die Spieler machen Pause → **sofort zurück** (wecken, ohne Zug).
    - `resume`: die Pause ist vorbei → **sofort zurück** (wecken, ohne Zug, `why: "Pause vorbei"`).
    - `error`: zurück mit `woke: true`, `why: "Wächter geht nicht"`; die Spielleitung wartet dann selbst.
-   - `turn`: `wait_for_players` mit `quiet: true` holen, dann entscheiden (unten). Kommt dabei kein Zug
-     (`finished: false`, oder „cut in without a word“): zurück zu 1. Kommt `paused: true`: wie `break`. Steht in
-     der Antwort `secret_waiting`: wie `secret`, sofort zurück.
+   - `turn` **mit** `turn` in der Ausgabe: Der Wächter hat den Zug schon still geholt. Sofort entscheiden (unten),
+     ohne `wait_for_players`; jede Sekunde zählt, die Zeile der Spielleitung läuft leiser weiter, bis du schneidest
+     oder einen neuen Wächter startest. Steht `secret_waiting` dabei: erst den Zug wie unten, dann wie `secret`.
+   - `turn` **ohne** `turn` (ältere Studio-Version): `wait_for_players` mit `quiet: true` holen, dann entscheiden.
+     Kommt dabei kein Zug (`finished: false`, oder „cut in without a word“): zurück zu 1. Kommt `paused: true`: wie
+     `break`. Steht in der Antwort `secret_waiting`: wie `secret`, sofort zurück.
 3. Nicht wecken: den Zug in einer kurzen Zeile merken („Jule und Tobi beraten, ob sie den Wächter bestechen“), zurück
    zu 1. Nach **10** übersprungenen Zügen trotzdem zurück, mit `woke: false`.
 
