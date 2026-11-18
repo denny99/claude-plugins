@@ -2,7 +2,8 @@
 import { expect, test } from "claude-code/testing";
 
 import { pictureKey, studioPathOfPicture } from "../features/look";
-import { cropCenter, fromBase64, MAX_SVG_BYTES, parseBmp, rasterSvg } from "../lib/picture";
+import { CELLS, cropCenter, fromBase64, MAX_SVG_BYTES, parseBmp, pictureSvg, type Raster, rasterSvg } from "../lib/picture";
+import { random } from "../lib/pixel";
 import { TABLE, world } from "./world";
 
 /** A 24-bit bottom-up BMP, w x h, rows padded to 4 bytes: a red/blue gradient with a green bar. */
@@ -60,14 +61,67 @@ test("pure: a BMP becomes a small pure-vector pixel scene, light and dark", () =
   expect(svg.includes("scale(4)")).toBe(true);
   expect(svg.length < MAX_SVG_BYTES).toBe(true);
   expect(/<image|href|<!--|<script|<text|<foreignObject/i.test(svg)).toBe(false);
-  // at most 28 colors, one path each
-  expect((svg.match(/<path fill="#/g) ?? []).length <= 28).toBe(true);
+  // at most 28 colors: the most common one as the ground rectangle, the others one stroked path each
+  expect((svg.match(/<path stroke="#/g) ?? []).length <= 27).toBe(true);
+  expect(svg.includes('<rect width="100" height="63" fill="#')).toBe(true);
   // a veil that is light in the light scheme and dark in the dark one
   const dark = /@media \(prefers-color-scheme: dark\)\{svg\{([^}]*)\}\}/.exec(svg)?.[1] ?? "";
   const light = /<style>svg\{([^}]*)\}/.exec(svg)?.[1] ?? "";
   expect(/--veil:#f/.test(light)).toBe(true);
   expect(/--veil:#0/.test(dark)).toBe(true);
   expect(svg.includes("prefers-reduced-motion")).toBe(true);
+});
+
+/** A 1280 x 720 picture with a scene's detail: a dim gradient, a few hundred shapes (tables, candles), grain on all. */
+function detailed(grain: number): Raster {
+  const width = 1280;
+  const height = 720;
+  const rgb = new Uint8Array(width * height * 3);
+  const r = random(7);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const q = (y * width + x) * 3;
+      rgb[q] = 60 + (x * 80) / width;
+      rgb[q + 1] = 40 + (y * 50) / height;
+      rgb[q + 2] = 30;
+    }
+  for (let i = 0; i < 300; i++) {
+    const x0 = Math.floor(r() * width);
+    const y0 = Math.floor(r() * height);
+    const w = 8 + Math.floor(r() * 120);
+    const h = 8 + Math.floor(r() * 90);
+    const c = [Math.floor(r() * 256), Math.floor(r() * 200), Math.floor(r() * 140)];
+    for (let y = y0; y < Math.min(height, y0 + h); y++)
+      for (let x = x0; x < Math.min(width, x0 + w); x++) rgb.set(c, (y * width + x) * 3);
+  }
+  for (let i = 0; i < rgb.length; i++) rgb[i] = Math.max(0, Math.min(255, rgb[i]! + Math.floor((r() - 0.5) * grain)));
+  return { width, height, rgb };
+}
+
+/** What sips does for pictureSvg: the picture shrunk to w x h (nearest pixel is enough here). */
+const shrinkOf = (src: Raster) => async (w: number, h: number): Promise<Raster> => {
+  const rgb = new Uint8Array(w * h * 3);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const p = (Math.floor((y * src.height) / h) * src.width + Math.floor((x * src.width) / w)) * 3;
+      rgb.set(src.rgb.subarray(p, p + 3), (y * w + x) * 3);
+    }
+  return { width: w, height: h, rgb };
+};
+
+const cellOf = (svg: string) => Number(/scale\(([\d.]+)\)/.exec(svg)?.[1]);
+
+test("pure: a scene picture is drawn fine (about the build looks' grid), and a busy one still fits the limit", async () => {
+  // Testrunde 3: 4 units a cell (100 x 63) read as mush; now the finest grid that fits, 1 unit is the looks' own grid
+  expect(CELLS[0]).toBe(1);
+  const scene = await pictureSvg({ width: 1280, height: 720 }, shrinkOf(detailed(12)));
+  expect(scene !== undefined && scene.length < MAX_SVG_BYTES).toBe(true);
+  expect(cellOf(scene!) <= 1.6).toBe(true); // at least 250 x 157 cells
+  // pure grain (worse than any photo) gets coarser, but still under the engine's limit and finer than before
+  const noise = await pictureSvg({ width: 1280, height: 720 }, shrinkOf(detailed(400)));
+  expect(noise !== undefined && noise.length < MAX_SVG_BYTES).toBe(true);
+  expect(cellOf(noise!) < 4).toBe(true);
+  expect(/<image|href|<!--|<script|<text|<foreignObject/i.test(noise!)).toBe(false);
 });
 
 test("pure: the window's /view URL names the Studio file", () => {

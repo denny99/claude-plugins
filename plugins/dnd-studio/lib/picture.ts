@@ -1,7 +1,7 @@
 /**
  * A scene picture as a backdrop: the picture shrunk to a pixel raster (sips makes a small BMP, see features/look.tsx),
  * its colors cut to a small palette, and drawn as vector rectangles in the style of the pixel looks (lib/pixel.ts):
- * one path per color, runs of equal cells per row as one rectangle. Pure vector (no `<image>`, no links), under
+ * one path per color, runs of equal cells per row as one line, as fine as fits. Pure vector (no `<image>`, no links), under
  * 128 KB, with a light veil in the light scheme and a dark one in the dark scheme so chat text reads over it.
  */
 import { H, W, group, px, random, scene } from "./pixel";
@@ -77,8 +77,10 @@ type Box = number[][];
 
 /** Median cut: at most `n` colors that stand for the raster's pixels. */
 export function palette(r: Raster, n: number): number[][] {
+  // a sample of at most ~16000 pixels is enough for the palette and keeps fine rasters quick
+  const step = Math.max(1, Math.floor((r.width * r.height) / 16000)) * 3;
   const px: number[][] = [];
-  for (let i = 0; i < r.rgb.length; i += 3) px.push([r.rgb[i]!, r.rgb[i + 1]!, r.rgb[i + 2]!]);
+  for (let i = 0; i < r.rgb.length; i += step) px.push([r.rgb[i]!, r.rgb[i + 1]!, r.rgb[i + 2]!]);
   const boxes: Box[] = [px];
   const range = (b: Box, c: number) => {
     let lo = 255;
@@ -159,6 +161,7 @@ function edge(i: number): string {
 
 const STYLE = `svg{--sky-top:#2a2420;--sky-bot:#1d1916;--scan:.04;--veil:#f6efe2;--veil-o:.42;--vig:#3a2a1a;--vig-o:.07;--dust:#fff4d6}
 @media (prefers-color-scheme: dark){svg{--sky-top:#14110f;--sky-bot:#0c0a09;--scan:.08;--veil:#0b0908;--veil-o:.42;--vig:#000000;--vig-o:.14;--dust:#ffd9a0}}
+.art path{fill:none;stroke-width:1}
 .veil{fill:var(--veil);opacity:var(--veil-o)}.vig{fill:var(--vig);opacity:var(--vig-o)}.dust{fill:var(--dust)}
 .mote{opacity:0;animation:mote 8s steps(240) infinite}
 @keyframes mote{0%{opacity:0;transform:translate(0,0)}20%{opacity:.7}80%{opacity:.4;transform:translate(-8px,-24px)}100%{opacity:0;transform:translate(-10px,-30px)}}`;
@@ -166,27 +169,42 @@ const STYLE = `svg{--sky-top:#2a2420;--sky-bot:#1d1916;--scan:.04;--veil:#f6efe2
 /**
  * The raster (already `cols` x `rows`, see gridFor) as the backdrop SVG: `cell` units per raster pixel on the 400 x 250
  * frame, `colors` palette colors, a veil and an edge vignette over it, dust drifting.
+ *
+ * Kept small so fine rasters fit the engine's limit: the most common color is one rectangle under everything and is not
+ * drawn again; every other color is one stroked path of one-unit-high lines, a run of equal cells per line, written with
+ * relative moves inside a row (`m3 0h5`) — about six bytes a run.
  */
 export function rasterSvg(r: Raster, cell: number, colors = 28): string {
   const pal = palette(r, colors);
+  const idx = new Uint8Array(r.width * r.height);
+  const count = new Array<number>(pal.length).fill(0);
+  for (let i = 0; i < idx.length; i++) {
+    const c = nearest(pal, r.rgb[i * 3]!, r.rgb[i * 3 + 1]!, r.rgb[i * 3 + 2]!);
+    idx[i] = c;
+    count[c]!++;
+  }
+  const ground = count.indexOf(Math.max(...count));
   const paths = new Map<number, string>();
+  // where each color's pen stands in the current row (-1: not in this row yet)
+  const pen = new Array<number>(pal.length).fill(-1);
   for (let y = 0; y < r.height; y++) {
+    pen.fill(-1);
     let x = 0;
     while (x < r.width) {
-      const at = (i: number) => {
-        const q = (y * r.width + i) * 3;
-        return nearest(pal, r.rgb[q]!, r.rgb[q + 1]!, r.rgb[q + 2]!);
-      };
-      const c = at(x);
+      const c = idx[y * r.width + x]!;
       let run = 1;
-      while (x + run < r.width && at(x + run) === c) run++;
-      paths.set(c, `${paths.get(c) ?? ""}M${x} ${y}h${run}v1h${-run}z`);
+      while (x + run < r.width && idx[y * r.width + x + run] === c) run++;
+      if (c !== ground) {
+        const move = pen[c]! < 0 ? `M${x} ${y}` : `m${x - pen[c]!} 0`;
+        paths.set(c, `${paths.get(c) ?? ""}${move}h${run}`);
+        pen[c] = x + run;
+      }
       x += run;
     }
   }
-  let art = "";
-  for (const [c, d] of paths) art += `<path fill="${hex(pal[c]!)}" d="${d}"/>`;
-  const body = `<g transform="scale(${cell})">${art}</g>
+  let art = `<rect width="${r.width}" height="${r.height}" fill="${hex(pal[ground]!)}"/><g class="art" transform="translate(0 .5)">`;
+  for (const [c, d] of paths) art += `<path stroke="${hex(pal[c]!)}" d="${d}"/>`;
+  const body = `<g transform="scale(${cell})">${art}</g></g>
 <rect class="veil" width="${W}" height="${H}"/>
 ${[0, 1, 2, 3].map(edge).join("")}
 ${dust()}`;
@@ -194,7 +212,15 @@ ${dust()}`;
 }
 
 /** The raster sizes tried, finest first: cell units per raster pixel; the raster is W/cell x H/cell (rounded up). */
-export const CELLS = [4, 5, 8] as const;
+export const CELLS = [1, 1.25, 1.6, 2, 2.5, 3.2, 4, 5, 8] as const;
+
+/**
+ * The next cell size worth trying after one at `cell` came out `bytes` long: the SVG grows about with the cell count to
+ * the power 0.75 (bytes ~ cell^-1.5, measured on photos and noise), so sizes that would surely be too big are skipped.
+ */
+export function nextCell(cell: number, bytes: number): number | undefined {
+  return CELLS.find((c) => c > cell && bytes * (cell / c) ** 1.5 < MAX_SVG_BYTES * 0.97);
+}
 
 export function gridFor(cell: number): { cols: number; rows: number } {
   return { cols: Math.ceil(W / cell), rows: Math.ceil(H / cell) };
@@ -211,17 +237,31 @@ export function coverSize(width: number, height: number, cols: number, rows: num
 
 /**
  * The finest raster whose SVG stays under the limit. `shrink(w, h)` makes the picture w x h pixels (sips); it is
- * asked once per size tried. Undefined when even the coarsest is too big.
+ * asked once per size tried. Too big a result skips straight to the size it should fit (nextCell); when that one comes
+ * out well under the limit, the size just finer is tried once too. Undefined when even the coarsest is too big.
  */
 export async function pictureSvg(
   size: { width: number; height: number },
   shrink: (w: number, h: number) => Promise<Raster>,
 ): Promise<string | undefined> {
-  for (const cell of CELLS) {
+  const tried = new Set<number>();
+  const make = async (cell: number) => {
+    tried.add(cell);
     const { cols, rows } = gridFor(cell);
     const { w, h } = coverSize(size.width, size.height, cols, rows);
-    const svg = rasterSvg(cropCenter(await shrink(w, h), cols, rows), cell);
-    if (svg.length < MAX_SVG_BYTES) return svg;
+    return rasterSvg(cropCenter(await shrink(w, h), cols, rows), cell);
+  };
+  const coarsest = CELLS[CELLS.length - 1];
+  let cell: number | undefined = CELLS[0];
+  while (cell !== undefined) {
+    const svg = await make(cell);
+    if (svg.length < MAX_SVG_BYTES) {
+      const finer = CELLS[CELLS.indexOf(cell as (typeof CELLS)[number]) - 1];
+      if (finer === undefined || tried.has(finer) || svg.length > MAX_SVG_BYTES * 0.7) return svg;
+      const better = await make(finer);
+      return better.length < MAX_SVG_BYTES ? better : svg;
+    }
+    cell = nextCell(cell, svg.length) ?? (cell === coarsest ? undefined : coarsest);
   }
   return undefined;
 }
