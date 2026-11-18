@@ -70,6 +70,28 @@ export type ModelJob = {
   root?: string
 }
 
+/** One frame-time recording (lib/play.ts PerfResult, restated). */
+export type ModelPerf = {
+  seconds: number
+  requestedSeconds: number
+  frames: number
+  budgetMs: number
+  avgMs: number
+  p50: number
+  p95: number
+  p99: number
+  worst: number
+  hitches: number
+  seriesStep: number
+  series: number[]
+  costs: { name: string; avgMs: number; maxMs: number; hitchAvgMs: number; hitchMaxMs: number; hitchShare: number }[]
+  aborted?: string
+  spot?: Record<string, unknown>
+}
+
+/** The pane's tabs (console and target sit behind "More"). */
+export type UnityTab = 'overview' | 'tests' | 'review' | 'perf' | 'console' | 'target'
+
 export type UnityModel = {
   phase: 'unknown' | 'none' | 'ok'
   sessionRoot?: string
@@ -119,6 +141,64 @@ export type UnityModel = {
   affected?: { text: string; areas: string[]; at: number }
   busy?: string
   error?: string
+  /** The open tab (absent: overview). */
+  tab?: UnityTab
+  /** The last frame-time recordings, newest first (at most 5). */
+  perfRuns?: { at: number; perf: ModelPerf }[]
+  /** Why the last recording failed (code from lib/play.ts PlayError). */
+  perfError?: { code?: string; error: string }
+  /** Console tab filter. */
+  consoleFilter?: 'error' | 'warning' | 'all'
+}
+
+/** Review tab (features/review): sub-tab, drafts, the picture viewer and the report draft. */
+export type ReviewMark = { tool: 'pen' | 'arrow'; color: 'red' | 'yellow' | 'blue'; pts: [number, number][] }
+export type ReviewViewState = {
+  /** `claude`: shown through unity_review_show; `item`: a picture of the review list; `report`: Problem melden. */
+  source: 'claude' | 'item' | 'report'
+  id: string
+  title: string
+  question?: string
+  /** One group per direction / view; each a list of frame files (absolute). */
+  groups: { label: string; frames: string[] }[]
+  group: number
+  frame: number
+  playing: boolean
+  marks: ReviewMark[]
+  tool: 'pen' | 'arrow'
+  color: 'red' | 'yellow' | 'blue'
+  note: string
+}
+export type ReviewReportState = {
+  shot?: string
+  preview?: string
+  spot?: unknown
+  spotLine?: string
+  facts: string[]
+  kind?: string
+  note: string
+  measure: boolean
+  busy?: string
+  error?: string
+}
+export type ReviewUiState = {
+  sub: string
+  open?: string
+  drafts: Record<string, string>
+  attachShot: boolean
+  notice?: string
+  view?: ReviewViewState
+  report?: ReviewReportState
+  /** The last answer from the viewer or a report, read back by unity_review_feedback. */
+  feedback?: { text: string; image?: string; svg?: string; at: number }
+  sounds?: {
+    list: { id: string; name: string; group: string; duration: number; takes: number }[]
+    mix: { group: string; db: number }[]
+    mode: 'near' | 'flat'
+    playing?: string
+    musicOpen: boolean
+    error?: string
+  }
 }
 
 declare module 'claude-code' {
@@ -126,6 +206,7 @@ declare module 'claude-code' {
     unity: {
       ui: ShapedState<UiKitState>
       model: ShapedState<UnityModel>
+      review: ShapedState<ReviewUiState>
     }
   }
 }

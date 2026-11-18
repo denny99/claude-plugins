@@ -1,6 +1,7 @@
 /** Hooks of the unity plugin: session start (commands, tools), edit guards + compile gate, tools, commands, pane. */
 import type { EngineInterface, On } from 'claude-code'
 
+import { autoOpenFacts, decideAutoOpen } from '../lib/autoopen'
 import { createHost } from '../lib/host'
 import { isAbsolute, join, relative } from '../lib/path'
 import { formatMessage, isScriptFile, splitFilter, type ProjectConfig } from '../lib/unity'
@@ -112,6 +113,15 @@ export async function unitySessionStart($: EngineInterface): Promise<void> {
   for (const c of COMMANDS) await $.command.register(c)
 }
 
+/** Opens the pane at session start when this folder is a Unity project and no higher-ranked mod claims it. */
+async function autoOpen($: EngineInterface, cwd: string, options: Options): Promise<void> {
+  if (options.autoOpen === false) return
+  const host = await createHost($)
+  const root = cwd || (await $.session.root())
+  if (decideAutoOpen('unity', await autoOpenFacts(host.fs, root), { autoOpen: options.autoOpen }))
+    await openPane($, options)
+}
+
 /** Resolves an area name to its filter; anything else is the filter itself. */
 function resolveFilter(presets: { name: string; filter: string }[], input: string | undefined): string | undefined {
   const v = input?.trim()
@@ -204,6 +214,11 @@ export function registerUnity(on: On, options: Options): void {
       await unitySessionStart($)
     } catch (err) {
       $.ui.log(`unity: session start failed: ${String(err)}`)
+    }
+    try {
+      await autoOpen($, e.cwd, options)
+    } catch (err) {
+      $.ui.log(`unity: auto-open failed: ${String(err)}`)
     }
     return next(e)
   })

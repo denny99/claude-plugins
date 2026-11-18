@@ -6,12 +6,7 @@ import { Header, type Kit } from '../lib/ui'
 const COLS = 40
 
 /** Renders the kit Header alone in a test Pane at COLS body columns; returns every Text line. */
-async function headerLines(
-  $: Engine,
-  on: On,
-  title: string,
-  context: string,
-): Promise<string[]> {
+async function headerLines($: Engine, on: On, title: string, context: string): Promise<string[]> {
   on('ui.render', { component: 'Pane', requestId: 'hdr' }, async (x, e) => {
     const els = x.ui.resolve(e) as unknown as Pick<Kit, 'Box' | 'Text' | 'Button'>
     const k = { ...els, cols: COLS, rows: 10, compact: false, surface: 'desktop' } as unknown as Kit

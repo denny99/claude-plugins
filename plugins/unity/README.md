@@ -29,10 +29,23 @@ package (the **bridge**, in `bridge/com.denny99.claude-bridge`).
   (`git diff HEAD` + untracked) to test areas (`tests.paths` globs, backticked `Assets/…` paths in the code-map section,
   else folder names matching the area) and runs only those. A green full run records HEAD; after `fullSuiteEvery`
   commits (default 5) the pane and the tool remind to run the full suite.
-- **Pane `/unity`**: editor state (Play / Pause / Stop, Screenshot), the safe target (lock file, whether batch runs are
-  allowed), last compile with _Fix_ buttons, console errors/warnings with _Fix with Claude_, EditMode/PlayMode tests
-  with a filter input and per-area presets (newly red first), batch jobs and the project's custom jobs with log tail; a failed batch job shows the last 60 lines of its
-  `-logFile`.
+- **Pane `/unity`** (German, neutral look with the Houndsridge logo; shared UI kit v2 in `lib/ui.tsx`): a header with
+  project, one status pill (verbindet / Editor bereit / Play-Modus / kompiliert / nicht verbunden) and _Aktualisieren_ /
+  _Ziel_ knobs, then tabs **Übersicht · Tests · Review · Leistung** (+ **Konsole** and **Ziel** behind _Mehr_):
+  - _Übersicht_: compile state with _Claude reparieren lassen_ per error, _Play_ / _Stopp_ / _Pause_, _Problem melden_,
+    _10 s messen_, _Screenshot_; the last test run (red first, _Rote erneut ausführen_); console at a glance; batch and
+    custom jobs with the log collapsed (a failed job shows the last 60 lines of its `-logFile`); where batch runs go.
+  - _Tests_: area preset and own filter, _EditMode_ / _PlayMode_ / _Betroffene_, newly red and still red apart.
+  - _Review_: review list, animation / model viewer, sounds and mix, report a problem (`features/review/`).
+  - _Leistung_: records frame times in the running game (`perf_record`), shows median / p95 / worst, the series as a
+    line against the 16.6 ms budget (block characters in the terminal), the costs inside the hitches, _Claude
+    analysieren lassen_ and _Hinspringen_ to the recorded spot; the last five recordings stay.
+  - _Konsole_: errors / warnings / all, _An Claude geben_, _Leeren_.
+  - _Ziel_: main checkout or worktree, project config (draft through `/unity-init`), the guards.
+  - Without a bridge: the setup steps (package in `manifest.json`, open the editor), batch tests without an editor, and
+    the package URL to copy.
+- **Opens by itself** at session start in a Unity project (`ProjectSettings/ProjectVersion.txt` at the root or under
+  `unity/`), unless a higher-ranked mod claims the folder (a deltastone ticket branch → `/ct`). Option `autoOpen`.
 - **Batchmode** (tests, compile check, build, custom jobs marked `batch`) runs as a Claude Code background shell, only
   when **no editor holds the project** (`Temp/UnityLockfile` held, checked with `lsof` on macOS and an exclusive open in
   PowerShell on Windows). A watchdog stops jobs after `watchdogMinutes`. `-runTests` exit codes: 0 ok, 2 tests failed,
@@ -94,7 +107,8 @@ provider the calls answer `code: 'no-provider'` with a sentence to show.
 ## Plugin options
 
 `compileGate` (on), `compileWaitSeconds` (60), `debounceMs` (400), `editorPath` (empty: found through Unity Hub,
-including the Hub's custom install location), `commitGuard` (on), `metaGuard` (on).
+including the Hub's custom install location), `commitGuard` (on), `metaGuard` (on), `autoOpen` (on: open the pane at
+session start in a Unity project).
 
 ## Limits
 

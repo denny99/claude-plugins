@@ -87,7 +87,8 @@ test('worktree: git worktree add, Library cloned in the background, then batch r
   expect(batch.command).toContain('-projectPath /g/.worktrees/wt1/unity')
   expect(batch.command).toContain('-logFile /g/.worktrees/wt1/unity/Logs/claude-tests-')
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect((await ui.find({ type: 'Text', text: /worktree wt1/ }))?.text).toBeDefined()
+  await settle(world, ui.press({ key: 'settings' }))
+  expect((await ui.find({ type: 'Text', text: /Worktree wt1/ }))?.text).toBeDefined()
   expect(await ui.find({ type: 'Button', key: 'worktree-main' })).toBeDefined()
   await ui.unmount()
   expect(JSON.stringify(await $.tool.call({ tool: 'mcp__unity__unity_worktree', name: '../x' }))).toContain(
@@ -122,6 +123,7 @@ test('affected tests: changed files → area run through the bridge; reminder af
   const cmd = Object.entries(world.files).find(([f, t]) => f.includes('/cmd-') && t.includes('run-tests'))
   expect(JSON.parse(cmd?.[1] ?? '{}')).toMatchObject({ cmd: 'run-tests', filter: 'Game.Tests.Core' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await settle(world, ui.press({ key: 'tab-tests' }))
   expect((await ui.find({ type: 'Text', text: /6 commits landed/ }))?.text).toBeDefined()
   expect(await ui.find({ type: 'Button', key: 'affected-tests' })).toBeDefined()
   await ui.unmount()
@@ -155,7 +157,7 @@ test('failed batch job: last 60 lines of its -logFile in the pane and in unity_s
   expect(status).toContain('Last failed job')
   expect(status).toContain('log 99!')
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect((await ui.find({ type: 'Text', text: /^Last 60 log lines · EditMode tests/ }))?.text).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^Letzte 60 Log-Zeilen · EditMode tests/ }))?.text).toBeDefined()
   expect((await ui.find({ type: 'Text', text: /^log 99!$/ }))?.text).toBeDefined()
   await ui.unmount()
 })
@@ -213,8 +215,16 @@ test('render check: every pane section on every surface at 40x15 and 120x40 stay
   await settle(world, $.tool.call({ tool: 'mcp__unity__unity_worktree', name: 'wt' }))
   await finishBash(world, 'b1', 1, `${'robocopy says something rather long '.repeat(5)}\r\n`)
   await settle(world, $.tool.call({ tool: 'mcp__unity__unity_screenshot' }))
-  const SECTIONS = [/^Editor/, /^Compile/, /^Tests/, /^Jobs/]
-  const TOGGLES = ['sec-target', 'sec-console']
+  // Every tab, reached the way a person does: tab buttons, the console card's link, the header's settings knob.
+  const VIEWS: { press?: string; expect: RegExp }[] = [
+    { expect: /Kompilierfehler|Kompiliert/ },
+    { press: 'tab-tests', expect: /Tests starten/ },
+    { press: 'tab-perf', expect: /Es ruckelt gerade/ },
+    { press: 'tab-review', expect: /./ },
+    { press: 'tab-overview', expect: /Aufgaben/ },
+    { press: 'console-open', expect: /NullReferenceException/ },
+    { press: 'settings', expect: /Worauf Claude arbeitet/ },
+  ]
   for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const)
     for (const [cols, rows] of [
       [40, 15],
@@ -226,16 +236,25 @@ test('render check: every pane section on every surface at 40x15 and 120x40 stay
         viewport: { columns: cols, rows },
         props: { ...PANE.props, bodyColumns: cols, scroll: { offset: 0, bodyRows: rows } },
       })
-      const texts = await ui.findAll({ type: 'Text' })
-      expect(texts.length).toBeGreaterThan(5)
-      for (const t of texts) {
-        expect(t.text).not.toMatch(/[\x00-\x09\x0b-\x1f\x7f]/)
-        for (const line of t.text.split('\n'))
-          if ([...line].length > cols) throw new Error(`${surface}/${cols}: "${line}" is wider than ${cols}`)
+      await settle(world, ui.press({ key: 'tab-overview' }))
+      for (const view of VIEWS) {
+        if (view.press && !(await ui.find({ type: 'Button', key: view.press })))
+          await settle(world, ui.press({ key: 'tab-more' }))
+        if (view.press) await settle(world, ui.press({ key: view.press }))
+        const texts = await ui.findAll({ type: 'Text' })
+        expect(texts.length).toBeGreaterThan(3)
+        for (const t of texts) {
+          expect(t.text).not.toMatch(/[\x00-\x09\x0b-\x1f\x7f]/)
+          // Graphical surfaces wrap text natively; the terminal draws strings as they are.
+          if (surface === 'terminal')
+            for (const line of t.text.split('\n'))
+              if ([...line].length > cols)
+                throw new Error(`${surface}/${cols}/${view.press ?? 'overview'}: "${line}" is wider than ${cols}`)
+        }
+        if (!texts.some(t => view.expect.test(t.text)))
+          throw new Error(`${surface}/${cols}/${view.press ?? 'overview'}: nothing matches ${view.expect}`)
       }
-      for (const s of SECTIONS)
-        if (!(await ui.find({ type: 'Text', text: s }))) throw new Error(`${surface}/${cols}: no section ${s}`)
-      for (const key of TOGGLES) expect(await ui.find({ type: 'Button', key })).toBeDefined()
+      await settle(world, ui.press({ key: 'tab-overview' }))
       await ui.unmount()
     }
 })

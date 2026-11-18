@@ -52,6 +52,8 @@ export type Options = {
   editorPath?: string
   commitGuard?: boolean
   metaGuard?: boolean
+  /** Open the pane at session start in a Unity project (lib/autoopen.ts ranking). */
+  autoOpen?: boolean
 }
 
 const EMPTY: UnityModel = {
@@ -819,14 +821,24 @@ export async function capture(
   }
 }
 
-export const gotoSpot = ($: EngineInterface, options: Options, spot: play.Spot | string) =>
-  play.gotoSpot(playSend($, options), spot)
-export const perfRecord = ($: EngineInterface, options: Options, seconds: number) =>
-  play.perfRecord(playSend($, options), seconds)
-export const soundList = ($: EngineInterface, options: Options) => play.soundList(playSend($, options))
-export const soundPlay = ($: EngineInterface, options: Options, sound: string, mode: 'near' | 'flat' = 'near') =>
-  play.soundPlay(playSend($, options), sound, mode)
-export const soundStop = ($: EngineInterface, options: Options) => play.soundStop(playSend($, options))
-export const mixGet = ($: EngineInterface, options: Options) => play.mixGet(playSend($, options))
-export const mixSet = ($: EngineInterface, options: Options, group: string, db: number) =>
-  play.mixSet(playSend($, options), group, db)
+export function gotoSpot($: EngineInterface, options: Options, spot: play.Spot | string) {
+  return play.gotoSpot(playSend($, options), spot)
+}
+export function perfRecord($: EngineInterface, options: Options, seconds: number) {
+  return play.perfRecord(playSend($, options), seconds)
+}
+export function soundList($: EngineInterface, options: Options) {
+  return play.soundList(playSend($, options))
+}
+export function soundPlay($: EngineInterface, options: Options, sound: string, mode: 'near' | 'flat' = 'near') {
+  return play.soundPlay(playSend($, options), sound, mode)
+}
+export function soundStop($: EngineInterface, options: Options) {
+  return play.soundStop(playSend($, options))
+}
+export function mixGet($: EngineInterface, options: Options) {
+  return play.mixGet(playSend($, options))
+}
+export function mixSet($: EngineInterface, options: Options, group: string, db: number) {
+  return play.mixSet(playSend($, options), group, db)
+}

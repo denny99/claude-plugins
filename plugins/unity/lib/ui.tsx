@@ -1,20 +1,47 @@
 /**
- * Shared UI kit (UX.md): one visual language for every pane and hub tab. Copy this file into sibling plugins as is.
+ * Shared UI kit v2 (UX.md, mockup boards): one visual language for every pane and hub tab, in three brands. Copy this
+ * file with `theme.ts` and `icons.ts` into sibling plugins (see the copy notes in KIT-V2.md): change the atom's plugin
+ * name below, nothing else.
  *
- * Components are plain functions taking the kit `k` first (not JSX components): `Row(k, {...})`. Build `k` once per
- * render with `const k = await kit($, e)`; it carries the surface's element constructors, the body size and the kit's
- * own small state (two-step confirms, collapsed sections, overflow menus, error details, log expansion), so a render
- * hook never threads `$` into the components (the validator only lets `$` cross into function declarations).
+ * Never name a variable `h` or `Fragment` in a .tsx file: the JSX factory is `h`.
+ *
+ * Components are plain functions taking the kit `k` first (not JSX components): `Card(k, {...})`. Build `k` once per
+ * render with `const k = await kit($, e, { brand: 'deltastone' })`; it carries the surface's element constructors, the
+ * body size, the brand tokens for light or dark and the kit's own small state (two-step confirms, collapsed sections,
+ * overflow menus, error details, log expansion), so a render hook never threads `$` into the components (the validator
+ * only lets `$` cross into function declarations).
+ *
+ * Graphical surfaces (desktop, vscode, mobile) paint cards, pills and icons (`Svg`) with the brand's hex tokens; the
+ * terminal paints with theme keys only, draws no backgrounds and puts text glyphs where icons would be.
  *
  * Glyphs: ✓ green ok · ✗ red failed · ● yellow running/pending · ○ dim idle · ↑ yellow update available ·
  * ⚠ yellow warning (lint/tsc warnings only).
+ *
+ * v1 calls keep their exact output: the v2 look (icons, button variants, overflow tabs, collapsed logs, card states)
+ * switches on only through the new fields (`icon`, `variant`, `maxVisible`, `collapsed`, object forms of the states).
  */
 import { atom, read, update } from 'claude-code'
 import type { RenderInput, EngineInterface, RenderElement } from 'claude-code'
 
 import type { UiKitState } from '../types'
+import { iconSvg, TERM_GLYPHS, type IconName } from './icons'
+import { modeFromTheme, terminalColor, themeTokens, type Brand, type Mode, type Tokens, type Tone } from './theme'
+
+export { ICONS, iconSvg, isIconName, TERM_GLYPHS, type IconName } from './icons'
+export {
+  modeFromTheme,
+  terminalColor,
+  THEMES,
+  themeTokens,
+  type Brand,
+  type Mode,
+  type Tokens,
+  type Tone,
+  type ToneColors,
+} from './theme'
 
 const EMPTY_UI: UiKitState = { toggled: [], more: [], details: [], logMore: [] }
+// On copy into another plugin: change the plugin name (it must stay a string literal).
 const uiAtom = atom({ plugin: 'unity', key: 'ui' } as const, EMPTY_UI, { shape: 'ui-1' })
 
 // --- text helpers ---
@@ -92,20 +119,98 @@ export function glyphOf(status: Status): { char: string; color: Color; dim?: boo
 
 // --- kit ---
 
+type El = (props: Record<string, unknown>) => RenderElement
+
 type Els = {
-  Box: (props: Record<string, unknown>) => RenderElement
-  Text: (props: Record<string, unknown>) => RenderElement
-  Button: (props: Record<string, unknown>) => RenderElement
+  Box: El
+  Text: El
+  Button: El
+  /** Absent on the terminal. */
+  Svg?: El
+  Progress?: El
+}
+
+/** Kit texts; `lang` picks the set. English is the v1 wording. */
+export type KitStrings = {
+  cancel: string
+  really: (label: string) => string
+  details: string
+  hideDetails: string
+  retry: string
+  more: string
+  log: string
+  hideLog: string
+  copy: string
+  loading: string
+  showMore: (hidden: number) => string
+  showLess: string
+  wrong: string
+}
+
+export const KIT_STRINGS: Record<'en' | 'de', KitStrings> = {
+  en: {
+    cancel: 'Cancel',
+    really: label => `Really ${label.toLowerCase()}?`,
+    details: 'Details',
+    hideDetails: 'Hide details',
+    retry: 'Retry',
+    more: 'More',
+    log: 'Log',
+    hideLog: 'Hide log',
+    copy: 'Copy',
+    loading: 'Loading…',
+    showMore: n => `Show more (${n} earlier)`,
+    showLess: 'Show less',
+    wrong: 'Something went wrong.',
+  },
+  de: {
+    cancel: 'Abbrechen',
+    really: label => `Wirklich ${label.toLowerCase()}?`,
+    details: 'Details',
+    hideDetails: 'Details ausblenden',
+    retry: 'Erneut versuchen',
+    more: 'Mehr',
+    log: 'Log',
+    hideLog: 'Log ausblenden',
+    copy: 'Kopieren',
+    loading: 'Lädt …',
+    showMore: n => `Mehr zeigen (${n} frühere)`,
+    showLess: 'Weniger',
+    wrong: 'Etwas ist schiefgegangen.',
+  },
+}
+
+/** Options of `kit()`. */
+export type KitOptions = {
+  /** Brand tokens to paint with (default `neutral`). */
+  brand?: Brand
+  /** `auto` (default) reads the engine's `theme` setting; unknown there → dark. */
+  mode?: Mode | 'auto'
+  /** Kit texts (default `en`). */
+  lang?: 'en' | 'de'
 }
 
 export type Kit = Els & {
+  Box: El
+  Text: El
+  Button: El
   /** Columns of the pane body (`e.props.bodyColumns`, else the viewport's). */
   cols: number
   /** Rows of the pane body (`e.props.scroll.bodyRows`, else the viewport's). */
   rows: number
   /** Narrow or mobile: one column, secondary text hidden. */
   compact: boolean
+  /** Very narrow (under 48 columns, the 320 px board): buttons stack, tabs lose icons, header loses its label. */
+  narrow: boolean
   surface: string
+  /** The surface draws `Svg` (desktop, vscode, mobile): cards, pills and icons are painted. */
+  graphical: boolean
+  brand: Brand
+  mode: Mode
+  /** Brand tokens for the mode. */
+  t: Tokens
+  /** Kit texts. */
+  s: KitStrings
   state: UiKitState
   isOpen: (key: string, defaultOpen?: boolean) => boolean
   toggle: (key: string) => void
@@ -118,6 +223,8 @@ export type Kit = Els & {
   toggleDetails: (key: string) => void
   isLogMore: (key: string) => boolean
   toggleLogMore: (key: string) => void
+  /** Copies text to the clipboard of the surface a press came from. */
+  copy: (text: string, surface?: string) => void
 }
 
 function flip(list: string[], key: string): string[] {
@@ -132,8 +239,27 @@ export async function patchUi(
   await update($, uiAtom, s => ({ ...s, ...(typeof patch === 'function' ? patch(s) : patch) }))
 }
 
-/** Builds the kit for one render: elements, body size and kit state (subscribes the drawing to it). */
-export async function kit($: EngineInterface, e: RenderInput<'Pane'>): Promise<Kit> {
+/** Light or dark from the engine's `theme` setting; dark when it cannot tell. */
+export async function detectMode($: EngineInterface): Promise<Mode> {
+  try {
+    const rows = await $.config.list()
+    return modeFromTheme(rows.find(row => row.key === 'theme')?.value) ?? 'dark'
+  } catch {
+    return 'dark'
+  }
+}
+
+/** Copies through the engine; a refused copy is ignored. */
+async function copyText($: EngineInterface, text: string, surface?: string): Promise<void> {
+  try {
+    await $.ui.copy({ text, ...(surface ? { surface } : {}) } as never)
+  } catch {
+    // nothing to copy to on this surface
+  }
+}
+
+/** Builds the kit for one render: elements, body size, brand tokens and kit state (subscribes the drawing to it). */
+export async function kit($: EngineInterface, e: RenderInput<'Pane'>, opts: KitOptions = {}): Promise<Kit> {
   const els = $.ui.resolve(e) as unknown as Els
   const state = await read($, uiAtom)
   const props = (e as { props?: { bodyColumns?: number; scroll?: { bodyRows?: number } } }).props ?? {}
@@ -141,14 +267,26 @@ export async function kit($: EngineInterface, e: RenderInput<'Pane'>): Promise<K
   const cols = Math.max(20, props.bodyColumns ?? viewport?.columns ?? 80)
   const rows = Math.max(8, props.scroll?.bodyRows ?? viewport?.rows ?? 30)
   const surface = String((e as { surface?: string }).surface ?? 'terminal')
+  const graphical = surface !== 'terminal' && typeof els.Svg === 'function'
+  const brand = opts.brand ?? 'neutral'
+  const mode: Mode =
+    opts.mode === 'dark' || opts.mode === 'light' ? opts.mode : graphical ? await detectMode($) : 'dark'
   return {
     Box: els.Box,
     Text: els.Text,
     Button: els.Button,
+    Svg: els.Svg,
+    Progress: els.Progress,
     cols,
     rows,
     compact: surface === 'mobile' || cols < 60,
+    narrow: cols < 48,
     surface,
+    graphical,
+    brand,
+    mode,
+    t: themeTokens(brand, mode),
+    s: KIT_STRINGS[opts.lang ?? 'en'],
     state,
     isOpen: (key, defaultOpen = true) => (state.toggled.includes(key) ? !defaultOpen : defaultOpen),
     toggle: key => void patchUi($, s => ({ toggled: flip(s.toggled, key) })),
@@ -161,10 +299,553 @@ export async function kit($: EngineInterface, e: RenderInput<'Pane'>): Promise<K
     toggleDetails: key => void patchUi($, s => ({ details: flip(s.details, key) })),
     isLogMore: key => state.logMore.includes(key),
     toggleLogMore: key => void patchUi($, s => ({ logMore: flip(s.logMore, key) })),
+    copy: (text, at) => void copyText($, text, at),
   }
 }
 
-// --- components ---
+// --- painting helpers ---
+
+type Kid = RenderElement | null | false | undefined
+type Kids = Kid[] | RenderElement | null
+
+function kids(children: Kids | undefined): RenderElement[] {
+  return (Array.isArray(children) ? children : [children]).filter(Boolean) as RenderElement[]
+}
+
+/** A tone's text color on this surface: brand hex when painted, a theme key on the terminal. */
+export function toneColor(k: Kit, tone: Tone): string | undefined {
+  return k.graphical ? k.t.tones[tone].fg : terminalColor(k.brand, tone)
+}
+
+/** Text color of a role: hex when painted, the surface's own on the terminal. */
+function ink(k: Kit, role: 'text' | 'muted' | 'faint'): string | undefined {
+  return k.graphical ? k.t[role] : undefined
+}
+
+/** The tone a status reads as. */
+export function toneOf(status: Status): Tone {
+  if (status === 'ok') return 'ok'
+  if (status === 'failed') return 'bad'
+  if (status === 'idle') return 'neutral'
+  return 'warn'
+}
+
+const STATUS_ICON: Record<Status, IconName> = {
+  ok: 'checkCircle',
+  failed: 'xCircle',
+  running: 'clock',
+  pending: 'clock',
+  idle: 'circle',
+  update: 'up',
+  warning: 'alert',
+}
+
+/** The icon a status reads as (error rows: cross in a circle). */
+export function statusIcon(status: Status): IconName {
+  return STATUS_ICON[status]
+}
+
+// --- v2 components ---
+
+/**
+ * A stroke icon: an `Svg` on graphical surfaces (color: `color`, else the tone's, else faint), a glyph `Text` on the
+ * terminal for the icons that have one (TERM_GLYPHS), else nothing.
+ */
+export function Icon(
+  k: Kit,
+  name: IconName,
+  opts: { size?: number; color?: string; tone?: Tone; alt?: string } = {},
+): RenderElement | null {
+  const { Text } = k
+  const Svg = k.Svg
+  if (k.graphical && Svg) {
+    const size = opts.size ?? 16
+    const color = opts.color ?? (opts.tone ? k.t.tones[opts.tone].fg : k.t.faint)
+    return <Svg source={iconSvg(name, color, size)} alt={opts.alt ?? name} width={size} height={size} />
+  }
+  const glyph = TERM_GLYPHS[name]
+  if (!glyph) return null
+  return (
+    <Text color={opts.tone ? terminalColor(k.brand, opts.tone) : undefined} dimColor={opts.tone ? undefined : true}>
+      {glyph}
+    </Text>
+  )
+}
+
+/** Default mark of a pill per tone: ✓ ok, ⚠ warn, ✕ bad, ● info. Running states pass `glyph: '◷'`, updates `'↑'`. */
+const TONE_GLYPH: Record<Tone, string> = { ok: '✓', warn: '⚠', bad: '✕', info: '●', neutral: '', accent: '' }
+
+export type PillProps = {
+  text: string
+  tone?: Tone
+  /** The mark before the text; `false` for none. Default per tone (TONE_GLYPH). */
+  glyph?: string | false
+  /** An icon in place of the glyph on graphical surfaces. */
+  icon?: IconName
+}
+
+/** A state pill: tinted chip with a mark (✓ ◷ ↑ ⚠ ✕) and a short sentence ("3 rot · 2 neu"). */
+export function Pill(k: Kit, p: PillProps): RenderElement {
+  const { Box, Text } = k
+  const tone = p.tone ?? 'neutral'
+  const glyph = p.glyph === false ? '' : (p.glyph ?? TONE_GLYPH[tone])
+  if (!k.graphical) {
+    return (
+      <Text color={terminalColor(k.brand, tone)} dimColor={tone === 'neutral' ? true : undefined}>
+        {truncate(glyph ? `${glyph} ${p.text}` : p.text, Math.max(4, Math.floor(k.cols / 2)))}
+      </Text>
+    )
+  }
+  const c = k.t.tones[tone]
+  const icon = p.icon ? Icon(k, p.icon, { size: 12, color: c.fg }) : null
+  return (
+    <Box
+      flexDirection="row"
+      alignItems="center"
+      gap={1}
+      paddingX={1}
+      backgroundColor={c.bg}
+      borderStyle="round"
+      borderColor={c.border}
+      flexShrink={0}
+    >
+      {icon}
+      <Text size="caption" weight="bold" color={c.fg} wrap="truncate-end">
+        {sanitize(!icon && glyph ? `${glyph} ${p.text}` : p.text)}
+      </Text>
+    </Box>
+  )
+}
+
+/** A card: framed, filled, rounded box (tone tints it, e.g. `bad` for a problem). The terminal draws no frame. */
+export function Card(k: Kit, c: { key?: string; tone?: Tone; gap?: number; children: Kids }): RenderElement {
+  const { Box } = k
+  if (!k.graphical)
+    return (
+      <Box key={c.key} flexDirection="column">
+        {kids(c.children)}
+      </Box>
+    )
+  const fill = c.tone ? k.t.tones[c.tone].bg : k.t.card
+  const border = c.tone ? k.t.tones[c.tone].border : k.t.border
+  return (
+    <Box
+      key={c.key}
+      flexDirection="column"
+      gap={c.gap ?? 1}
+      padding={1}
+      backgroundColor={fill}
+      borderStyle="round"
+      borderColor={border}
+    >
+      {kids(c.children)}
+    </Box>
+  )
+}
+
+/** Card title row: icon left, title, then a count (dim) or a pill on the right. */
+export function CardTitle(
+  k: Kit,
+  c: { icon?: IconName; title: string; count?: number | string; pill?: PillProps; tone?: Tone },
+): RenderElement {
+  const { Box, Text } = k
+  const count = c.count === undefined || c.count === '' ? '' : String(c.count)
+  if (!k.graphical) {
+    const room = Math.max(4, k.cols - (count ? [...count].length + 1 : 0) - (c.pill ? [...c.pill.text].length + 4 : 0))
+    return (
+      <Box flexDirection="row" gap={1}>
+        <Text bold color={c.tone ? terminalColor(k.brand, c.tone) : undefined}>
+          {truncate(c.title, room)}
+        </Text>
+        {count ? <Text dimColor>{count}</Text> : null}
+        {c.pill ? Pill(k, c.pill) : null}
+      </Box>
+    )
+  }
+  return (
+    <Box flexDirection="row" alignItems="center" gap={1}>
+      {c.icon ? Icon(k, c.icon, { tone: c.tone, color: c.tone ? undefined : k.t.faint }) : null}
+      <Box flexGrow={1} flexShrink={1}>
+        <Text weight="bold" color={c.tone ? k.t.tones[c.tone].fg : k.t.text} wrap="truncate-end">
+          {sanitize(c.title)}
+        </Text>
+      </Box>
+      {count ? (
+        <Text size="caption" color={k.t.faint}>
+          {sanitize(count)}
+        </Text>
+      ) : null}
+      {c.pill ? Pill(k, c.pill) : null}
+    </Box>
+  )
+}
+
+/** A sentence in a card ("409 von 412 grün · Lauf vor 4 min"): wrapped, muted. */
+export function Sentence(k: Kit, text: string, opts: { tone?: Tone; faint?: boolean } = {}): RenderElement {
+  const { Text } = k
+  if (!k.graphical)
+    return (
+      <Text color={opts.tone ? terminalColor(k.brand, opts.tone) : undefined} dimColor={opts.faint ? true : undefined}>
+        {wrapText(text, k.cols).join('\n')}
+      </Text>
+    )
+  return (
+    <Text size="footnote" color={opts.tone ? k.t.tones[opts.tone].fg : ink(k, opts.faint ? 'faint' : 'muted')}>
+      {sanitize(text)}
+    </Text>
+  )
+}
+
+export type IconAction = { key: string; icon: IconName; label: string; onPress: () => void }
+
+/**
+ * A header knob. Terminal: a one-glyph plain Button named by `label`. Graphical: a framed knob (hover tint) with the
+ * `Svg` icon and the label as the pressable part (an `Svg` cannot be pressed nor sit in a Button); compact bodies keep
+ * the frame but press on the glyph instead of the label.
+ */
+export function IconButton(k: Kit, a: IconAction): RenderElement {
+  const { Button } = k
+  if (!k.graphical)
+    return (
+      <Button key={a.key} label={a.label} plain onPress={a.onPress}>
+        {TERM_GLYPHS[a.icon] ?? a.label}
+      </Button>
+    )
+  const glyph = TERM_GLYPHS[a.icon]
+  if (k.compact && glyph)
+    return FramedButton(k, { key: a.key, label: a.label, text: glyph, look: 'knob', onPress: a.onPress })
+  return FramedButton(k, { key: a.key, label: a.label, icon: a.icon, look: 'knob', onPress: a.onPress })
+}
+
+/**
+ * Pane header: logo (an SVG string or an element; graphical surfaces only), LABEL, title, one status pill, icon knobs
+ * on the right. Narrow drops the label; the terminal draws `LABEL · title  pill` and the knobs as glyph buttons.
+ */
+export function PaneHeader(
+  k: Kit,
+  hd: {
+    title: string
+    label?: string
+    logo?: string | RenderElement
+    logoAlt?: string
+    logoWidth?: number
+    logoHeight?: number
+    pill?: PillProps
+    actions?: IconAction[]
+  },
+): RenderElement {
+  const { Box, Text } = k
+  const Svg = k.Svg
+  const knobs = (hd.actions ?? []).map(a => IconButton(k, a))
+  if (!k.graphical) {
+    const label = hd.label && !k.narrow ? `${hd.label} · ` : ''
+    const room = Math.max(
+      6,
+      k.cols - [...label].length - (hd.pill ? [...hd.pill.text].length + 4 : 0) - knobs.length * 4,
+    )
+    return (
+      <Box flexDirection="row" gap={1} flexWrap="wrap">
+        <Text bold>
+          {label ? <Text dimColor>{label}</Text> : null}
+          {truncate(hd.title, room)}
+        </Text>
+        {hd.pill ? Pill(k, hd.pill) : null}
+        {knobs}
+      </Box>
+    )
+  }
+  const logo =
+    typeof hd.logo === 'string' && Svg ? (
+      <Svg
+        source={hd.logo}
+        alt={hd.logoAlt ?? hd.label ?? 'logo'}
+        width={hd.logoWidth ?? 18}
+        height={hd.logoHeight ?? hd.logoWidth ?? 18}
+      />
+    ) : typeof hd.logo === 'object' && hd.logo ? (
+      hd.logo
+    ) : null
+  return (
+    <Box flexDirection="row" alignItems="center" gap={1}>
+      {logo}
+      {hd.label && !k.narrow ? (
+        <Text size="caption" weight="bold" color={k.t.faint}>
+          {sanitize(hd.label).toUpperCase()}
+        </Text>
+      ) : null}
+      <Box flexShrink={1}>
+        <Text weight="bold" color={k.t.text} wrap="truncate-end">
+          {sanitize(hd.title)}
+        </Text>
+      </Box>
+      {hd.pill ? Pill(k, hd.pill) : null}
+      <Box flexGrow={1} />
+      {knobs}
+    </Box>
+  )
+}
+
+/** A problem first: tinted card with what is wrong, why (one sentence) and the button that fixes it. */
+export function ProblemCard(
+  k: Kit,
+  p: {
+    key: string
+    title: string
+    cause: string
+    tone?: 'bad' | 'warn'
+    icon?: IconName
+    action?: Action
+    more?: Action[]
+  },
+): RenderElement {
+  const tone = p.tone ?? 'bad'
+  const acts: Action[] = [
+    ...(p.action ? [{ variant: 'primary' as const, ...p.action }] : []),
+    ...(p.more ?? []).map(a => ({ variant: 'link' as const, ...a })),
+  ]
+  return Card(k, {
+    key: p.key,
+    tone,
+    children: [
+      CardTitle(k, { icon: p.icon ?? 'alert', title: k.graphical ? p.title : `✗ ${p.title}`, tone }),
+      Sentence(k, p.cause),
+      acts.length ? Actions(k, `${p.key}-acts`, acts, acts.length) : null,
+    ],
+  })
+}
+
+export type StepState = 'done' | 'active' | 'todo' | 'failed'
+
+export type Step = { key?: string; title: string; detail?: string; state: StepState; body?: RenderElement | null }
+
+const STEP_TONE: Record<StepState, Tone> = { done: 'ok', active: 'accent', todo: 'neutral', failed: 'bad' }
+
+/** Steps with a rail: ✓ done, ● (or the number) active, ○ todo, ✗ failed; an active step may carry a body card. */
+export function Stepper(k: Kit, s: { key?: string; steps: Step[] }): RenderElement {
+  const { Box, Text } = k
+  const rows = s.steps.map((step, i) => {
+    const last = i === s.steps.length - 1
+    const mark =
+      step.state === 'done'
+        ? '✓'
+        : step.state === 'failed'
+          ? '✗'
+          : k.graphical
+            ? String(i + 1)
+            : step.state === 'active'
+              ? '●'
+              : '○'
+    if (!k.graphical) {
+      const color = step.state === 'todo' ? undefined : terminalColor(k.brand, STEP_TONE[step.state])
+      return (
+        <Box key={step.key} flexDirection="column">
+          <Text
+            color={color}
+            dimColor={step.state === 'todo' ? true : undefined}
+            bold={step.state === 'active' ? true : undefined}
+          >
+            {truncate(`${mark} ${sanitize(step.title)}`, k.cols)}
+          </Text>
+          {step.detail ? <Text dimColor>{truncate(`│ ${sanitize(step.detail)}`, k.cols)}</Text> : null}
+          {step.body ?? null}
+          {!last ? <Text dimColor>│</Text> : null}
+        </Box>
+      )
+    }
+    const tone = k.t.tones[STEP_TONE[step.state]]
+    const fill = step.state === 'active' ? k.t.accent : tone.bg
+    const markColor = step.state === 'active' ? k.t.onAccent : tone.fg
+    return (
+      <Box key={step.key} flexDirection="row" gap={1}>
+        <Box flexDirection="column" alignItems="center" width={3}>
+          <Box backgroundColor={fill} borderStyle="round" borderColor={fill} paddingX={0}>
+            <Text size="caption" weight="bold" color={markColor}>
+              {mark}
+            </Text>
+          </Box>
+          {!last ? <Text color={k.t.line}>│</Text> : null}
+        </Box>
+        <Box flexDirection="column" flexGrow={1} flexShrink={1} gap={0} paddingBottom={last ? 0 : 1}>
+          <Text
+            weight={step.state === 'active' ? 'bold' : 'medium'}
+            color={step.state === 'todo' ? k.t.faint : k.t.text}
+          >
+            {sanitize(step.title)}
+          </Text>
+          {step.detail ? (
+            <Text size="footnote" color={k.t.faint}>
+              {sanitize(step.detail)}
+            </Text>
+          ) : null}
+          {step.body ?? null}
+        </Box>
+      </Box>
+    )
+  })
+  return (
+    <Box key={s.key} flexDirection="column">
+      {rows}
+    </Box>
+  )
+}
+
+/** A list row: status icon, title, meta (hidden when narrow), a pill, actions. Error rows get the cross-in-circle. */
+export function ListRow(
+  k: Kit,
+  r: {
+    key: string
+    title: string
+    status?: Status
+    icon?: IconName
+    tone?: Tone
+    meta?: string
+    pill?: PillProps
+    actions?: Action[]
+  },
+): RenderElement {
+  const { Box, Text } = k
+  const tone = r.tone ?? (r.status ? toneOf(r.status) : undefined)
+  const icon = r.icon ?? (r.status ? statusIcon(r.status) : undefined)
+  if (!k.graphical) {
+    const g = r.status ? glyphOf(r.status) : undefined
+    const mark = g?.char ?? (icon ? TERM_GLYPHS[icon] : undefined)
+    const meta = r.meta && !k.compact ? `  ${sanitize(r.meta)}` : ''
+    const pillLen = r.pill ? [...r.pill.text].length + 3 : 0
+    const head = truncate(`${mark ? `${mark} ` : ''}${sanitize(r.title)}`, Math.max(6, k.cols - pillLen))
+    const rest = Math.max(0, k.cols - [...head].length - pillLen)
+    return (
+      <Box key={r.key} flexDirection="column">
+        <Box flexDirection="row" gap={1}>
+          <Text color={tone ? terminalColor(k.brand, tone) : undefined} dimColor={g?.dim}>
+            {head}
+            {meta && rest > 3 ? <Text dimColor>{truncate(meta, rest)}</Text> : null}
+          </Text>
+          {r.pill ? Pill(k, r.pill) : null}
+        </Box>
+        {r.actions?.length ? Actions(k, r.key, r.actions) : null}
+      </Box>
+    )
+  }
+  const acts = r.actions?.length ? Actions(k, r.key, r.actions) : null
+  return (
+    <Box key={r.key} flexDirection="column" paddingY={0}>
+      <Box flexDirection="row" alignItems="center" gap={1}>
+        {icon ? Icon(k, icon, { tone, color: tone ? undefined : k.t.faint, size: 14 }) : null}
+        <Box flexGrow={1} flexShrink={1}>
+          <Text size="footnote" color={k.t.text} wrap="truncate-end">
+            {sanitize(r.title)}
+          </Text>
+        </Box>
+        {r.meta && !k.narrow ? (
+          <Text size="caption" color={k.t.faint} wrap="truncate-end">
+            {sanitize(r.meta)}
+          </Text>
+        ) : null}
+        {r.pill ? Pill(k, r.pill) : null}
+        {acts && !k.narrow ? acts : null}
+      </Box>
+      {acts && k.narrow ? acts : null}
+    </Box>
+  )
+}
+
+/** Label / value rows; `copy` adds a copy button for raw data (paths, URLs, IDs). */
+export function KeyValue(
+  k: Kit,
+  kv: { key?: string; rows: { key?: string; label: string; value: string; copy?: boolean; tone?: Tone }[] },
+): RenderElement {
+  const { Box, Text } = k
+  const width = Math.min(Math.floor(k.cols / 2), Math.max(0, ...kv.rows.map(r => [...sanitize(r.label)].length)))
+  return (
+    <Box key={kv.key} flexDirection="column">
+      {kv.rows.map((r, i) => {
+        const id = r.key ?? `${kv.key ?? 'kv'}-${i}`
+        const copy = r.copy ? CopyButton(k, { key: `${id}-copy`, text: r.value, iconOnly: true }) : null
+        if (!k.graphical) {
+          const label = truncate(sanitize(r.label).padEnd(width), width)
+          const room = Math.max(4, k.cols - width - 2 - (copy ? 4 : 0))
+          return (
+            <Box key={id} flexDirection="row" gap={1}>
+              <Text dimColor>{label}</Text>
+              <Text color={r.tone ? terminalColor(k.brand, r.tone) : undefined}>{truncate(r.value, room)}</Text>
+              {copy}
+            </Box>
+          )
+        }
+        return (
+          <Box key={id} flexDirection="row" alignItems="center" gap={1}>
+            <Box flexGrow={1} flexShrink={1}>
+              <Text size="footnote" color={k.t.muted} wrap="truncate-end">
+                {sanitize(r.label)}
+              </Text>
+            </Box>
+            <Text size="footnote" tabular color={r.tone ? k.t.tones[r.tone].fg : k.t.text} wrap="truncate-middle">
+              {sanitize(r.value)}
+            </Text>
+            {copy}
+          </Box>
+        )
+      })}
+    </Box>
+  )
+}
+
+/** A copy button for raw data; `show` prints the value (mono, cut in the middle) before it. */
+export function CopyButton(
+  k: Kit,
+  c: { key: string; text: string; label?: string; show?: boolean; iconOnly?: boolean },
+): RenderElement {
+  const { Box, Text, Button } = k
+  const label = c.label ?? k.s.copy
+  const press = (e: { surface?: string }) => k.copy(c.text, e?.surface)
+  const btn = c.iconOnly ? (
+    <Button key={c.key} label={label} plain onPress={press}>
+      {TERM_GLYPHS.copy ?? label}
+    </Button>
+  ) : (
+    <Button key={c.key} plain onPress={press}>
+      {label}
+    </Button>
+  )
+  const icon = !c.iconOnly && k.graphical ? Icon(k, 'copy', { size: 14, color: k.t.muted }) : null
+  if (!c.show && !icon) return btn
+  return (
+    <Box flexDirection="row" alignItems="center" gap={1}>
+      {c.show ? (
+        <Box flexShrink={1}>
+          <Text mono dimColor={k.graphical ? undefined : true} color={ink(k, 'faint')} wrap="truncate-middle">
+            {k.graphical ? sanitize(c.text) : truncate(c.text, Math.max(6, k.cols - [...label].length - 4))}
+          </Text>
+        </Box>
+      ) : null}
+      {icon}
+      {btn}
+    </Box>
+  )
+}
+
+/** Progress bar with a sentence under it ("128 von 412 · noch ca. 2 min"); no `value` draws it as running. */
+export function ProgressBlock(
+  k: Kit,
+  p: { key?: string; label: string; value?: number; max?: number; valueText?: string; sentence?: string; tone?: Tone },
+): RenderElement {
+  const { Box, Text } = k
+  const Progress = k.Progress
+  const color = toneColor(k, p.tone ?? 'warn')
+  const bar = Progress ? (
+    <Progress label={sanitize(p.label) || '…'} value={p.value} max={p.max} valueText={p.valueText} color={color} />
+  ) : (
+    <Text>{truncate(`${p.label}${p.valueText ? `  ${p.valueText}` : ''}`, k.cols)}</Text>
+  )
+  return (
+    <Box key={p.key} flexDirection="column" gap={k.graphical ? 1 : 0}>
+      {bar}
+      {p.sentence ? Sentence(k, p.sentence, { faint: true }) : null}
+    </Box>
+  )
+}
+
+// --- v1 components (extended) ---
 
 export type Action = {
   key: string
@@ -172,7 +853,16 @@ export type Action = {
   onPress: () => void
   /** Destructive: two-step via ConfirmButton; a string is the confirm label ("Really delete?"). */
   confirm?: boolean | string
+  /** v1 spelling of `variant: 'primary'`. */
   primary?: boolean
+  /** v2: icon left of the label (graphical surfaces). */
+  icon?: IconName
+  /** v2: primary (one per view), secondary (framed), link (text, no icon). Absent with no icon: the v1 plain look. */
+  variant?: 'primary' | 'secondary' | 'link'
+}
+
+function isV2(a: Action): boolean {
+  return a.icon !== undefined || a.variant !== undefined
 }
 
 /** One line of text, sanitized and cut to the body width (minus `indent`). */
@@ -223,16 +913,21 @@ export function ConfirmButton(
           a.onConfirm()
         }}
       >
-        {a.confirmLabel ?? `Really ${a.label.toLowerCase()}?`}
+        {a.confirmLabel ?? k.s.really(a.label)}
       </Button>
       <Button key={`${a.key}-cancel`} plain onPress={() => k.clearConfirm()}>
-        Cancel
+        {k.s.cancel}
       </Button>
     </Box>
   )
 }
 
-/** One action button (plain, or two-step when `confirm`). */
+/**
+ * One action button. v1 (no `icon`/`variant`): plain, primary or two-step. v2: `variant` primary/secondary, `link` as
+ * plain text. On graphical surfaces a v2 button is a framed `Box` (accent fill for primary, border for secondary, a
+ * hover tint) holding the icon and a `plain` Button: the engine refuses an `Svg` inside a Button, so the icon sits in
+ * the frame and the Button (the click target, named by `label`) carries the label. The terminal keeps `[ label ]`.
+ */
 export function ActionButton(k: Kit, a: Action): RenderElement {
   const { Button } = k
   if (a.confirm)
@@ -242,26 +937,129 @@ export function ActionButton(k: Kit, a: Action): RenderElement {
       confirmLabel: typeof a.confirm === 'string' ? a.confirm : undefined,
       onConfirm: a.onPress,
     })
+  if (!isV2(a))
+    return (
+      <Button
+        key={a.key}
+        plain={a.primary ? undefined : true}
+        variant={a.primary ? 'primary' : undefined}
+        onPress={a.onPress}
+      >
+        {a.label}
+      </Button>
+    )
+  const variant = a.variant ?? (a.primary ? 'primary' : 'secondary')
+  if (variant === 'link')
+    return (
+      <Button key={a.key} plain onPress={a.onPress}>
+        {a.label}
+      </Button>
+    )
+  if (!k.graphical)
+    return (
+      <Button key={a.key} variant={variant} onPress={a.onPress}>
+        {a.label}
+      </Button>
+    )
+  return FramedButton(k, {
+    key: a.key,
+    label: a.label,
+    icon: a.icon,
+    look: variant === 'primary' ? 'primary' : 'secondary',
+    onPress: a.onPress,
+  })
+}
+
+type FrameLook = 'primary' | 'secondary' | 'tab' | 'tabActive' | 'knob'
+
+/** Fill, border, label color and hover fill per look, from the brand tokens. */
+function frameStyle(
+  k: Kit,
+  look: FrameLook,
+): { bg?: string; border?: string; fg: string; hoverBg: string; hoverBorder?: string; bold: boolean } {
+  const t = k.t
+  switch (look) {
+    case 'primary':
+      return {
+        bg: t.accent,
+        border: t.accent,
+        fg: t.onAccent,
+        hoverBg: t.accentTintText,
+        hoverBorder: t.accentTintText,
+        bold: true,
+      }
+    case 'secondary':
+      return { bg: t.card, border: t.border, fg: t.text, hoverBg: t.line, hoverBorder: t.faint, bold: false }
+    case 'tabActive':
+      return { bg: t.accentTint, fg: t.accentTintText, hoverBg: t.accentTint, bold: true }
+    case 'tab':
+      return { fg: t.muted, hoverBg: t.line, bold: false }
+    case 'knob':
+      return { border: t.border, fg: t.muted, hoverBg: t.line, hoverBorder: t.faint, bold: false }
+  }
+}
+
+/**
+ * Graphical-only button chrome: a keyed `Box` (`${key}-frame`, the hover scope) painted per `look`, holding the `Svg`
+ * icon and a `plain` Button keyed `key` whose `label` names it and whose `Text` child carries the color. Only the Button
+ * is pressable (Box and Svg take no press), so the icon stays small and the label is the target. `text` overrides what
+ * is drawn on the Button (a count, a glyph) while `label` stays its accessible name.
+ */
+function FramedButton(
+  k: Kit,
+  b: {
+    key: string
+    label: string
+    text?: string
+    icon?: IconName
+    look: FrameLook
+    onPress: () => void
+    border?: boolean
+  },
+): RenderElement {
+  const { Box, Button, Text } = k
+  const st = frameStyle(k, b.look)
+  const framed = b.border !== false && st.border !== undefined
   return (
-    <Button
-      key={a.key}
-      plain={a.primary ? undefined : true}
-      variant={a.primary ? 'primary' : undefined}
-      onPress={a.onPress}
+    <Box
+      key={`${b.key}-frame`}
+      flexDirection="row"
+      alignItems="center"
+      gap={1}
+      paddingX={1}
+      flexShrink={0}
+      backgroundColor={st.bg}
+      borderStyle={framed ? 'round' : undefined}
+      borderColor={framed ? st.border : undefined}
+      hover={framed ? { backgroundColor: st.hoverBg, borderColor: st.hoverBorder } : { backgroundColor: st.hoverBg }}
     >
-      {a.label}
-    </Button>
+      {b.icon ? Icon(k, b.icon, { size: 14, color: st.fg }) : null}
+      <Button key={b.key} label={b.label} plain onPress={b.onPress}>
+        <Text color={st.fg} bold={st.bold || undefined}>
+          {b.text ?? b.label}
+        </Text>
+      </Button>
+    </Box>
   )
 }
 
-/** A wrapped row of buttons: at most `max` (3) shown, the rest behind a "…" toggle keyed `${key}-more`. */
+/**
+ * A wrapped row of buttons: at most `max` (3) shown, the rest behind a "…" toggle keyed `${key}-more`. v2 actions on a
+ * narrow body stack in one column.
+ */
 export function Actions(k: Kit, key: string, actions: Action[], max = 3): RenderElement | null {
   const { Box, Button } = k
   if (!actions.length) return null
   const open = k.isMore(key)
   const shown = actions.length > max && !open ? actions.slice(0, max) : actions
+  const stack = k.narrow && actions.some(isV2)
   return (
-    <Box flexDirection="row" gap={1} flexWrap="wrap">
+    <Box
+      flexDirection={stack ? 'column' : 'row'}
+      alignItems={stack ? 'stretch' : undefined}
+      gap={1}
+      flexWrap={stack ? undefined : 'wrap'}
+    >
       {shown.map(a => ActionButton(k, a))}
       {actions.length > max && (
         <Button key={`${key}-more`} plain onPress={() => k.toggleMore(key)}>
@@ -272,7 +1070,7 @@ export function Actions(k: Kit, key: string, actions: Action[], max = 3): Render
   )
 }
 
-/** Header row: title, dim context (repo · branch), actions right with Refresh ⟳ last. */
+/** Header row: title, dim context (repo · branch), actions right with Refresh ⟳ last. v1; v2 panes use PaneHeader. */
 export function Header(
   k: Kit,
   hd: {
@@ -287,8 +1085,8 @@ export function Header(
   const { Box, Text, Button } = k
   const key = hd.key ?? 'header'
   const title = truncate(hd.title, k.cols)
-  // The context only fits beside a title that leaves room for it ("  " + a few chars); else the line overflows.
   const room = k.cols - [...title].length - 2
+  // A title cut to the full width leaves no room: drawing "  …" after it would overflow the line.
   const ctx = hd.context && !k.compact && room >= 4 ? truncate(hd.context, room) : ''
   return (
     <Box flexDirection="column">
@@ -320,13 +1118,14 @@ export function Section(
     collapsible?: boolean
     defaultOpen?: boolean
     actions?: Action[]
-    children: (RenderElement | null | false | undefined)[] | RenderElement | null
+    children: Kid[] | RenderElement | null
   },
 ): RenderElement {
   const { Box, Text, Button } = k
   const open = s.collapsible ? k.isOpen(s.key, s.defaultOpen ?? true) : true
-  const count = s.count === undefined || s.count === '' ? '' : ` ${s.count}`
   const label = truncate(`${s.collapsible ? (open ? '▾ ' : '▸ ') : ''}${s.title}`, k.cols)
+  const room = k.cols - [...label].length - 1
+  const count = s.count === undefined || s.count === '' || room < 2 ? '' : ` ${truncate(s.count, room)}`
   const head = s.collapsible ? (
     <Button key={`sec-${s.key}`} plain onPress={() => k.toggle(s.key)}>
       {`${label}${count}`}
@@ -337,7 +1136,6 @@ export function Section(
       {count ? <Text dimColor>{count}</Text> : null}
     </Text>
   )
-  const kids = (Array.isArray(s.children) ? s.children : [s.children]).filter(Boolean) as RenderElement[]
   return (
     <Box flexDirection="column">
       {s.actions?.length ? (
@@ -348,12 +1146,12 @@ export function Section(
       ) : (
         head
       )}
-      {open && kids}
+      {open && kids(s.children)}
     </Box>
   )
 }
 
-/** Row: leading glyph + primary, dim secondary (hidden when compact), ≤3 actions + "…" overflow. */
+/** Row: leading glyph + primary, dim secondary (hidden when compact), ≤3 actions + "…" overflow. v1; v2 uses ListRow. */
 export function Row(
   k: Kit,
   r: {
@@ -385,26 +1183,123 @@ export function Row(
   )
 }
 
-/** Empty state: one dim line. */
-export function EmptyState(k: Kit, text: string): RenderElement {
-  return Line(k, text, { dim: true })
+export type EmptyInfo = { icon?: IconName; title: string; text?: string; action?: Action }
+
+/** Empty state. A string: one dim line (v1). An object: calm icon, one sentence what is going on, at most one button. */
+export function EmptyState(k: Kit, info: string | EmptyInfo): RenderElement {
+  if (typeof info === 'string') return Line(k, info, { dim: true })
+  const { Box, Text } = k
+  const action = info.action ? ActionButton(k, { variant: 'secondary', ...info.action }) : null
+  if (!k.graphical)
+    return (
+      <Box flexDirection="column">
+        <Text bold>{truncate(info.title, k.cols)}</Text>
+        {info.text ? Sentence(k, info.text, { faint: true }) : null}
+        {action}
+      </Box>
+    )
+  return (
+    <Box flexDirection="column" alignItems="center" gap={1} paddingY={2}>
+      {Icon(k, info.icon ?? 'circle', { size: 28, color: k.t.faint })}
+      <Text weight="bold" color={k.t.text}>
+        {sanitize(info.title)}
+      </Text>
+      {info.text ? Sentence(k, info.text) : null}
+      {action}
+    </Box>
+  )
 }
 
-/** Loading state: one dim line. */
-export function LoadingState(k: Kit, text = 'Loading…'): RenderElement {
-  return Line(k, text, { dim: true })
+const BAR_WIDTHS = ['72%', '48%', '86%', '60%', '40%']
+
+/**
+ * Loading state. A string: one dim line (v1). An object: placeholder cards in the shape that is coming (`shape`: bars
+ * per card, default one card of 3) and, after 3 s or so, a sentence saying why it takes long (`text`). No spinner.
+ */
+export function LoadingState(k: Kit, info: string | { text?: string; shape?: number[] } = k.s.loading): RenderElement {
+  if (typeof info === 'string') return Line(k, info, { dim: true })
+  const { Box, Text } = k
+  if (!k.graphical) return Line(k, info.text ?? k.s.loading, { dim: true })
+  const cards = (info.shape ?? [3]).map((bars, i) =>
+    Card(k, {
+      key: `skeleton-${i}`,
+      children: Array.from({ length: Math.max(1, bars) }, (_, j) => (
+        <Box
+          key={`sk-${i}-${j}`}
+          height={1}
+          width={BAR_WIDTHS[(i + j) % BAR_WIDTHS.length]}
+          backgroundColor={k.t.line}
+        />
+      )),
+    }),
+  )
+  return (
+    <Box flexDirection="column" gap={1}>
+      {cards}
+      {info.text ? (
+        <Text size="footnote" color={k.t.faint}>
+          {sanitize(info.text)}
+        </Text>
+      ) : null}
+    </Box>
+  )
 }
 
-/** Error state: red one-liner + Details toggle (`${key}-details`) + Retry (`${key}-retry`); no stack in the main view. */
+/**
+ * Error state. v1 (no `title`): red one-liner + Details toggle (`${key}-details`) + Retry (`${key}-retry`). v2 (with
+ * `title`): a bad-toned card saying what did not work and what still runs, one helping button (`action`), Retry as a
+ * link and the raw details only on press.
+ */
 export function ErrorState(
   k: Kit,
-  err: { key: string; message: string; details?: string; onRetry?: () => void },
+  err: { key: string; message: string; details?: string; onRetry?: () => void; title?: string; action?: Action },
 ): RenderElement {
   const { Box, Text, Button } = k
   const lines = sanitize(err.message).split('\n')
-  const first = lines[0] || 'Something went wrong.'
+  const first = lines[0] || k.s.wrong
   const details = [err.details ? sanitize(err.details) : '', ...lines.slice(1)].filter(Boolean).join('\n')
   const shown = k.hasDetails(err.key)
+  const detailLines = shown
+    ? details
+        .split('\n')
+        .slice(0, Math.max(3, k.rows - 6))
+        .map(l => (
+          <Text
+            dimColor={k.graphical && err.title !== undefined ? undefined : true}
+            color={err.title !== undefined ? ink(k, 'faint') : undefined}
+          >
+            {truncate(l || ' ', k.cols)}
+          </Text>
+        ))
+    : []
+  if (err.title !== undefined) {
+    const acts: Action[] = [
+      ...(err.action ? [{ variant: 'primary' as const, ...err.action }] : []),
+      ...(err.onRetry
+        ? [{ key: `${err.key}-retry`, label: k.s.retry, onPress: err.onRetry, variant: 'link' as const }]
+        : []),
+      ...(details
+        ? [
+            {
+              key: `${err.key}-details`,
+              label: shown ? k.s.hideDetails : k.s.details,
+              onPress: () => k.toggleDetails(err.key),
+              variant: 'link' as const,
+            },
+          ]
+        : []),
+    ]
+    return Card(k, {
+      key: err.key,
+      tone: 'bad',
+      children: [
+        CardTitle(k, { icon: 'xCircle', title: k.graphical ? err.title : `✗ ${err.title}`, tone: 'bad' }),
+        Sentence(k, first),
+        acts.length ? Actions(k, `${err.key}-acts`, acts, acts.length) : null,
+        ...detailLines,
+      ],
+    })
+  }
   return (
     <Box flexDirection="column">
       <Text color="red">{truncate(`✗ ${first}`, k.cols)}</Text>
@@ -412,35 +1307,62 @@ export function ErrorState(
         <Box flexDirection="row" gap={1}>
           {details ? (
             <Button key={`${err.key}-details`} plain onPress={() => k.toggleDetails(err.key)}>
-              {shown ? 'Hide details' : 'Details'}
+              {shown ? k.s.hideDetails : k.s.details}
             </Button>
           ) : null}
           {err.onRetry ? (
             <Button key={`${err.key}-retry`} plain onPress={err.onRetry}>
-              Retry
+              {k.s.retry}
             </Button>
           ) : null}
         </Box>
       )}
-      {shown &&
-        details
-          .split('\n')
-          .slice(0, Math.max(3, k.rows - 6))
-          .map(l => <Text dimColor>{truncate(l || ' ', k.cols)}</Text>)}
+      {detailLines}
     </Box>
   )
 }
 
-/** Long output: newest lines at the bottom, bounded to the body rows; "Show more" (`${key}-more`) widens it. */
+/**
+ * Long output: newest lines at the bottom, bounded to the body rows; "Show more" (`${key}-more`) widens it.
+ * `collapsed` (v2): only the last non-empty line and a "Log" button (same key) until pressed.
+ */
 export function LogBox(
   k: Kit,
-  b: { key: string; title?: string; lines: readonly string[]; rows?: number; onClose?: () => void },
+  b: {
+    key: string
+    title?: string
+    lines: readonly string[]
+    rows?: number
+    onClose?: () => void
+    collapsed?: boolean
+  },
 ): RenderElement {
   const { Box, Text, Button } = k
   const base = b.rows ?? Math.max(4, Math.floor(k.rows / 2) - 2)
   const more = k.isLogMore(b.key)
-  const room = more ? base * 4 : base
   const all = b.lines.flatMap(l => sanitize(l).split('\n'))
+  if (b.collapsed && !more) {
+    const last = [...all].reverse().find(l => l.trim()) ?? ''
+    const btn = ActionButton(k, {
+      key: `${b.key}-more`,
+      label: k.s.log,
+      icon: 'log',
+      variant: 'link',
+      onPress: () => k.toggleLogMore(b.key),
+    })
+    return (
+      <Box flexDirection="row" alignItems="center" gap={1}>
+        <Box flexGrow={1} flexShrink={1}>
+          <Text dimColor={k.graphical ? undefined : true} color={ink(k, 'faint')} size="footnote" wrap="truncate-end">
+            {k.graphical ? last || ' ' : truncate(last || ' ', Math.max(4, k.cols - [...k.s.log].length - 3))}
+          </Text>
+        </Box>
+        {k.graphical ? Icon(k, 'log', { size: 14, color: k.t.muted }) : null}
+        {btn}
+      </Box>
+    )
+  }
+  const room = more ? base * 4 : base
   const shown = all.slice(-room)
   const hidden = all.length - shown.length
   return (
@@ -457,7 +1379,7 @@ export function LogBox(
       )}
       {(hidden > 0 || more) && (
         <Button key={`${b.key}-more`} plain onPress={() => k.toggleLogMore(b.key)}>
-          {more ? 'Show less' : `Show more (${hidden} earlier)`}
+          {more ? (b.collapsed ? k.s.hideLog : k.s.showLess) : k.s.showMore(hidden)}
         </Button>
       )}
       {shown.map(l => (
@@ -467,24 +1389,142 @@ export function LogBox(
   )
 }
 
-/** Tab bar: one Button per tab keyed `tab-${id}`, the active one primary; wraps on narrow bodies. */
+export type TabItem<T extends string> = {
+  id: T
+  label: string
+  badge?: string
+  /** v2: icon left of the label (graphical, not narrow). */
+  icon?: IconName
+  /** v2: a count after the label ("Review · 2"). */
+  count?: number | string
+}
+
+/**
+ * Tab bar: one Button per tab keyed `${keyPrefix ?? 'tab-'}${id}`, the active one primary; wraps on narrow bodies (v1).
+ * v2 (any `icon` or `maxVisible`): a strip with icons and counts; past `maxVisible` the rest sit behind a "More" tab
+ * (`${prefix}more`) whose menu lists them under the strip (same keys); the active tab always stays in the strip.
+ * Narrow bodies drop the icons and keep the strip on one line.
+ */
 export function Tabs<T extends string>(
   k: Kit,
-  t: { tabs: { id: T; label: string; badge?: string }[]; active: T; onSelect: (id: T) => void },
+  t: {
+    tabs: TabItem<T>[]
+    active: T
+    onSelect: (id: T) => void
+    keyPrefix?: string
+    maxVisible?: number
+    moreLabel?: string
+  },
 ): RenderElement {
   const { Box, Button } = k
-  return (
+  const prefix = t.keyPrefix ?? 'tab-'
+  const text = (tab: TabItem<T>) =>
+    `${tab.label}${tab.count !== undefined && tab.count !== '' ? ` · ${tab.count}` : ''}${tab.badge ? ` ${tab.badge}` : ''}`
+  const v2 = t.maxVisible !== undefined || t.tabs.some(tab => tab.icon)
+  if (!v2)
+    return (
+      <Box flexDirection="row" gap={1} flexWrap="wrap">
+        {t.tabs.map(tab => (
+          <Button
+            key={`${prefix}${tab.id}`}
+            plain={tab.id === t.active ? undefined : true}
+            variant={tab.id === t.active ? 'primary' : undefined}
+            onPress={() => t.onSelect(tab.id)}
+          >
+            {text(tab)}
+          </Button>
+        ))}
+      </Box>
+    )
+  const max = Math.max(2, t.maxVisible ?? t.tabs.length)
+  let strip = t.tabs
+  let rest: TabItem<T>[] = []
+  if (t.tabs.length > max) {
+    strip = t.tabs.slice(0, max - 1)
+    const active = t.tabs.find(tab => tab.id === t.active)
+    if (active && !strip.includes(active)) strip = [...strip.slice(0, -1), active]
+    rest = t.tabs.filter(tab => !strip.includes(tab))
+  }
+  const menuKey = `${prefix}menu`
+  const menuOpen = rest.length > 0 && k.isMore(menuKey)
+  const one = (tab: TabItem<T>, inMenu = false) => {
+    const on = tab.id === t.active
+    const press = () => {
+      if (inMenu) k.toggleMore(menuKey)
+      t.onSelect(tab.id)
+    }
+    if (k.graphical)
+      return FramedButton(k, {
+        key: `${prefix}${tab.id}`,
+        label: tab.label,
+        text: text(tab),
+        icon: tab.icon && (!k.narrow || inMenu) ? tab.icon : undefined,
+        look: on ? 'tabActive' : 'tab',
+        onPress: press,
+      })
+    return (
+      <Button
+        key={`${prefix}${tab.id}`}
+        plain={on ? undefined : true}
+        variant={on ? 'primary' : undefined}
+        onPress={press}
+      >
+        {text(tab)}
+      </Button>
+    )
+  }
+  const moreText = `${t.moreLabel ?? k.s.more}${menuOpen ? ' ▴' : ' ▾'}`
+  const moreTab = !rest.length ? null : k.graphical ? (
+    FramedButton(k, {
+      key: `${prefix}more`,
+      label: t.moreLabel ?? k.s.more,
+      text: moreText,
+      icon: k.narrow ? undefined : 'dots',
+      look: menuOpen ? 'tabActive' : 'tab',
+      onPress: () => k.toggleMore(menuKey),
+    })
+  ) : (
+    <Box flexDirection="row" alignItems="center" gap={1} flexShrink={0}>
+      <Button key={`${prefix}more`} plain onPress={() => k.toggleMore(menuKey)}>
+        {moreText}
+      </Button>
+    </Box>
+  )
+  const bar = k.graphical ? (
+    <Box
+      flexDirection="row"
+      alignItems="center"
+      gap={0}
+      padding={0}
+      flexWrap={k.narrow ? 'nowrap' : 'wrap'}
+      overflow={k.narrow ? 'hidden' : undefined}
+      backgroundColor={k.t.well}
+      borderStyle="round"
+      borderColor={k.t.well}
+    >
+      {strip.map(tab => one(tab))}
+      {moreTab}
+    </Box>
+  ) : (
     <Box flexDirection="row" gap={1} flexWrap="wrap">
-      {t.tabs.map(tab => (
-        <Button
-          key={`tab-${tab.id}`}
-          plain={tab.id === t.active ? undefined : true}
-          variant={tab.id === t.active ? 'primary' : undefined}
-          onPress={() => t.onSelect(tab.id)}
-        >
-          {`${tab.label}${tab.badge ? ` ${tab.badge}` : ''}`}
-        </Button>
-      ))}
+      {strip.map(tab => one(tab))}
+      {moreTab}
+    </Box>
+  )
+  if (!menuOpen) return bar
+  const menu = k.graphical ? (
+    <Box flexDirection="column" padding={1} backgroundColor={k.t.card} borderStyle="round" borderColor={k.t.border}>
+      {rest.map(tab => one(tab, true))}
+    </Box>
+  ) : (
+    <Box flexDirection="column" paddingLeft={2}>
+      {rest.map(tab => one(tab, true))}
+    </Box>
+  )
+  return (
+    <Box flexDirection="column" gap={k.graphical ? 1 : 0}>
+      {bar}
+      {menu}
     </Box>
   )
 }
