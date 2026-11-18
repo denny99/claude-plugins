@@ -8,6 +8,7 @@ import { formatMessage, isScriptFile, splitFilter, type ProjectConfig } from '..
 import { bashVerdictReason } from './bash'
 import { editNotes, metaCandidates } from './guards'
 import { draftConfig, draftJson } from './init'
+import { REVIEW_TOOLS, registerReview } from './review/register'
 import { BRIDGE_GIT_URL, BRIDGE_README, openPane, PANE_ID, renderPane } from './pane'
 import {
   affectedTests,
@@ -109,7 +110,7 @@ const COMMANDS = [
 ]
 
 export async function unitySessionStart($: EngineInterface): Promise<void> {
-  for (const t of TOOLS) await $.tool.register(t)
+  for (const t of [...TOOLS, ...REVIEW_TOOLS]) await $.tool.register(t)
   for (const c of COMMANDS) await $.command.register(c)
 }
 
@@ -209,6 +210,7 @@ function statusText(m: Awaited<ReturnType<typeof readModel>>): string {
 }
 
 export function registerUnity(on: On, options: Options): void {
+  registerReview(on, options)
   on('session.start', async ($, e, next) => {
     try {
       await unitySessionStart($)

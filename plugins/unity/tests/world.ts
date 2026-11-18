@@ -27,6 +27,11 @@ export function fakeWorld(
     config?: Record<string, unknown>
     platform?: 'macos' | 'windows' | 'linux'
     store?: Record<string, unknown>
+    /** A sound board + spot provider in the fake bridge (sound_*, mix_*, goto answer instead of no-provider). */
+    board?: {
+      sounds: { id: string; name: string; group: string; duration: number; takes: number }[]
+      mix: { group: string; db: number }[]
+    }
   } = {},
 ): World {
   const files: Record<string, string> = {
@@ -158,6 +163,20 @@ export function fakeWorld(
             },
             spot: { pos: [4, 5, 6] },
           })
+      } else if (opts.board && /^(sound_|mix_|goto$)/.test(String(cmd.cmd))) {
+        const b = opts.board
+        if (cmd.cmd === 'sound_list') done({ sounds: b.sounds })
+        else if (cmd.cmd === 'sound_play') done({ sound: cmd.sound, mode: cmd.mode })
+        else if (cmd.cmd === 'mix_get') done({ groups: b.mix })
+        else if (cmd.cmd === 'mix_set') {
+          const g = b.mix.find(x => x.group === cmd.group)
+          if (!g) fail(`unknown group ${String(cmd.group)}`, 'bad-input')
+          else {
+            g.db = Number(cmd.db)
+            done({ groups: b.mix })
+          }
+        } else if (cmd.cmd === 'goto') done({ spot: { line: cmd.spot } })
+        else done({})
       } else if (/^(sound_|mix_|goto$)/.test(String(cmd.cmd))) {
         fail('This project offers no sound board (no IClaudeSoundBoard registered).', 'no-provider')
       } else if (cmd.cmd === 'play') {
