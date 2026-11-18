@@ -12,7 +12,7 @@ const PKG = 'com.denny99.claude-bridge'
 
 test('bridge version: BRIDGE_VERSION is the shipped package.json version; versions compare numerically', () => {
   // A test cannot import JSON: bump this together with bridge/com.denny99.claude-bridge/package.json.
-  expect(BRIDGE_VERSION).toBe('0.2.0')
+  expect(BRIDGE_VERSION).toBe('0.3.0')
   expect(versionOlder('0.1.0', '0.2.0')).toBe(true)
   expect(versionOlder('0.10.0', '0.2.0')).toBe(false)
   expect(versionOlder('0.2.0', '0.2.0')).toBe(false)
@@ -40,6 +40,7 @@ test('old bridge in the project: warning instead of ✓, update frees the lock e
   })
   world.dirs[`${PROJECT}/Library/PackageCache`] = [`${PKG}@b055521ea1a0`]
   world.files[`${PROJECT}/Library/PackageCache/${PKG}@b055521ea1a0/package.json`] = JSON.stringify({ version: '0.1.0' })
+  world.statusExtra.bridgeVersion = undefined // a 0.1 bridge names no version in its heartbeat
   await $.session.start(start)
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await settle(world, ui.press({ key: 'refresh' }))

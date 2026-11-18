@@ -221,10 +221,14 @@ export async function loadSounds($: EngineInterface, options: Options, tries = S
   }
   await patchReview($, s => ({
     sounds: {
-      list: play.isPlayError(list) ? [] : list.sounds.map(x => ({ ...x, group: x.group ?? '' })),
+      list: play.isPlayError(list)
+        ? []
+        : list.sounds.map(keptSound),
       mix: play.isPlayError(mix) ? [] : mix.groups,
       mode: s.sounds?.mode ?? 'near',
       musicOpen: s.sounds?.musicOpen ?? false,
+      // only the fields the tab draws are kept (the atom is rewritten on every press); the open group stays
+      ...(s.sounds?.openGroup !== undefined ? { openGroup: s.sounds.openGroup } : {}),
       ...(err ? { error: err } : {}),
     },
   }))
@@ -551,61 +555,110 @@ function soundsBody(
       }),
     )
   const fresh = snd.list.filter(x => !isMusic(x) && !d.answers.has(`ton:${x.id}`))
-  const rated = snd.list.filter(x => !isMusic(x) && d.answers.has(`ton:${x.id}`))
   const music = snd.list.filter(isMusic)
+  const groups = soundGroups(snd.list, id => d.answers.has(id))
+  const openGroup = groups.find(g => g.name === snd.openGroup) ?? groups.find(g => g.fresh > 0) ?? groups[0]
   const secs = (n: number) => `${n.toFixed(1).replace('.', ',')} s`
   const rate = (id: string, fits: boolean) =>
     void answerItem($, options, `ton:${id}`, fits ? 'passt' : 'passt-nicht', id, s.drafts[`ton:${id}`] ?? '', false)
   const rows: (RenderElement | null)[] = []
-  for (const x of fresh) {
+  // One group unfolded at a time, 20 rows per page: hundreds of rows with three buttons each made a tree the app could
+  // not draw any more (and with it no other mod's pane or band).
+  groups.forEach((g, gi) => {
+    const isOpen = g === openGroup
     rows.push(
       ListRow(k, {
-        key: `rv-snd-${x.id}`,
-        title: x.name,
-        status: snd.playing === x.id ? 'running' : undefined,
-        meta: `${x.group} · ${secs(x.duration)}${x.takes > 1 ? ` · ${x.takes} Varianten` : ''}`,
-        actions: [
-          {
-            key: `rv-play-${x.id}`,
-            label: 'Abspielen',
-            icon: 'play',
-            variant: 'secondary',
-            onPress: () => void playSound($, options, x.id),
-          },
-          {
-            key: `rv-ok-${x.id}`,
-            label: 'passt',
-            icon: 'check',
-            variant: 'secondary',
-            onPress: () => rate(x.id, true),
-          },
-          { key: `rv-no-${x.id}`, label: 'nochmal', icon: 'x', variant: 'secondary', onPress: () => rate(x.id, false) },
-        ],
+        key: `rv-sgrp-${gi}`,
+        title: g.name || 'ohne Gruppe',
+        icon: isOpen ? 'folder' : 'circle',
+        meta: `${g.fresh} neu · ${g.items.length} gesamt`,
+        actions: isOpen
+          ? []
+          : [
+              {
+                key: `rv-sgrp-open-${gi}`,
+                label: 'Zeigen',
+                variant: 'link',
+                onPress: () =>
+                  void patchReview($, x => ({
+                    sounds: x.sounds && { ...x.sounds, openGroup: g.name, more: undefined },
+                  })),
+              },
+            ],
       }),
     )
-    if (s.open === `ton:${x.id}` && Input)
+    if (!isOpen) return
+    const shownCount = Math.max(SOUND_PAGE, snd.more ?? SOUND_PAGE)
+    for (const x of g.items.slice(0, shownCount)) {
+      const a = d.answers.get(`ton:${x.id}`)
+      if (a) {
+        rows.push(
+          ListRow(k, {
+            key: `rv-snd-done-${x.id}`,
+            title: x.name,
+            meta: secs(x.duration),
+            pill: { text: verdictText(a.verdict), tone: verdictTone(a.verdict) },
+          }),
+        )
+        continue
+      }
       rows.push(
-        Input({
-          key: `rv-note-ton-${x.id}`,
-          placeholder: 'Notiz zum Klang',
-          value: s.drafts[`ton:${x.id}`] ?? '',
-          submitLabel: 'nochmal',
-          onInput: (v: string) => void patchReview($, y => ({ drafts: { ...y.drafts, [`ton:${x.id}`]: v } })),
-          onSubmit: () => rate(x.id, false),
+        ListRow(k, {
+          key: `rv-snd-${x.id}`,
+          title: x.name,
+          status: snd.playing === x.id ? 'running' : undefined,
+          meta: `${secs(x.duration)}${x.takes > 1 ? ` · ${x.takes} Varianten` : ''}`,
+          actions: [
+            {
+              key: `rv-play-${x.id}`,
+              label: 'Abspielen',
+              icon: 'play',
+              variant: 'secondary',
+              onPress: () => void playSound($, options, x.id),
+            },
+            {
+              key: `rv-ok-${x.id}`,
+              label: 'passt',
+              icon: 'check',
+              variant: 'secondary',
+              onPress: () => rate(x.id, true),
+            },
+            {
+              key: `rv-no-${x.id}`,
+              label: 'nochmal',
+              icon: 'x',
+              variant: 'secondary',
+              onPress: () => rate(x.id, false),
+            },
+          ],
         }),
       )
-  }
-  for (const x of rated) {
-    const a = d.answers.get(`ton:${x.id}`)!
-    rows.push(
-      ListRow(k, {
-        key: `rv-snd-done-${x.id}`,
-        title: x.name,
-        meta: x.group,
-        pill: { text: verdictText(a.verdict), tone: verdictTone(a.verdict) },
-      }),
-    )
-  }
+      if (s.open === `ton:${x.id}` && Input)
+        rows.push(
+          Input({
+            key: `rv-note-ton-${x.id}`,
+            placeholder: 'Notiz zum Klang',
+            value: s.drafts[`ton:${x.id}`] ?? '',
+            submitLabel: 'nochmal',
+            onInput: (v: string) => void patchReview($, y => ({ drafts: { ...y.drafts, [`ton:${x.id}`]: v } })),
+            onSubmit: () => rate(x.id, false),
+          }),
+        )
+    }
+    const left = g.items.length - shownCount
+    if (left > 0)
+      rows.push(
+        ActionButton(k, {
+          key: 'rv-snd-more',
+          label: `Weitere ${Math.min(SOUND_PAGE, left)} (noch ${left})`,
+          variant: 'link',
+          onPress: () =>
+            void patchReview($, x => ({
+              sounds: x.sounds && { ...x.sounds, more: shownCount + SOUND_PAGE },
+            })),
+        }),
+      )
+  })
   out.push(
     Card(k, {
       key: 'rv-snd-new',
@@ -643,14 +696,16 @@ function soundsBody(
       ],
     }),
   )
-  if (music.length)
+  if (music.length) {
+    const musicShown = Math.max(SOUND_PAGE, snd.musicMore ?? SOUND_PAGE)
+    const musicLeft = music.length - musicShown
     out.push(
       Card(k, {
         key: 'rv-music',
         children: [
           CardTitle(k, { icon: 'music', title: `Musik · ${music.length} Stücke` }),
           ...(snd.musicOpen
-            ? music.map(x =>
+            ? music.slice(0, musicShown).map(x =>
                 ListRow(k, {
                   key: `rv-mus-${x.id}`,
                   title: x.name,
@@ -667,17 +722,56 @@ function soundsBody(
                 }),
               )
             : [Sentence(k, 'Jedes Stück einzeln anspielen.', { faint: true })]),
+          snd.musicOpen && musicLeft > 0
+            ? ActionButton(k, {
+                key: 'rv-music-more',
+                label: `Weitere ${Math.min(SOUND_PAGE, musicLeft)} (noch ${musicLeft})`,
+                variant: 'link',
+                onPress: () =>
+                  void patchReview($, x => ({
+                    sounds: x.sounds && { ...x.sounds, musicMore: musicShown + SOUND_PAGE },
+                  })),
+              })
+            : null,
           ActionButton(k, {
             key: 'rv-music-toggle',
             label: snd.musicOpen ? 'Musik einklappen' : 'Musik zeigen',
             variant: 'link',
             onPress: () =>
-              void patchReview($, x => ({ sounds: x.sounds && { ...x.sounds, musicOpen: !x.sounds.musicOpen } })),
+              void patchReview($, x => ({
+                sounds: x.sounds && { ...x.sounds, musicOpen: !x.sounds.musicOpen, musicMore: undefined },
+              })),
           }),
         ],
       }),
     )
+  }
   return out
+}
+
+/** What the review atom keeps of a board sound: only the fields the tab draws. */
+export function keptSound(x: play.SoundInfo): SoundRow {
+  return { id: x.id, name: x.name, group: x.group ?? '', duration: x.duration, takes: x.takes }
+}
+
+/** Rows per page in the sound list (open group, music). */
+export const SOUND_PAGE = 20
+
+type SoundRow = NonNullable<ReviewUiState['sounds']>['list'][number]
+
+/** The non-music sounds by group in board order; per group the new ones first, then the rated ones. */
+export function soundGroups(
+  list: SoundRow[],
+  answered: (id: string) => boolean,
+): { name: string; items: SoundRow[]; fresh: number }[] {
+  const by = new Map<string, { fresh: SoundRow[]; rated: SoundRow[] }>()
+  for (const x of list) {
+    if (isMusic(x)) continue
+    const g = by.get(x.group) ?? { fresh: [], rated: [] }
+    ;(answered(`ton:${x.id}`) ? g.rated : g.fresh).push(x)
+    by.set(x.group, g)
+  }
+  return [...by].map(([name, g]) => ({ name, items: [...g.fresh, ...g.rated], fresh: g.fresh.length }))
 }
 
 function ideasBody(

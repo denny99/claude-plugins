@@ -230,6 +230,11 @@ export type ReviewUiState = {
     playing?: string
     musicOpen: boolean
     error?: string
+    /** The one sound group shown unfolded (the others are a row each); unset = the first with new sounds. */
+    openGroup?: string
+    /** How many rows of the open group / of the music are shown (pages of 20, "weitere"). */
+    more?: number
+    musicMore?: number
   }
 }
 

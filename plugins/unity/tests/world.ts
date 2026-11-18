@@ -2,6 +2,8 @@
 import type { On } from 'claude-code'
 import { mock } from 'claude-code/testing'
 
+import { BRIDGE_VERSION } from '../lib/bridge'
+
 export const VERSION = 'm_EditorVersion: 6000.6.7f1\n'
 export const ROOT = '/g'
 export const PROJECT = '/g/unity'
@@ -69,6 +71,7 @@ export function fakeWorld(
       isPaused: false,
       compileSeq: world.bridge.compileSeq,
       scene: 'Assets/Scenes/Main.unity',
+      bridgeVersion: BRIDGE_VERSION, // the shipped bridge; an old one: statusExtra.bridgeVersion = undefined
       ...world.statusExtra,
     })
   const read = (p: string): string | undefined =>

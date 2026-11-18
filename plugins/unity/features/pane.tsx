@@ -9,6 +9,7 @@ import { loadSounds, reviewBadge, reviewTab } from './review/tab'
 import { readReview } from './review/store'
 import {
   bridgeOutdated,
+  bridgeOutdatedPill,
   editorBusyWithTests,
   patchModel,
   readModel,
@@ -48,7 +49,7 @@ export function statusPill(m: UnityModel): PillProps {
   if (b.isCompiling && !b.isPlaying) return { text: 'kompiliert', tone: 'warn', glyph: '◷' }
   if (testsRunning(m)) return { text: 'Tests laufen', tone: 'warn', glyph: '◷' }
   if (b.isPlaying) return { text: b.isPaused ? 'pausiert' : 'Play-Modus', tone: 'info', icon: 'play' }
-  if (bridgeOutdated(m)) return { text: `Bridge ${m.bridgeInstalled} veraltet`, tone: 'warn' }
+  if (bridgeOutdated(m)) return { text: bridgeOutdatedPill(m), tone: 'warn' }
   return { text: 'Editor bereit', tone: 'ok' }
 }
 

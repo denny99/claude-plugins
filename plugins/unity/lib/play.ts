@@ -185,14 +185,34 @@ export function parsePerf(d: Record<string, unknown>): PerfResult | undefined {
   }
 }
 
+/** A board text for the panel: no control characters (a Pane drops its whole tree over one), one line, capped. */
+export function boardText(v: unknown, max = 120): string | undefined {
+  if (typeof v !== 'string') return undefined
+  // eslint-disable-next-line no-control-regex
+  const t = v.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim()
+  if (!t) return undefined
+  return [...t].length > max ? `${[...t].slice(0, max - 1).join('')}…` : t
+}
+
+/** The board's sounds, cleaned (see `boardText`) and with each id once: ids become keys in the pane. */
 export function parseSounds(d: Record<string, unknown>): SoundInfo[] {
+  const seen = new Set<string>()
   return (Array.isArray(d.sounds) ? d.sounds : []).flatMap(s => {
     const o = obj(s)
+    // ids are sent back to the bridge as they came: only refuse ones a pane key or a command could not carry
     const id = o && str(o.id)
-    if (!o || !id) return []
-    const group = str(o.group)
+    // eslint-disable-next-line no-control-regex
+    if (!o || !id || id.length > 200 || /[\x00-\x1f\x7f]/.test(id) || seen.has(id)) return []
+    seen.add(id)
+    const group = boardText(o.group, 60)
     return [
-      { id, name: str(o.name) ?? id, ...(group ? { group } : {}), duration: num(o.duration), takes: num(o.takes, 1) },
+      {
+        id,
+        name: boardText(o.name) ?? boardText(id) ?? id,
+        ...(group ? { group } : {}),
+        duration: num(o.duration),
+        takes: num(o.takes, 1),
+      },
     ]
   })
 }
@@ -200,8 +220,10 @@ export function parseSounds(d: Record<string, unknown>): SoundInfo[] {
 export function parseMix(d: Record<string, unknown>): MixGroup[] {
   return (Array.isArray(d.groups) ? d.groups : []).flatMap(g => {
     const o = obj(g)
+    // the name goes back to the bridge in mix_set as it came; one a pane key could not carry is left out
     const group = o && str(o.group)
-    return o && group ? [{ group, db: num(o.db) }] : []
+    // eslint-disable-next-line no-control-regex
+    return o && group && group.length <= 200 && !/[\x00-\x1f\x7f]/.test(group) ? [{ group, db: num(o.db) }] : []
   })
 }
 

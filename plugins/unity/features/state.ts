@@ -310,9 +310,30 @@ async function findEditorElsewhere(
   return undefined
 }
 
-/** The installed bridge is older than the one this plugin ships (unknown version: not outdated). */
-export function bridgeOutdated(m: Pick<UnityModel, 'bridgeInstalled'>): boolean {
+/**
+ * The installed bridge is older than the one this plugin ships. A running bridge without `bridgeVersion` in its
+ * heartbeat is from before it reported one, so it is old too; with the editor closed an unknown version is not.
+ */
+export function bridgeOutdated(m: Pick<UnityModel, 'bridgeInstalled'> & { bridge?: UnityModel['bridge'] }): boolean {
+  if (m.bridge?.up && !m.bridge.version) return true
   return !!m.bridgeInstalled && versionOlder(m.bridgeInstalled, BRIDGE_VERSION)
+}
+
+/**
+ * How the panel names an outdated bridge: "Bridge 0.1.0 — Plugin braucht 0.3.0", or "Bridge älter als 0.3.0" when no
+ * older version is known (heartbeat without `bridgeVersion`).
+ */
+export function bridgeOutdatedTitle(m: Pick<UnityModel, 'bridgeInstalled'>): string {
+  return m.bridgeInstalled && versionOlder(m.bridgeInstalled, BRIDGE_VERSION)
+    ? `Bridge ${m.bridgeInstalled} — Plugin braucht ${BRIDGE_VERSION}`
+    : `Bridge älter als ${BRIDGE_VERSION} — bitte aktualisieren`
+}
+
+/** The header pill of an outdated bridge: "Bridge 0.1.0 veraltet", or "Bridge veraltet" without a known version. */
+export function bridgeOutdatedPill(m: Pick<UnityModel, 'bridgeInstalled'>): string {
+  return m.bridgeInstalled && versionOlder(m.bridgeInstalled, BRIDGE_VERSION)
+    ? `Bridge ${m.bridgeInstalled} veraltet`
+    : 'Bridge veraltet'
 }
 
 /** A test run goes (editor run or batch job). */

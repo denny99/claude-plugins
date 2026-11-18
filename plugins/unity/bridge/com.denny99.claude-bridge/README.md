@@ -11,6 +11,14 @@ Package Manager → **+** → **Add package from git URL…**
 https://github.com/denny99/claude-plugins.git?path=/plugins/unity/bridge/com.denny99.claude-bridge
 ```
 
+Pinned to this version (what the panel's „Paket-Adresse kopieren“ gives):
+`https://github.com/denny99/claude-plugins.git?path=/plugins/unity/bridge/com.denny99.claude-bridge#unity-bridge-v0.3.0`.
+
+**Version 0.3.0.** The heartbeat names it (`bridgeVersion`, from `package.json`, else `ClaudeBridge.Version`). A bump
+changes three places together: `package.json`, `ClaudeBridge.Version` and `BRIDGE_VERSION` in the plugin's
+`lib/bridge.ts`, then the tag `unity-bridge-v<version>` on the release commit. The panel warns when the bridge is
+older than the plugin needs, and also when a running bridge names no version (bridges before 0.2).
+
 The repository is private: Unity uses your git credentials (an SSH URL works too:
 `git@github.com:denny99/claude-plugins.git?path=/plugins/unity/bridge/com.denny99.claude-bridge`).
 

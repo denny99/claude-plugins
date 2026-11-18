@@ -102,18 +102,25 @@ namespace Denny99.ClaudeBridge
 
         static string bridgeVersion;
 
-        /// <summary>This package's version from its package.json (via the Package Manager); empty when unknown.</summary>
+        /// <summary>
+        /// The version of this code, for when the Package Manager cannot name one (copied into Assets, embedded without
+        /// package info). Bump together with package.json and BRIDGE_VERSION in the plugin's lib/bridge.ts: the panel
+        /// takes a running bridge without a version for one older than the plugin needs.
+        /// </summary>
+        public const string Version = "0.3.0";
+
+        /// <summary>This package's version from its package.json (via the Package Manager), else <see cref="Version"/>.</summary>
         static string BridgeVersion()
         {
             if (bridgeVersion != null) return bridgeVersion;
             try
             {
                 var info = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(ClaudeBridge).Assembly);
-                bridgeVersion = info != null && info.version != null ? info.version : "";
+                bridgeVersion = info != null && !string.IsNullOrEmpty(info.version) ? info.version : Version;
             }
             catch
             {
-                bridgeVersion = "";
+                bridgeVersion = Version;
             }
             return bridgeVersion;
         }

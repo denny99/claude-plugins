@@ -42,7 +42,7 @@ export interface BridgeStatus {
 }
 
 /** The bridge version this plugin ships (bridge/com.denny99.claude-bridge/package.json; a test keeps them equal). */
-export const BRIDGE_VERSION = '0.2.0'
+export const BRIDGE_VERSION = '0.3.0'
 
 /** `a` is an older version than `b` (numeric x.y.z compare; anything unparsable counts as not older). */
 export function versionOlder(a: string, b: string): boolean {

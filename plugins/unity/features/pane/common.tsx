@@ -5,7 +5,7 @@ import type { ModelConsoleEntry, UnityModel, UnityTab } from '../../types'
 import { BRIDGE_VERSION } from '../../lib/bridge'
 import { batchAllowed } from '../../lib/unity'
 import { Card, CardTitle, CopyButton, Actions, Sentence, type Action, type Kit } from '../../lib/ui'
-import { batchTarget, cancelTests, patchModel, unlockBridgePackage, type Options } from '../state'
+import { batchTarget, bridgeOutdatedTitle, cancelTests, patchModel, unlockBridgePackage, type Options } from '../state'
 
 /** Elements the kit does not wrap. */
 export type Extra = {
@@ -152,7 +152,7 @@ export function bridgeUpdateCard($: EngineInterface, k: Kit, m: UnityModel, opti
     children: [
       CardTitle(k, {
         icon: 'download',
-        title: `Bridge ${m.bridgeInstalled ?? 'zu alt'} — Plugin braucht ${BRIDGE_VERSION}`,
+        title: bridgeOutdatedTitle(m),
         tone: 'warn',
       }),
       Sentence(
@@ -168,12 +168,15 @@ export function bridgeUpdateCard($: EngineInterface, k: Kit, m: UnityModel, opti
   })
 }
 
-/** A running run's progress: "12 von 80 · 1:05" (count once the bridge reported the total, time once started). */
+/**
+ * A running run's progress: "12 von 80 · 1:05". The count only with a plausible total (> 0 and not below what is done;
+ * older bridges reported the whole suite, newer ones 0 when they cannot count), else "12 Tests fertig".
+ */
 export function testsProgress(t: NonNullable<UnityModel['tests']>, now: number): string {
   const done = t.results.length
   const parts: string[] = []
-  if (t.total) parts.push(`${Math.min(done, t.total)} von ${t.total}`)
-  else if (done) parts.push(`${done} fertig`)
+  if (t.total && t.total > 0 && t.total >= done) parts.push(`${done} von ${t.total}`)
+  else if (done) parts.push(`${done} ${done === 1 ? 'Test' : 'Tests'} fertig`)
   if (t.startedAt && now >= t.startedAt) {
     const s = Math.floor((now - t.startedAt) / 1000)
     parts.push(`${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`)
