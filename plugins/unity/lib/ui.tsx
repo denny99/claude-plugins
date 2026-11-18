@@ -723,6 +723,19 @@ export type Step = { key?: string; title: string; detail?: string; state: StepSt
 
 const STEP_TONE: Record<StepState, Tone> = { done: 'ok', active: 'accent', todo: 'neutral', failed: 'bad' }
 
+const STEP_MARK = 22
+
+/** The round step mark: a filled circle with the number (or ✓ ✗) centred in it. */
+export function stepMarkSvg(mark: string, fg: string, bg: string): string {
+  const r = STEP_MARK / 2
+  return svgDocument(
+    `<svg viewBox="0 0 ${STEP_MARK} ${STEP_MARK}"><circle cx="${r}" cy="${r}" r="${r}" fill="${bg}"></circle>` +
+      `<text x="${r}" y="${r}" text-anchor="middle" dominant-baseline="central" ` +
+      `font-family="-apple-system, Segoe UI, sans-serif" font-size="12" font-weight="700" ` +
+      `fill="${fg}">${xmlText(mark)}</text></svg>`,
+  )
+}
+
 /** Steps with a rail: ✓ done, ● (or the number) active, ○ todo, ✗ failed; an active step may carry a body card. */
 export function Stepper(k: Kit, s: { key?: string; steps: Step[] }): RenderElement {
   const { Box, Text } = k
@@ -761,11 +774,13 @@ export function Stepper(k: Kit, s: { key?: string; steps: Step[] }): RenderEleme
     return (
       <Box key={step.key} flexDirection="row" gap={1}>
         <Box flexDirection="column" alignItems="center" width={3}>
-          <Box backgroundColor={fill} borderStyle="round" borderColor={fill} paddingX={0}>
-            <Text size="caption" weight="bold" color={markColor}>
+          {k.Svg ? (
+            <k.Svg source={stepMarkSvg(mark, markColor, fill)} alt={mark} width={STEP_MARK} height={STEP_MARK} />
+          ) : (
+            <Text weight="bold" color={markColor}>
               {mark}
             </Text>
-          </Box>
+          )}
           {!last ? <Text color={k.t.line}>│</Text> : null}
         </Box>
         <Box flexDirection="column" flexGrow={1} flexShrink={1} gap={0} paddingBottom={last ? 0 : 1}>
