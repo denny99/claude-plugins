@@ -147,6 +147,8 @@ export type World = {
   submitted: string[];
   store: Map<string, unknown>;
   answers: Record<string, unknown>;
+  /** Set: each submitted prompt waits for it before it is taken. */
+  hold?: (text: string) => Promise<void>;
   clock: { advance: (ms: number) => Promise<void> };
 };
 
@@ -218,7 +220,9 @@ export function world(on: On, answers: Record<string, unknown> = {}): World {
       return { value: '{"name":"dnd-studio","version":"9.8.7"}' };
     throw new Error("missing");
   });
-  on("prompt.submit", (_, e) => {
+  on("prompt.submit", async (_, e) => {
+    // a test may keep a prompt queued (the engine resolves $.prompt.submit only once the prompt is taken)
+    if (w.hold) await w.hold(e.text);
     w.submitted.push(e.text);
     return { text: e.text };
   });

@@ -71,9 +71,6 @@ export const NO_LISTENER_NOTE =
   'Your last answer ended in listener mode (discord listener haiku) without a running pnp-zuhoerer: nothing wakes you when the players speak. Start exactly one dnd-studio:pnp-zuhoerer in the background (Agent, run_in_background: true) at the beginning of each answer to a listener wake (pnp-spielleiter, "Mit dem Zuhörer").';
 export const LISTENER_AGENT = "pnp-zuhoerer";
 
-/** True while this plugin submits a prompt itself (a person's button), so it is not taken as an interjection. */
-let submitting = false;
-
 /**
  * Submits a prompt for the main thread on a person's press (never on its own), through the kit's `askClaude`: a toast
  * at once, the same task (`key`) only once until Claude answered that prompt. A producer (`text` as a function) runs
@@ -83,12 +80,10 @@ export async function submitForPerson(
   $: EngineInterface,
   opts: AskOptions,
 ): Promise<AskResult> {
-  submitting = true;
-  try {
-    return await askClaude($, opts);
-  } finally {
-    submitting = false;
-  }
+  // No module-wide "submitting" flag: $.prompt.submit stays pending while the prompt waits in the queue, and a flag
+  // held that long dropped every line the person typed meanwhile (Runde 3: „passt“, a message sent mid-turn). The
+  // plugin's own prompt arrives with origin `plugin`, which isPersonsPrompt never takes.
+  return await askClaude($, opts);
 }
 
 /**
@@ -548,14 +543,18 @@ export async function endInterjections($: EngineInterface): Promise<boolean> {
   return true;
 }
 
-/** Only what the person typed: the composer (or a remote bridge), no slash command, no meta or task notification. */
+/**
+ * Only what the person typed: the composer (or a remote bridge), no slash command, no meta or task notification. A
+ * plugin's own prompt (a pane button) comes as origin `plugin` and is left out by its origin alone, also while the
+ * person types in the meantime or into a running turn.
+ */
 export function isPersonsPrompt(e: {
   text?: string;
   isMeta?: boolean;
   command?: unknown;
   origin?: { kind?: string };
 }): boolean {
-  if (submitting || e.isMeta || e.command) return false;
+  if (e.isMeta || e.command) return false;
   const kind = e.origin?.kind;
   return (
     (kind === "composer" || kind === "bridge") &&
