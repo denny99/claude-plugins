@@ -4,8 +4,7 @@ import type { EngineInterface, RenderElement } from 'claude-code'
 import type { UnityModel } from '../../types'
 import { batchAllowed } from '../../lib/unity'
 import { Actions, Card, CardTitle, CopyButton, Sentence, Stepper, type Kit } from '../../lib/ui'
-import { BRIDGE_VERSION } from '../../lib/bridge'
-import { batchTarget, bridgeOutdated, editorBusyWithTests, type Options } from '../state'
+import { batchTarget, bridgeOutdated, bridgeOutdatedTitle, editorBusyWithTests, type Options } from '../state'
 import { BRIDGE_GIT_URL_TAGGED, BRIDGE_README, bridgeUpdateCard, selectTab, type Extra } from './common'
 import { jobsCard, testsCard } from './overview'
 
@@ -78,7 +77,7 @@ export async function setupView(
             steps: [
               {
                 title: old
-                  ? `Bridge ${m.bridgeInstalled} — Plugin braucht ${BRIDGE_VERSION}`
+                  ? bridgeOutdatedTitle(m)
                   : 'Bridge-Paket ist im Projekt',
                 detail: old
                   ? 'Bridge aktualisieren (Karte oben)'

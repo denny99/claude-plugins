@@ -5,9 +5,10 @@
 import type { EngineInterface, RenderElement } from 'claude-code'
 
 import type { ModelPerf, UnityModel } from '../../types'
+import { versionOlder } from '../../lib/bridge'
 import { isPlayError } from '../../lib/play'
 import { schemeSvg } from '../../lib/theme'
-import { Actions, Card, CardTitle, ProblemCard, Sentence, sanitize, truncate, type Kit } from '../../lib/ui'
+import { Actions, askAction, Card, CardTitle, ProblemCard, Sentence, sanitize, truncate, type Kit } from '../../lib/ui'
 import { gotoSpot, patchModel, type Options } from '../state'
 import { bridgeUpdateAction, clockTime, dec, thousands } from './common'
 import { measure, measuringSeconds } from './measure'
@@ -113,7 +114,14 @@ function chartWidth(k: Kit): number {
   return Math.round(Math.min(1400, Math.max(160, k.cols * 7.5 - 32)))
 }
 
-function runCard($: EngineInterface, k: Kit, options: Options, at: number, p: ModelPerf): RenderElement {
+function runCard(
+  $: EngineInterface,
+  k: Kit,
+  options: Options,
+  at: number,
+  p: ModelPerf,
+  bridgeVersion?: string,
+): RenderElement {
   const { Svg, Box } = k
   const where = spotLine(p.spot)
   const costs = p.costs.slice(0, 5)
@@ -129,7 +137,7 @@ function runCard($: EngineInterface, k: Kit, options: Options, at: number, p: Mo
       }),
       Sentence(
         k,
-        `${where ? `${where} · ` : ''}${perfLength(p)} · ${thousands(p.frames)} Frames${p.aborted ? ` · abgebrochen: ${p.aborted}` : ''}`,
+        `${where ? `${where} · ` : ''}${perfLength(p, bridgeVersion)} · ${thousands(p.frames)} Frames${p.aborted ? ` · abgebrochen: ${p.aborted}` : ''}`,
         { faint: true },
       ),
       outlierNote(p) ? Sentence(k, outlierNote(p)!, { faint: true }) : null,
@@ -155,13 +163,7 @@ function runCard($: EngineInterface, k: Kit, options: Options, at: number, p: Mo
       ...costs.map((c, i) => costRow(k, `cost-${i}`, c.name, p.hitches ? c.hitchAvgMs : c.avgMs)),
       !costs.length ? Sentence(k, noCostsText(p), { faint: true }) : null,
       Actions(k, 'perf-run-acts', [
-        {
-          key: 'perf-ask',
-          label: 'Claude analysieren lassen',
-          icon: 'claude',
-          variant: 'secondary',
-          onPress: () => void $.prompt.submit({ text: perfPrompt(at, p) }),
-        },
+        askAction($, k, { key: 'perf-ask', label: 'Claude analysieren lassen', text: perfPrompt(at, p) }),
         ...(p.spot
           ? [
               {
@@ -184,12 +186,27 @@ function runCard($: EngineInterface, k: Kit, options: Options, at: number, p: Mo
 
 export const NO_SPOT = 'Stelle unbekannt: das Projekt meldet bei der Messung keine Stelle, darum kein Hinspringen.'
 
-/** The recording's length; says when it ran shorter than asked (older bridges summed frame times). */
-export function perfLength(p: Pick<ModelPerf, 'seconds' | 'requestedSeconds' | 'wallSeconds' | 'aborted'>): string {
+/**
+ * The recording's length; says when it ran clearly shorter than asked (under 95 %, so 9,5 of 10 s stays quiet). Only a
+ * bridge older than 0.3.0 (or one that does not name its version) gets the advice to update: those ended on summed
+ * frame times. A current bridge measures real time, so a gap there is named neutrally.
+ */
+export function perfLength(
+  p: Pick<ModelPerf, 'seconds' | 'requestedSeconds' | 'wallSeconds' | 'aborted'>,
+  bridgeVersion?: string,
+): string {
   const s = p.wallSeconds ?? p.seconds
-  const short = !p.aborted && p.requestedSeconds > 0 && s < p.requestedSeconds * 0.9
-  return `${dec(s, 0)} s${short ? ` von ${dec(p.requestedSeconds, 0)} s (die Bridge zählte Frame-Zeiten statt Echtzeit; Bridge aktualisieren)` : ''}`
+  const short = !p.aborted && p.requestedSeconds > 0 && s < p.requestedSeconds * 0.95
+  if (!short) return `${dec(s, 0)} s`
+  const of = `${dec(s, 0)} s von ${dec(p.requestedSeconds, 0)} s`
+  const old = !bridgeVersion || versionOlder(bridgeVersion, REALTIME_PERF_SINCE)
+  return old
+    ? `${of} (die Bridge zählte Frame-Zeiten statt Echtzeit; Bridge aktualisieren)`
+    : `${of} (kürzer als angefragt)`
 }
+
+/** First bridge whose perf_record ends on real time. */
+const REALTIME_PERF_SINCE = '0.3.0'
 
 /** A frame far above the rest (≥ 4× p99 and over 100 ms) counts as an outlier. */
 export function hasOutlier(p: Pick<ModelPerf, 'worst' | 'p99'>): boolean {
@@ -267,7 +284,7 @@ export function perfTab($: EngineInterface, k: Kit, m: UnityModel, options: Opti
               err.code === 'outdated'
                 ? bridgeUpdateAction($, options)
                 : err.code === 'not-playing' && m.bridge.up && !m.bridge.isPlaying
-                  ? playActions($, m, options).find(a => a.key === 'play')
+                  ? playActions($, k, m, options).find(a => a.key === 'play')
                   : undefined,
             more: [
               {
@@ -313,12 +330,12 @@ export function perfTab($: EngineInterface, k: Kit, m: UnityModel, options: Opti
                       { key: 'perf-30', label: '30 s', variant: 'link', onPress: () => void measure($, options, 30) },
                     ]
                   : m.bridge.up
-                    ? playActions($, m, options).filter(a => a.key === 'play')
+                    ? playActions($, k, m, options).filter(a => a.key === 'play')
                     : [],
               ),
         ],
       })}
-      {runs[0] ? runCard($, k, options, runs[0].at, runs[0].perf) : null}
+      {runs[0] ? runCard($, k, options, runs[0].at, runs[0].perf, m.bridge.version ?? m.bridgeInstalled) : null}
       {runs.length > 1
         ? Card(k, {
             key: 'perf-history',

@@ -3,6 +3,7 @@ import type { EngineInterface, On } from 'claude-code'
 
 import { autoOpenFacts, decideAutoOpen } from '../lib/autoopen'
 import { createHost } from '../lib/host'
+import { askTurnComplete, askTurnStart } from '../lib/ui'
 import { isAbsolute, join, relative } from '../lib/path'
 import { formatMessage, isScriptFile, splitFilter, type ProjectConfig } from '../lib/unity'
 import { bashVerdictReason } from './bash'
@@ -22,6 +23,7 @@ import {
   markStopped,
   patchModel,
   readModel,
+  ensureLive,
   refreshModel,
   runTests,
   screenshot,
@@ -124,6 +126,9 @@ async function autoOpen($: EngineInterface, cwd: string, options: Options): Prom
   const host = await createHost($)
   const root = cwd || (await $.session.root())
   const facts = await autoOpenFacts(host.fs, root)
+  // panel and band follow the heartbeat from here on (also with the panel closed: the band shows the state); at a
+  // reload session.start fires again for this module, so the new copy starts its own watch here
+  if (facts.unityProject) ensureLive($, options)
   await patchModel($, { unityHere: facts.unityProject })
   if (options.autoOpen === false) return
   if (decideAutoOpen('unity', facts, { autoOpen: options.autoOpen })) await openPane($, options)
@@ -230,6 +235,18 @@ export function registerUnity(on: On, options: Options): void {
       $.ui.log(`unity: auto-open failed: ${String(err)}`)
     }
     return next(e)
+  })
+
+  // Kit „ask Claude“: a button's lock ends with the main loop's answer to *that* prompt (subagents skipped inside).
+  on('turn.start', async ($, e, next) => {
+    const r = await next(e)
+    await askTurnStart($, e).catch(() => undefined)
+    return r
+  })
+  on('turn.complete', async ($, e, next) => {
+    const r = await next(e)
+    await askTurnComplete($, e).catch(() => undefined)
+    return r
   })
 
   // --- Bash guards: verdicts only (tool.check), never tool.call/tool.run on Bash ---

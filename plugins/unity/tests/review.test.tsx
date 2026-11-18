@@ -320,7 +320,8 @@ test('Problem melden: capture + spot, kind and note, "Nur merken" lists it, send
   const shots = Object.keys(world.files).filter(p =>
     /\.claude\/unity-review\/report-\d{8}-\d{6}(-klein)?\.png$/.test(p),
   )
-  expect(shots).toHaveLength(2)
+  // one picture per report in the reports folder; the pane's small copy sits in the bridge's temp shots
+  expect(shots).toHaveLength(1)
   await settle(world, ui.press({ key: 'rv-kind-sieht-falsch-aus' }))
   await settle(world, ui.input({ key: 'rv-report-note', text: 'Baum schwebt', kind: 'change' } as never))
   await settle(world, ui.press({ key: 'rv-report-keep' }))
@@ -328,7 +329,11 @@ test('Problem melden: capture + spot, kind and note, "Nur merken" lists it, send
   expect(JSON.parse(saved.trim())).toMatchObject({ kind: 'Sieht falsch aus', note: 'Baum schwebt', sent: false })
   expect((await findShown(ui, /Sieht falsch aus: Baum schwebt/))?.text).toBeDefined()
   const id = (JSON.parse(saved.trim()) as { id: string }).id
-  await settle(world, ui.press({ key: `rv-rep-send-${id}` }))
+  // kit „ask Claude“: an impatient double press sends once (the second only toasts); a sent report loses its button
+  const before = world.prompts.length
+  await settle(world, Promise.all([ui.press({ key: `rv-rep-send-${id}` }), ui.press({ key: `rv-rep-send-${id}` })]))
+  expect(world.prompts).toHaveLength(before + 1)
+  expect(world.toasts).toContain('Schon an Claude geschickt – kommt mit der Antwort darauf.')
   expect(world.prompts.at(-1)).toContain('Problem gemeldet im Unity-Spiel: Sieht falsch aus.')
   expect(world.prompts.at(-1)).toContain('Notiz: Baum schwebt')
   expect(JSON.parse((world.files[`${ROOT}/.claude/unity-review/reports.jsonl`] ?? '').trim()).sent).toBe(true)
@@ -380,10 +385,10 @@ test('schmales Panel: Entscheidungs-Optionen ganz lesbar, keine „Entscheiden�
     expect(await subs()).toContain(k)
   await settle(world, ui.press({ key: 'rv-tab-decide' }))
   expect((await subs()).includes('rv-tab-look')).toBe(true) // menu closed again, strip keeps its order
-  // the option is a wrapping text beside a short letter button; the button's label is the whole option
-  expect((await findShown(ui, 'warmes Orange'))?.text).toBeDefined()
+  // the option is a wrapping text above a short button; the button carries no option text (runde 2, Befund 4)
+  expect((await findShown(ui, 'A: warmes Orange'))?.text).toBeDefined()
   const a = await ui.find({ type: 'Button', key: 'rv-choice-fackel-0' })
-  expect(a?.props.label).toBe('A · warmes Orange')
+  expect(a?.props.label).toBe('A wählen')
   const alts = (await ui.findAll({ type: 'Svg' })).map(s => String(s.props.alt ?? ''))
   expect(alts.includes('Entscheiden')).toBe(false)
   await ui.unmount()

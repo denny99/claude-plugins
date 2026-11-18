@@ -4,8 +4,8 @@ import type { EngineInterface, RenderElement } from 'claude-code'
 import type { ModelConsoleEntry, UnityModel, UnityTab } from '../../types'
 import { BRIDGE_VERSION } from '../../lib/bridge'
 import { batchAllowed } from '../../lib/unity'
-import { Card, CardTitle, CopyButton, Actions, Sentence, type Action, type Kit } from '../../lib/ui'
-import { batchTarget, cancelTests, patchModel, unlockBridgePackage, type Options } from '../state'
+import { askAction, askClaude, Card, CardTitle, CopyButton, Actions, Sentence, type Action, type Kit } from '../../lib/ui'
+import { batchTarget, bridgeOutdatedTitle, cancelTests, patchModel, unlockBridgePackage, type Options } from '../state'
 
 /** Elements the kit does not wrap. */
 export type Extra = {
@@ -35,9 +35,14 @@ export function fixPrompt(ask: string, detail: string): string {
   return `${ask}:\n\n${detail}`
 }
 
-/** Hands a problem to Claude as a prompt. */
-export async function fixWithClaude($: EngineInterface, ask: string, detail: string): Promise<void> {
-  await $.prompt.submit({ text: fixPrompt(ask, detail) })
+/** Hands a problem to Claude as a prompt (once per `key` until Claude answered it; kit „ask Claude“). */
+export async function fixWithClaude($: EngineInterface, ask: string, detail: string, key?: string): Promise<void> {
+  await askClaude($, { text: fixPrompt(ask, detail), key })
+}
+
+/** A „Claude reparieren lassen“ button: locked („✓ An Claude geschickt“) until Claude answered this prompt. */
+export function fixAction($: EngineInterface, k: Kit, key: string, ask: string, detail: string): Action {
+  return askAction($, k, { key, label: 'Claude reparieren lassen', icon: 'claude', text: fixPrompt(ask, detail) })
 }
 
 /** A button handler: marks the pane busy, toasts the first line of the result, keeps a thrown error in the model. */
@@ -67,6 +72,29 @@ export function msg(r: { ok: boolean; error?: string }, okText: string): string 
 /** German decimal: 8.14 → "8,1". */
 export function dec(n: number, digits = 1): string {
   return (Number.isFinite(n) ? n : 0).toFixed(digits).replace('.', ',')
+}
+
+/**
+ * Wall-clock length of a test run in seconds: finishedAt − startedAt (ms) when both are known, else the sum of the
+ * test durations (which leaves out setup, domain reloads and Play-mode entry, so it can say "0 s" for a 12 s run).
+ */
+export function runSeconds(t: {
+  startedAt?: number
+  finishedAt?: number
+  results: { duration?: number }[]
+}): number | undefined {
+  if (t.startedAt && t.finishedAt && t.finishedAt >= t.startedAt) return (t.finishedAt - t.startedAt) / 1000
+  const sum = t.results.reduce((s, r) => s + (r.duration ?? 0), 0)
+  return sum > 0 ? sum : undefined
+}
+
+/** "12 s", "1,4 s", "0,2 s", "2 min 5 s". */
+export function runLength(secs: number): string {
+  if (secs >= 60) {
+    const s = Math.round(secs)
+    return `${Math.floor(s / 60)} min${s % 60 ? ` ${s % 60} s` : ''}`
+  }
+  return secs >= 10 ? `${Math.round(secs)} s` : `${dec(secs, secs < 0.05 ? 2 : 1)} s`
 }
 
 /** German thousands: 1204 → "1.204". */
@@ -152,7 +180,7 @@ export function bridgeUpdateCard($: EngineInterface, k: Kit, m: UnityModel, opti
     children: [
       CardTitle(k, {
         icon: 'download',
-        title: `Bridge ${m.bridgeInstalled ?? 'zu alt'} — Plugin braucht ${BRIDGE_VERSION}`,
+        title: bridgeOutdatedTitle(m),
         tone: 'warn',
       }),
       Sentence(
@@ -168,12 +196,15 @@ export function bridgeUpdateCard($: EngineInterface, k: Kit, m: UnityModel, opti
   })
 }
 
-/** A running run's progress: "12 von 80 · 1:05" (count once the bridge reported the total, time once started). */
+/**
+ * A running run's progress: "12 von 80 · 1:05". The count only with a plausible total (> 0 and not below what is done;
+ * older bridges reported the whole suite, newer ones 0 when they cannot count), else "12 Tests fertig".
+ */
 export function testsProgress(t: NonNullable<UnityModel['tests']>, now: number): string {
   const done = t.results.length
   const parts: string[] = []
-  if (t.total) parts.push(`${Math.min(done, t.total)} von ${t.total}`)
-  else if (done) parts.push(`${done} fertig`)
+  if (t.total && t.total > 0 && t.total >= done) parts.push(`${done} von ${t.total}`)
+  else if (done) parts.push(`${done} ${done === 1 ? 'Test' : 'Tests'} fertig`)
   if (t.startedAt && now >= t.startedAt) {
     const s = Math.floor((now - t.startedAt) / 1000)
     parts.push(`${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`)
@@ -205,6 +236,61 @@ export function consoleOrigin(
   const pkg = /PackageCache\/([^@/]+)/.exec(path)?.[1] ?? /^(?:\.\/)?Packages\/([^/]+)/.exec(path)?.[1]
   const file = `${path.split('/').pop() ?? path}${line ? `:${line}` : ''}`
   return pkg ? { file, pkg } : { file }
+}
+
+/**
+ * The prompt of "An Claude geben" for console entries. Entries from our own code ask for a fix; entries from a package
+ * (HDRP, Input System …) say where they come from (package, file:line) and ask to judge whether our code triggers
+ * them, without changing the package — the panel itself says "nicht aus deinem Spiel-Code". A mixed choice gets two
+ * clearly separated parts.
+ */
+export function consolePrompt(groups: { entry: Pick<ModelConsoleEntry, 'type' | 'message' | 'stack'>; count: number }[]): string {
+  const text = (g: (typeof groups)[number]): string =>
+    `${g.count > 1 ? `[×${g.count}] ` : ''}${`${g.entry.message}\n${g.entry.stack ?? ''}`.trim()}`
+  const word = (gs: typeof groups): string =>
+    gs.every(g => g.entry.type === 'Warning')
+      ? gs.length === 1
+        ? 'Warnung'
+        : 'Warnungen'
+      : gs.some(g => g.entry.type === 'Warning')
+        ? 'Meldungen'
+        : 'Fehler'
+  const own = groups.filter(g => !consoleOrigin(g.entry)?.pkg)
+  const pkg = groups.filter(g => !!consoleOrigin(g.entry)?.pkg)
+  const parts: string[] = []
+  if (own.length)
+    parts.push(
+      fixPrompt(
+        own.length === 1 && !pkg.length
+          ? `${FIX_ASK.console} (${own[0]!.entry.type})`
+          : `${FIX_ASK.console} (${own.length} ${word(own)} aus unserem Code)`,
+        own
+          .map(g => {
+            const o = consoleOrigin(g.entry)
+            return `${o ? `Herkunft: ${o.file}\n` : ''}${text(g)}`
+          })
+          .join('\n\n'),
+      ),
+    )
+  if (pkg.length) {
+    const names = [...new Set(pkg.map(g => consoleOrigin(g.entry)!.pkg!))]
+    const w = word(pkg)
+    const one = pkg.length === 1
+    parts.push(
+      fixPrompt(
+        `${one ? w : `${pkg.length} ${w}`} aus ${names.length === 1 ? `Paket ${names[0]}` : `den Paketen ${names.join(', ')}`} ` +
+          `(nicht aus unserem Spiel-Code): ordne ein, ob unser Code ${one ? (w === 'Warnung' ? 'sie' : 'ihn') : 'sie'} auslöst. ` +
+          'Das Paket selbst nicht ändern – liegt die Ursache dort, sag mir das und was wir auf unserer Seite tun können',
+        pkg
+          .map(g => {
+            const o = consoleOrigin(g.entry)!
+            return `Herkunft: Paket ${o.pkg} · ${o.file}\n${text(g)}`
+          })
+          .join('\n\n'),
+      ),
+    )
+  }
+  return parts.join('\n\n---\n\n')
 }
 
 /** Same type and message collapsed into one entry (the latest), counted — like Unity's Collapse. */

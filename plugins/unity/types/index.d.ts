@@ -9,6 +9,23 @@ export type UiKitState = {
   logMore: string[]
 }
 
+/** One task sent to Claude (kit section „ask Claude“): queued until a turn carrying its probe starts, then running, then done. */
+export type AskedEntry = {
+  at: number
+  phase: 'queued' | 'running' | 'done'
+  /** Folded start of the prompt that finds it in a turn's text. */
+  probe?: string
+  /** The main-loop turn that carries it. */
+  turnId?: string
+}
+
+/** Prompts sent by kit buttons whose answer has not ended yet (lock against double presses). */
+export type AskedState = {
+  /** A main-loop turn is running (a new prompt waits in the queue). */
+  busy: boolean
+  sent: Record<string, AskedEntry>
+}
+
 export type ModelCompilerMessage = {
   severity: 'error' | 'warning'
   message: string
@@ -114,7 +131,7 @@ export type UnityModel = {
   configFound: boolean
   /** `.claude/unity.json` as parsed (lib/unity.ts ProjectConfig). */
   config: Record<string, unknown>
-  presets: { name: string; filter: string; source: 'config' | 'docs'; paths?: string[] }[]
+  presets: { name: string; filter: string; source: 'config' | 'docs'; note?: string; paths?: string[] }[]
   lock: 'free' | 'held' | 'stale'
   bridge: {
     up: boolean
@@ -140,6 +157,8 @@ export type UnityModel = {
   editorElsewhere?: { project: string; checkout: string; name: string; main: boolean; here: string; hereMain: boolean }
   /** Tests tab: "Alle Tests" chosen on purpose (no filter, no area). */
   testScope?: 'all'
+  /** Tests tab: the area chosen in "Bereich" (its normalized filter runs; the free-text field stays as typed). */
+  testArea?: string
   compile?: { seq: number; at: number; source: 'bridge' | 'log'; messages: ModelCompilerMessage[] }
   console: ModelConsoleEntry[]
   tests?: ModelTestRun
@@ -177,6 +196,8 @@ export type UnityModel = {
   perfRuns?: { at: number; perf: ModelPerf }[]
   /** Why the last recording failed (code from lib/play.ts PlayError). */
   perfError?: { code?: string; error: string }
+  /** A perf recording queued at the bridge: its result file, polled by the live watch until it lands or `deadline`. */
+  perfPending?: { resultFile: string; seconds: number; deadline: number }
   /** Console tab filter. */
   consoleFilter?: 'error' | 'warning' | 'all'
 }
@@ -200,6 +221,8 @@ export type ReviewViewState = {
   note: string
 }
 export type ReviewReportState = {
+  /** The report's time stamp (file names, note draft); absent on an error card. */
+  stamp?: string
   shot?: string
   preview?: string
   spot?: unknown
@@ -230,6 +253,11 @@ export type ReviewUiState = {
     playing?: string
     musicOpen: boolean
     error?: string
+    /** The one sound group shown unfolded (the others are a row each); unset = the first with new sounds. */
+    openGroup?: string
+    /** How many rows of the open group / of the music are shown (pages of 20, "weitere"). */
+    more?: number
+    musicMore?: number
   }
 }
 
@@ -239,6 +267,7 @@ declare module 'claude-code' {
       ui: ShapedState<UiKitState>
       model: ShapedState<UnityModel>
       review: ShapedState<ReviewUiState>
+      asked: ShapedState<AskedState>
     }
   }
 }

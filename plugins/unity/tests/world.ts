@@ -2,6 +2,8 @@
 import type { On } from 'claude-code'
 import { mock } from 'claude-code/testing'
 
+import { BRIDGE_VERSION } from '../lib/bridge'
+
 export const VERSION = 'm_EditorVersion: 6000.6.7f1\n'
 export const ROOT = '/g'
 export const PROJECT = '/g/unity'
@@ -18,7 +20,23 @@ export type World = {
   prompts: string[]
   /** Extra heartbeat fields (newer bridge fields, or overrides like isCompiling / scene). */
   statusExtra: Record<string, unknown>
-  bridge: { up: boolean; isPlaying: boolean; compileSeq: number; errors: boolean; nothingToCompile?: boolean }
+  bridge: {
+    up: boolean
+    isPlaying: boolean
+    compileSeq: number
+    errors: boolean
+    nothingToCompile?: boolean
+    /** screenshot / capture fail with this text (e.g. an old bridge's English Game-view error). */
+    shotError?: string
+    /** screenshot / capture answer with this path instead of the requested one (a stale picture). */
+    shotPath?: string
+    /** Captures wait in `held` until the test calls them (Unity slow in the background). */
+    holdCaptures?: boolean
+  }
+  /** Held capture answers (bridge.holdCaptures): call each to answer. */
+  held: (() => void)[]
+  /** Texts of $.ui.toast calls. */
+  toasts: string[]
   clock: { advance(ms: number): Promise<void> }
 }
 
@@ -56,6 +74,8 @@ export function fakeWorld(
     calls: [],
     argv: [],
     prompts: [],
+    held: [],
+    toasts: [],
     statusExtra: {},
     bridge: { up: opts.bridge ?? true, isPlaying: false, compileSeq: 3, errors: true },
     clock: mock.clock(on, { now: 1000 }),
@@ -69,6 +89,7 @@ export function fakeWorld(
       isPaused: false,
       compileSeq: world.bridge.compileSeq,
       scene: 'Assets/Scenes/Main.unity',
+      bridgeVersion: BRIDGE_VERSION, // the shipped bridge; an old one: statusExtra.bridgeVersion = undefined
       ...world.statusExtra,
     })
   const read = (p: string): string | undefined =>
@@ -142,9 +163,16 @@ export function fakeWorld(
           ],
         })
         done({ runId: 'r1' })
+      } else if ((cmd.cmd === 'screenshot' || cmd.cmd === 'capture') && world.bridge.shotError) {
+        fail(world.bridge.shotError, '')
       } else if (cmd.cmd === 'screenshot') {
         files[String(cmd.path)] = 'PNG!'
-        done({ path: cmd.path })
+        done({ path: world.bridge.shotPath ?? cmd.path })
+      } else if (cmd.cmd === 'capture' && world.bridge.holdCaptures) {
+        world.held.push(() => {
+          files[String(cmd.path)] = 'PNG!'
+          done({ path: cmd.path, playing: true, scene: 'Assets/Scenes/Main.unity', provider: false })
+        })
       } else if (cmd.cmd === 'capture') {
         files[String(cmd.path)] = 'PNG!'
         done({
@@ -247,7 +275,10 @@ export function fakeWorld(
     world.prompts.push(e.text)
     return { text: e.text } as never
   })
-  on('ui.toast', () => ({ value: undefined }))
+  on('ui.toast', (_, e) => {
+    world.toasts.push(String((e as { text?: unknown }).text ?? JSON.stringify(e)))
+    return { value: undefined }
+  })
   on('ui.status', () => ({ value: undefined }))
   on('ui.log', () => ({ value: undefined }))
   on('command.register', (_, e) => ({ value: { command: e.name } }))

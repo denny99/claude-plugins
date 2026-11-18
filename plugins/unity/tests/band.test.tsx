@@ -1,4 +1,4 @@
-// Band v3 (two fixed lines above the prompt). Same file in every plugin that carries the kit's launcher section.
+// Band v4 (two fixed lines above the prompt, both left-aligned). Same file in every plugin that carries the kit's launcher section.
 import { expect, test } from 'claude-code/testing'
 import type { RenderElement } from 'claude-code'
 import {
@@ -9,7 +9,9 @@ import {
   LauncherChip,
   LauncherRow,
   launchKey,
+  isTrailing,
   mergeLauncherRows,
+  showsStatus,
 } from '../lib/ui'
 
 type Node = { type?: unknown; props?: Record<string, unknown>; hover?: unknown; children?: Node[] }
@@ -30,7 +32,10 @@ const k = {
   cols: 80,
   t: { faint: 'inactive', tones: { ok: { fg: 'success' }, warn: { fg: 'warning' }, bad: { fg: 'error' }, info: { fg: 'suggestion' } } },
 } as never
-const fake$ = { ui: { resolve: () => ({ Box: 'Box', Text: 'Text' }) } } as never
+let redraws = 0
+const fake$ = {
+  ui: { resolve: () => ({ Box: 'Box', Text: 'Text', Button: 'Button', Svg: 'Svg' }), invalidate: () => void redraws++ },
+} as never
 const starter = (plugin: string, label: string, status?: string) => ({
   plugin,
   tree: LauncherRow(k, {
@@ -38,7 +43,7 @@ const starter = (plugin: string, label: string, status?: string) => ({
     chips: [LauncherChip(k, { key: `launch-${plugin}`, label, status, tone: status ? 'warn' : undefined, onPress: () => {} })],
   }) as RenderElement,
 })
-const meterLine = { type: 'Box', props: { key: launchKey('ds-usage-line'), justifyContent: 'flex-end' }, children: [] }
+const meterLine = { type: 'Box', props: { key: launchKey('ds-usage-line'), justifyContent: 'flex-start' }, children: [] }
 const usage = { plugin: 'ds-usage-line', tree: meterLine as never }
 // core's answer to next(e): one row alone is its tree, several a column
 const next = async (e: { props: { rows: readonly { tree: RenderElement }[] } }) =>
@@ -63,7 +68,8 @@ test('four starters with status and the usage row make exactly two lines, none w
   expect(line1?.props?.key).toBe('launch-strip')
   expect(line1?.props?.flexWrap).toBe('nowrap')
   expect(rule?.props?.key).toBe('launch-rule')
-  expect(line2).toBe(meterLine)
+  expect(line2?.props?.key).toBe('launch-meters')
+  expect(line2?.children?.[0]).toBe(meterLine)
   expect(walk(out).filter(n => n.props?.flexWrap === 'wrap' || n.props?.wrap === 'wrap')).toEqual([])
   // starters in their order on line 1
   expect(line1?.children?.map(c => c.props?.key)).toEqual([
@@ -75,6 +81,15 @@ test('four starters with status and the usage row make exactly two lines, none w
   // the merger's boxes hold other plugins' rows: flex props only (the engine refuses minWidth/overflow there)
   expect(Object.keys(line1?.props ?? {}).sort()).toEqual(['alignItems', 'columnGap', 'flexDirection', 'flexWrap', 'key'])
   expect(Object.keys(out.props ?? {}).sort()).toEqual(['flexDirection', 'key'])
+  expect(Object.keys(line2?.props ?? {}).sort()).toEqual(['alignItems', 'flexDirection', 'key'])
+  // line 2 stands left: the column sizes the meter row to its content
+  expect(line2?.props?.alignItems).toBe('flex-start')
+  // the rule: a hairline Svg with inner margin, no Text that could end in "…"
+  expect(rule?.props?.paddingX).toBe('sm')
+  expect(walk(rule).map(n => n.type)).toEqual(['Box', 'Svg'])
+  expect(walk(out).some(n => (n.children ?? []).some(c => typeof c === 'string' && c.includes('…')))).toBe(false)
+  // even gaps on line 1: between rows the same as inside a row
+  expect(line1?.props?.columnGap).toBe((line1?.children?.[0]?.props as { gap?: unknown }).gap)
   // every starter root shrinks and clips by itself; a status is cut with "…"
   for (const row of line1?.children ?? []) expect(row.props).toMatchObject(LAUNCH_ROW)
   const status = walk(out).find(n => n.children?.includes('· Gerät fehlt' as never))
@@ -90,9 +105,9 @@ test('a long status does not change line 2; what does not fit moves into "+N"', 
     starter('ds-ct', 'CT'),
     usage,
   ])
-  expect(long.children?.[2]).toBe(short.children?.[2])
-  expect(long.children?.[2]).toBe(meterLine)
-  // narrow: statuses cut first; then the last starters go into "+N" and its hover names them
+  expect(long.children?.[2]?.children?.[0]).toBe(short.children?.[2]?.children?.[0])
+  expect(long.children?.[2]?.children?.[0]).toBe(meterLine)
+  // narrow: statuses cut first; then the last starters go behind a plain "+N" button
   const rows = [
     starter('dnd-studio', 'D&D', 'Tisch läuft'),
     starter('ds-solutions-flow', 'Solutions'),
@@ -108,11 +123,49 @@ test('a long status does not change line 2; what does not fit moves into "+N"', 
   const line1 = narrow.children?.[0]
   const more = line1?.children?.at(-1)
   expect(more?.props?.key).toBe('launch-more')
-  expect(walk(more).some(n => String(n.children?.[0] ?? '').includes('Kommunikation'))).toBe(true)
-  expect(narrow.children?.[2]).toBe(meterLine)
+  // "+N" is a plain button, no popup in the band (Denny, #42): no hover, no absolute card, no hidden names
+  expect(more?.type).toBe('Button')
+  expect(more?.props?.label).toBe(`+${hidden.length}`)
+  expect(walk(more).some(n => n.hover !== undefined || n.props?.hover !== undefined)).toBe(false)
+  expect(walk(more).some(n => n.props?.position === 'absolute' || n.props?.display === 'none')).toBe(false)
+  expect(walk(more).some(n => String(n.children?.[0] ?? '').includes('Kommunikation'))).toBe(false)
+  expect(narrow.children?.[2]?.children?.[0]).toBe(meterLine)
 })
 
-test('a v2 row next to a v3 merger is drawn on line 1 as it comes; a newer row hands the merge on', async () => {
+test('a calm status shows no text: only warn/bad, or ok/info when something really runs', () => {
+  const chip = (status?: string, tone?: 'ok' | 'warn' | 'bad' | 'info' | 'neutral') =>
+    walk(LauncherChip(k, { key: 'c', label: 'Unity', status, tone, onPress: () => {} }) as never)
+  const texts = (nodes: Node[]) => nodes.flatMap(n => (n.children ?? []).filter(c => typeof c === 'string'))
+  expect(texts(chip('Editor bereit', 'neutral'))).toEqual(['Unity'])
+  expect(texts(chip('verbunden'))).toEqual(['Unity'])
+  expect(texts(chip('Tests laufen', 'ok'))).toEqual(['Unity', '· Tests laufen'])
+  expect(texts(chip('Gerät fehlt', 'warn'))).toEqual(['Unity', '· Gerät fehlt'])
+  expect(showsStatus({ status: 'läuft nicht', tone: 'neutral' })).toBe(false)
+  expect(showsStatus({ status: 'Start fehlgeschlagen', tone: 'bad' })).toBe(true)
+  // the status sits close to its starter
+  expect(chip('Gerät fehlt', 'warn')[0]?.props?.gap).toBe('xs')
+})
+
+test('the meter line is found by its key, any version, not by its alignment', () => {
+  const row = (key: string, justifyContent?: string) => ({ plugin: 'x', tree: { type: 'Box', props: { key, justifyContent } } as never })
+  expect(isTrailing(row('launch:ds-usage-line@4', 'flex-start'))).toBe(true)
+  expect(isTrailing(row('launch:ds-usage-line@3', 'flex-end'))).toBe(true)
+  expect(isTrailing(row('launch:ds-usage-line@2', 'flex-end'))).toBe(true)
+  expect(isTrailing(row('launch:dnd-studio@4', 'flex-end'))).toBe(false)
+})
+
+test('a v3 usage row and a v3 starter next to a v4 merger: line 2 and line 1, kept left', async () => {
+  const v3usage = { plugin: 'ds-usage-line', tree: { type: 'Box', props: { key: 'launch:ds-usage-line@3', justifyContent: 'flex-end' } } as never }
+  const v3 = { plugin: 'unity', tree: { type: 'Box', props: { key: 'launch:unity@3', flexDirection: 'row' }, children: [] } as never }
+  const out = await merge([v3, starter('ds-flutter', 'Flutter'), v3usage])
+  const [line1, rule, line2] = out.children ?? []
+  expect(line1?.children?.map(c => c.props?.key)).toEqual(['launch:unity@3', `launch:ds-flutter@${BAND_VERSION}`])
+  expect(rule?.props?.key).toBe('launch-rule')
+  expect(line2?.props).toMatchObject({ key: 'launch-meters', alignItems: 'flex-start' })
+  expect(line2?.children?.[0]).toBe(v3usage.tree)
+})
+
+test('a v2 row next to a v4 merger is drawn on line 1 as it comes; a newer row hands the merge on', async () => {
   const v2 = { plugin: 'ds-ct', tree: { type: 'Box', props: { key: 'launch:ds-ct@2', flexDirection: 'row' }, children: [] } as never }
   const v2usage = { plugin: 'ds-usage-line', tree: { type: 'Box', props: { key: 'launch:ds-usage-line@2', justifyContent: 'flex-end' } } as never }
   expect(bandVersion(v2)).toBe(2)
@@ -121,7 +174,7 @@ test('a v2 row next to a v3 merger is drawn on line 1 as it comes; a newer row h
   expect(line1?.children?.map(c => c.props?.key)).toEqual([`launch:ds-flutter@${BAND_VERSION}`, 'launch:ds-ct@2'])
   expect(line1?.children?.[1]).toBe(v2.tree)
   expect(rule?.props?.key).toBe('launch-rule')
-  expect(line2).toBe(v2usage.tree)
+  expect(line2?.children?.[0]).toBe(v2usage.tree)
   // a row keyed for a newer band: passes untouched; keys without a version count as 1
   const newer = { plugin: 'x', tree: { type: 'Box', props: { key: `launch:x@${BAND_VERSION + 1}` } } as never }
   const old = { plugin: 'y', tree: { type: 'Box', props: { key: 'launch:y' } } as never }
@@ -133,4 +186,50 @@ test('a v2 row next to a v3 merger is drawn on line 1 as it comes; a newer row h
     return null
   }) as never)
   expect(handed).toBe(rows)
+})
+
+test('"+N" turns line 1 to the hidden starters, "‹" turns back; two lines stay, line 2 does not move', async () => {
+  const press = (n: Node | undefined) => ((n as { onPress?: () => void } | undefined)?.onPress as () => void)()
+  const rows = [
+    starter('dnd-studio', 'D&D', 'Tisch läuft'),
+    starter('ds-solutions-flow', 'Solutions'),
+    starter('ds-flutter', 'Flutter', 'Gerät fehlt'),
+    starter('ds-communication', 'Kommunikation', 'Call 15:30'),
+  ]
+  const keys = (n: Node | undefined) => n?.children?.map(c => c.props?.key)
+  const first = await merge([...rows, usage], 40)
+  const line1 = first.children?.[0]
+  const visible = keys(line1)!.filter(k => String(k).startsWith('launch:'))
+  const more = line1?.children?.at(-1)
+  expect(more?.type).toBe('Button')
+  expect(more?.props?.key).toBe('launch-more')
+  expect(line1?.children?.[0]?.props?.key).not.toBe('launch-back')
+  expect(Number(String(more?.props?.label).slice(1))).toBe(4 - visible.length)
+
+  // +N: the hidden ones, with "‹" in front, nothing of page 1; still two lines, line 2 unchanged
+  const before = redraws
+  press(more)
+  expect(redraws).toBe(before + 1)
+  const second = await merge([...rows, usage], 40)
+  expect(second.children).toHaveLength(3)
+  const page2 = second.children?.[0]
+  expect(page2?.children?.[0]?.props?.key).toBe('launch-back')
+  expect(page2?.children?.[0]?.props?.label).toBe('‹')
+  const shown2 = keys(page2)!.filter(k => String(k).startsWith('launch:'))
+  expect(shown2.length).toBeGreaterThan(0)
+  for (const k of shown2) expect(visible).not.toContain(k)
+  expect(page2?.props?.flexWrap).toBe('nowrap')
+  expect(second.children?.[2]?.children?.[0]).toBe(meterLine)
+  expect(walk(second).filter(x => x.hover !== undefined || x.props?.hover !== undefined)).toEqual([])
+
+  // ‹: back to page 1
+  press(page2?.children?.[0])
+  const third = await merge([...rows, usage], 40)
+  expect(keys(third.children?.[0])).toEqual(keys(line1))
+
+  // turned again, then all fit: back to page 1 for the next overflow
+  press((await merge([...rows, usage], 40)).children?.[0]?.children?.at(-1))
+  const wide = await merge([...rows, usage], 200)
+  expect(keys(wide.children?.[0])?.filter(k => String(k).startsWith('launch-'))).toEqual([])
+  expect(keys((await merge([...rows, usage], 40)).children?.[0])).toEqual(keys(line1))
 })

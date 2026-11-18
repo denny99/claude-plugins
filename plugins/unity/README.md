@@ -61,7 +61,8 @@ package (the **bridge**, in `bridge/com.denny99.claude-bridge`).
    `claude plugin install unity@denny99`.
 2. Install the bridge in the Unity project: Package Manager → _Add package from git URL_ →
    `https://github.com/denny99/claude-plugins.git?path=/plugins/unity/bridge/com.denny99.claude-bridge`
-   (details in the bridge's README).
+   (details in the bridge's README). The panel's „Paket-Adresse kopieren“ pins the tag `unity-bridge-v0.3.0`; the
+   pane warns when the installed bridge is older (or names no version in its heartbeat).
 3. Optional: `/unity-init` drafts a `.claude/unity.json` for the project from its docs; review it and let Claude write it.
 
 ## Project config `.claude/unity.json`

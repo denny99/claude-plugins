@@ -9,7 +9,10 @@ import { loadSounds, reviewBadge, reviewTab } from './review/tab'
 import { readReview } from './review/store'
 import {
   bridgeOutdated,
+  bridgeOutdatedPill,
+  editorActivity,
   editorBusyWithTests,
+  ensureLive,
   patchModel,
   readModel,
   refreshLandings,
@@ -17,7 +20,7 @@ import {
   testsRunning,
   type Options,
 } from './state'
-import { BRIDGE_GIT_URL, BRIDGE_README, fixWithClaude, run, selectTab, type Extra } from './pane/common'
+import { BRIDGE_GIT_URL, BRIDGE_README, fixWithClaude, run, type Extra } from './pane/common'
 import { consoleTab } from './pane/console'
 import { overviewTab } from './pane/overview'
 import { perfTab } from './pane/perf'
@@ -33,6 +36,7 @@ export const PANE_TITLE = 'UNITY'
 export async function openPane($: EngineInterface, options: Options): Promise<void> {
   await $.ui.open({ id: PANE_ID, title: PANE_TITLE })
   $.clock.after(0, () => void refreshModel($, options).then(() => refreshLandings($, options)))
+  ensureLive($, options)
 }
 
 /** The one status pill of the header (exported for tests). */
@@ -44,11 +48,13 @@ export function statusPill(m: UnityModel): PillProps {
   if (!b.up && m.editorElsewhere)
     return { text: `Editor in ${m.editorElsewhere.main ? 'Haupt-Checkout' : m.editorElsewhere.name}`, tone: 'warn' }
   if (!b.up) return { text: b.why === 'stale' ? 'antwortet nicht' : 'nicht verbunden', tone: 'bad' }
-  // Entering Play reloads the domain (isCompiling for a moment); the heartbeat's isPlaying wins.
-  if (b.isCompiling && !b.isPlaying) return { text: 'kompiliert', tone: 'warn', glyph: '◷' }
-  if (testsRunning(m)) return { text: 'Tests laufen', tone: 'warn', glyph: '◷' }
-  if (b.isPlaying) return { text: b.isPaused ? 'pausiert' : 'Play-Modus', tone: 'info', icon: 'play' }
-  if (bridgeOutdated(m)) return { text: `Bridge ${m.bridgeInstalled} veraltet`, tone: 'warn' }
+  // the same activity the band chip reads (features/launcher.tsx), so the two never disagree
+  const act = editorActivity(m)
+  if (act === 'tests') return { text: 'Tests laufen', tone: 'warn', glyph: '◷' }
+  if (act === 'compiling') return { text: 'kompiliert', tone: 'warn', glyph: '◷' }
+  if (act === 'playing' || act === 'paused')
+    return { text: act === 'paused' ? 'pausiert' : 'Play-Modus', tone: 'info', icon: 'play' }
+  if (bridgeOutdated(m)) return { text: bridgeOutdatedPill(m), tone: 'warn' }
   return { text: 'Editor bereit', tone: 'ok' }
 }
 
@@ -57,6 +63,8 @@ export async function renderPane($: EngineInterface, e: RenderInput<'Pane'>, opt
   const { Box } = k
   const x = $.ui.resolve(e) as unknown as Extra
   const m = await readModel($)
+  // after a hot reload the pane may draw before anything restarted the watch (timer only, no state write)
+  if (m.project) ensureLive($, options)
   const refresh = run($, 'refresh', async () => {
     await refreshModel($, options)
     // The sound board is loaded on demand; once loaded, Aktualisieren fetches it again (also out of an error).
@@ -71,10 +79,8 @@ export async function renderPane($: EngineInterface, e: RenderInput<'Pane'>, opt
     title: m.project?.name ?? 'Unity',
     pill: statusPill(m),
     actions: [
+      // "Ziel" is a main tab only (no header knob): in a narrow pane the tab sits behind "Mehr", still one press away.
       { key: 'refresh', icon: 'refresh', label: 'Aktualisieren', onPress: refresh },
-      ...(m.phase === 'ok'
-        ? [{ key: 'settings', icon: 'gear' as const, label: 'Ziel', onPress: selectTab($, 'target') }]
-        : []),
     ],
   })
   if (m.phase === 'unknown')

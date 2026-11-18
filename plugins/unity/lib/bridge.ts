@@ -18,6 +18,7 @@
  */
 import type { Host, HostFs } from './host'
 import { join } from './path'
+import { germanBridgeError } from './messages'
 import { parseBridgeTests, type CompilerMessage, type TestRun } from './unity'
 
 export const STALE_MS = 10000
@@ -42,7 +43,7 @@ export interface BridgeStatus {
 }
 
 /** The bridge version this plugin ships (bridge/com.denny99.claude-bridge/package.json; a test keeps them equal). */
-export const BRIDGE_VERSION = '0.2.0'
+export const BRIDGE_VERSION = '0.3.0'
 
 /** `a` is an older version than `b` (numeric x.y.z compare; anything unparsable counts as not older). */
 export function versionOlder(a: string, b: string): boolean {
@@ -191,6 +192,8 @@ export type BridgeResult = { ok: true; data: Record<string, unknown> } | { ok: f
 
 let counter = 0
 
+export { germanBridgeError, SHOT_WAY } from './messages'
+
 /** Sleeps on the host clock (no setTimeout in a mod). */
 export function sleep(host: Pick<Host, 'after'>, ms: number): Promise<void> {
   return new Promise<void>(resolve => {
@@ -208,6 +211,27 @@ export async function sendCommand(
   command: BridgeCommand,
   timeoutMs = 10000,
 ): Promise<BridgeResult> {
+  const queued = await queueCommand(host, project, command)
+  if ('ok' in queued) return queued
+  const deadline = queued.at + timeoutMs
+  for (;;) {
+    const res = await readResult(host.fs, queued.resultFile)
+    if (res) return res
+    if ((await host.now()) >= deadline)
+      return { ok: false, code: 'timeout', error: `Der Editor hat nicht innerhalb von ${Math.round(timeoutMs / 1000)} s geantwortet` }
+    await sleep(host, 200)
+  }
+}
+
+/**
+ * Queues one command without waiting: returns where its result will land (for callers that poll it on their own
+ * clock, like the perf recording), or the failure to queue it.
+ */
+export async function queueCommand(
+  host: Pick<Host, 'fs' | 'now'>,
+  project: string,
+  command: BridgeCommand,
+): Promise<{ resultFile: string; at: number } | (BridgeResult & { ok: false })> {
   const now = await host.now()
   const id = `${now}-${++counter}`
   const dir = bridgeDir(project)
@@ -216,17 +240,14 @@ export async function sendCommand(
   } catch (e) {
     return { ok: false, error: `could not queue the command: ${e instanceof Error ? e.message : String(e)}` }
   }
-  const resultFile = join(dir, `result-${id}.json`)
-  const deadline = now + timeoutMs
-  for (;;) {
-    const raw = await readJson(host.fs, resultFile)
-    if (raw) {
-      if (raw.ok === true) return { ok: true, data: raw }
-      const code = typeof raw.code === 'string' && raw.code ? { code: raw.code } : {}
-      return { ok: false, error: String(raw.error ?? 'the bridge reported a failure'), ...code }
-    }
-    if ((await host.now()) >= deadline)
-      return { ok: false, code: 'timeout', error: `Der Editor hat nicht innerhalb von ${Math.round(timeoutMs / 1000)} s geantwortet` }
-    await sleep(host, 200)
-  }
+  return { resultFile: join(dir, `result-${id}.json`), at: now }
+}
+
+/** The result of a queued command, or undefined while the editor has not answered yet. */
+export async function readResult(fs: Pick<HostFs, 'read' | 'exists'>, resultFile: string): Promise<BridgeResult | undefined> {
+  const raw = await readJson(fs, resultFile)
+  if (!raw) return undefined
+  if (raw.ok === true) return { ok: true, data: raw }
+  const code = typeof raw.code === 'string' && raw.code ? { code: raw.code } : {}
+  return { ok: false, error: germanBridgeError(String(raw.error ?? 'Der Editor meldet einen Fehler ohne Text.')), ...code }
 }

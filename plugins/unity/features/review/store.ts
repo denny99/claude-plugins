@@ -250,7 +250,8 @@ export async function captureTo(
   path: string,
   size?: { width: number; height: number },
 ): Promise<play.CaptureResult | play.PlayError> {
-  return play.capture(playSend($, options), { path, ...size })
+  const askedAt = await (await createHost($)).now()
+  return play.capture(playSend($, options), { path, ...size, askedAt })
 }
 
 /** base64 of a file, undefined when unreadable. */

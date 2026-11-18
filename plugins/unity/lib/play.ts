@@ -7,7 +7,7 @@
  * What the data means comes from the project: a spot is whatever its IClaudeSpotProvider writes (free-form JSON), sound
  * ids and mix groups are its IClaudeSoundBoard's. Without a provider the bridge answers `code: 'no-provider'`.
  */
-import { BRIDGE_VERSION, type BridgeCommand, type BridgeResult } from './bridge'
+import { BRIDGE_VERSION, SHOT_WAY, type BridgeCommand, type BridgeResult } from './bridge'
 
 export type Send = (command: BridgeCommand, timeoutMs: number) => Promise<BridgeResult>
 
@@ -185,14 +185,34 @@ export function parsePerf(d: Record<string, unknown>): PerfResult | undefined {
   }
 }
 
+/** A board text for the panel: no control characters (a Pane drops its whole tree over one), one line, capped. */
+export function boardText(v: unknown, max = 120): string | undefined {
+  if (typeof v !== 'string') return undefined
+  // eslint-disable-next-line no-control-regex
+  const t = v.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim()
+  if (!t) return undefined
+  return [...t].length > max ? `${[...t].slice(0, max - 1).join('')}…` : t
+}
+
+/** The board's sounds, cleaned (see `boardText`) and with each id once: ids become keys in the pane. */
 export function parseSounds(d: Record<string, unknown>): SoundInfo[] {
+  const seen = new Set<string>()
   return (Array.isArray(d.sounds) ? d.sounds : []).flatMap(s => {
     const o = obj(s)
+    // ids are sent back to the bridge as they came: only refuse ones a pane key or a command could not carry
     const id = o && str(o.id)
-    if (!o || !id) return []
-    const group = str(o.group)
+    // eslint-disable-next-line no-control-regex
+    if (!o || !id || id.length > 200 || /[\x00-\x1f\x7f]/.test(id) || seen.has(id)) return []
+    seen.add(id)
+    const group = boardText(o.group, 60)
     return [
-      { id, name: str(o.name) ?? id, ...(group ? { group } : {}), duration: num(o.duration), takes: num(o.takes, 1) },
+      {
+        id,
+        name: boardText(o.name) ?? boardText(id) ?? id,
+        ...(group ? { group } : {}),
+        duration: num(o.duration),
+        takes: num(o.takes, 1),
+      },
     ]
   })
 }
@@ -200,8 +220,10 @@ export function parseSounds(d: Record<string, unknown>): SoundInfo[] {
 export function parseMix(d: Record<string, unknown>): MixGroup[] {
   return (Array.isArray(d.groups) ? d.groups : []).flatMap(g => {
     const o = obj(g)
+    // the name goes back to the bridge in mix_set as it came; one a pane key could not carry is left out
     const group = o && str(o.group)
-    return o && group ? [{ group, db: num(o.db) }] : []
+    // eslint-disable-next-line no-control-regex
+    return o && group && group.length <= 200 && !/[\x00-\x1f\x7f]/.test(group) ? [{ group, db: num(o.db) }] : []
   })
 }
 
@@ -217,12 +239,30 @@ export function perfTimeoutMs(seconds: number): number {
 
 export async function capture(
   send: Send,
-  opts: { path?: string; width?: number; height?: number } = {},
+  opts: { path?: string; width?: number; height?: number; askedAt?: number } = {},
 ): Promise<CaptureResult | PlayError> {
-  const res = await send({ cmd: 'capture', ...opts }, CAPTURE_TIMEOUT_MS)
+  const { askedAt, ...cmd } = opts
+  const res = await send({ cmd: 'capture', ...cmd }, CAPTURE_TIMEOUT_MS)
   if (!res.ok) return playError(res, 'die Ansicht aufnehmen')
   const out = parseCapture(res.data)
-  return out.path ? out : { error: 'Der Editor hat aufgenommen, aber keinen Bildpfad gemeldet.' }
+  if (!out.path) return { error: 'Der Editor hat aufgenommen, aber keinen Bildpfad gemeldet.' }
+  const stale = staleShot(res.data, cmd.path ?? out.path, askedAt ?? 0)
+  return stale ? { code: 'stale', error: stale } : out
+}
+
+/**
+ * A picture that is not the one just asked for: another path than the fresh one sent, or (bridge 0.3.1+, `takenAt`)
+ * taken before the request. Such a picture must not pass as new (live: an old picture came back while Unity was in
+ * the background). `askedAt` 0 skips the time check.
+ */
+export function staleShot(data: Record<string, unknown>, asked: string, askedAt: number): string | undefined {
+  const norm = (x: string): string => x.replace(/\\/g, '/').toLowerCase()
+  const got = typeof data.path === 'string' ? data.path : ''
+  if (got && norm(got) !== norm(asked)) return `Unity hat ein anderes Bild geliefert als angefragt (${got}). ${SHOT_WAY}`
+  // the bridge's clock is the same machine's; 2 s slack for file times
+  if (askedAt > 0 && typeof data.takenAt === 'number' && data.takenAt > 0 && data.takenAt < askedAt - 2000)
+    return `Unity hat ein altes Bild geliefert (aufgenommen vor der Anfrage). ${SHOT_WAY}`
+  return undefined
 }
 
 /** Jumps to a spot from an earlier capture (object or its JSON text). Answers with the spot reached, if any. */

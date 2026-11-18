@@ -6,12 +6,14 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 
-import type { ModelJob, UnityModel } from '../types'
+import type { ModelJob, ModelPerf, UnityModel } from '../types'
 import {
   BRIDGE_VERSION,
   readCompile,
   readConsole,
   readStatus,
+  queueCommand,
+  readResult,
   readTests,
   sendCommand,
   sleep,
@@ -310,14 +312,51 @@ async function findEditorElsewhere(
   return undefined
 }
 
-/** The installed bridge is older than the one this plugin ships (unknown version: not outdated). */
-export function bridgeOutdated(m: Pick<UnityModel, 'bridgeInstalled'>): boolean {
+/**
+ * The installed bridge is older than the one this plugin ships. A running bridge without `bridgeVersion` in its
+ * heartbeat is from before it reported one, so it is old too; with the editor closed an unknown version is not.
+ */
+export function bridgeOutdated(m: Pick<UnityModel, 'bridgeInstalled'> & { bridge?: UnityModel['bridge'] }): boolean {
+  if (m.bridge?.up && !m.bridge.version) return true
   return !!m.bridgeInstalled && versionOlder(m.bridgeInstalled, BRIDGE_VERSION)
+}
+
+/**
+ * How the panel names an outdated bridge: "Bridge 0.1.0 — Plugin braucht 0.3.0", or "Bridge älter als 0.3.0" when no
+ * older version is known (heartbeat without `bridgeVersion`).
+ */
+export function bridgeOutdatedTitle(m: Pick<UnityModel, 'bridgeInstalled'>): string {
+  return m.bridgeInstalled && versionOlder(m.bridgeInstalled, BRIDGE_VERSION)
+    ? `Bridge ${m.bridgeInstalled} — Plugin braucht ${BRIDGE_VERSION}`
+    : `Bridge älter als ${BRIDGE_VERSION} — bitte aktualisieren`
+}
+
+/** The header pill of an outdated bridge: "Bridge 0.1.0 veraltet", or "Bridge veraltet" without a known version. */
+export function bridgeOutdatedPill(m: Pick<UnityModel, 'bridgeInstalled'>): string {
+  return m.bridgeInstalled && versionOlder(m.bridgeInstalled, BRIDGE_VERSION)
+    ? `Bridge ${m.bridgeInstalled} veraltet`
+    : 'Bridge veraltet'
 }
 
 /** A test run goes (editor run or batch job). */
 export function testsRunning(m: Pick<UnityModel, 'tests' | 'jobs'>): boolean {
   return m.tests?.state === 'running' || m.jobs.some(j => j.kind === 'tests' && j.status === 'running')
+}
+
+/** What the editor is doing, from the heartbeat in the model; panel pill and band chip both read this one answer. */
+export type EditorActivity = 'down' | 'tests' | 'compiling' | 'paused' | 'playing' | 'ready'
+
+/**
+ * The editor's activity, most telling first: down, a test run (also a batch job), compiling, Play (paused), ready.
+ * Entering Play reloads the domain (isCompiling for a moment); the heartbeat's isPlaying wins over isCompiling.
+ */
+export function editorActivity(m: Pick<UnityModel, 'tests' | 'jobs' | 'bridge'>): EditorActivity {
+  const b = m.bridge
+  if (!b.up) return 'down'
+  if (testsRunning(m)) return 'tests'
+  if (b.isCompiling && !b.isPlaying) return 'compiling'
+  if (b.isPlaying) return b.isPaused ? 'paused' : 'playing'
+  return 'ready'
 }
 
 /** The heartbeat is a little stale because the editor runs tests (its main thread is blocked). */
@@ -388,6 +427,16 @@ export async function bridgeCommand(
   command: BridgeCommand,
   timeoutMs = 10000,
 ): Promise<BridgeResult> {
+  const ready = await bridgeReady($, options)
+  if ('ok' in ready) return ready
+  const host = await createHost($)
+  const res = await sendCommand(host, ready.root, command, timeoutMs)
+  await refreshModel($, options)
+  return res
+}
+
+/** Refreshes and checks the bridge can take a command: the project root, or the failure in the panel's words. */
+async function bridgeReady($: EngineInterface, options: Options): Promise<{ root: string } | (BridgeResult & { ok: false })> {
   const m = await refreshModel($, options)
   if (!m.project)
     return {
@@ -411,10 +460,139 @@ export async function bridgeCommand(
               ? `Der Editor läuft für ${m.editorElsewhere.name}, nicht für diesen Checkout (${m.editorElsewhere.here}).`
               : 'Claude ist nicht mit dem Unity-Editor verbunden. Öffne das Projekt in Unity mit dem Paket Claude Bridge (/unity zeigt, wie).',
           }
+  return { root: m.project.root }
+}
+
+/**
+ * Queues a perf recording and returns at once; the live watch ({@link ensureLive}) picks up the result file on its
+ * own short ticks and patches the model, so the result is drawn without anyone pressing "Aktualisieren". (One long
+ * wait inside a single timer callback did not redraw on its own live.)
+ */
+export async function queuePerf(
+  $: EngineInterface,
+  options: Options,
+  seconds: number,
+): Promise<BridgeResult | { queued: true }> {
+  const s = Math.min(play.PERF_MAX_SECONDS, Math.max(0.5, Number.isFinite(seconds) ? seconds : 5))
+  const ready = await bridgeReady($, options)
+  if ('ok' in ready) return ready
   const host = await createHost($)
-  const res = await sendCommand(host, m.project.root, command, timeoutMs)
-  await refreshModel($, options)
-  return res
+  const q = await queueCommand(host, ready.root, { cmd: 'perf_record', seconds: s })
+  if ('ok' in q) return q
+  await patchModel($, { perfPending: { resultFile: q.resultFile, seconds: s, deadline: q.at + play.perfTimeoutMs(s) } })
+  ensureLive($, options)
+  return { queued: true }
+}
+
+// --- live watch: the heartbeat on a short clock, so panel and band follow the editor at once ---
+
+/** How often the live watch reads status.json (and a pending perf result). */
+export const LIVE_MS = 1000
+let live: { cancel(): void } | undefined
+let liveRunning = false
+let liveTicks = 0
+
+/**
+ * Starts the live watch once per loaded copy: every {@link LIVE_MS} it reads the heartbeat and, when a state the
+ * panel or band shows changed (up/down, Play, pause, compiling, compile seq), runs one refresh, whose atom patch
+ * redraws both from the same model. With a test run going it refreshes every 2 s (progress); with the editor down it
+ * looks every 3 s. A pending perf result is fetched on the same ticks. Stops in a folder without a Unity project.
+ */
+export function ensureLive($: EngineInterface, options: Options): void {
+  if (live) return
+  // Also called while the band or the pane draws (after a hot reload the new copy has no watch until something
+  // starts it): starting a timer writes no state, but should the engine refuse it there, the next caller retries.
+  try {
+    live = $.clock.every(LIVE_MS, () => void liveTick($, options))
+  } catch {
+    live = undefined
+  }
+}
+
+/** Whether the live watch of this loaded copy runs (tests). */
+export function liveOn(): boolean {
+  return !!live
+}
+
+/** Stops the live watch (tests). */
+export function stopLive(): void {
+  live?.cancel()
+  live = undefined
+}
+
+/** What the panel and band show from a heartbeat, as one comparable string. */
+export function liveSignature(b: UnityModel['bridge']): string {
+  if (!b.up) return `down:${b.why ?? ''}`
+  return `up:${b.isPlaying ? 1 : 0}${b.isPaused ? 1 : 0}${b.isCompiling ? 1 : 0}:${b.compileSeq ?? ''}:${b.version ?? ''}`
+}
+
+export async function liveTick($: EngineInterface, options: Options): Promise<void> {
+  if (liveRunning) return
+  liveRunning = true
+  liveTicks++
+  try {
+    const m = await readModel($)
+    if (m.phase === 'none' || (!m.project && m.unityHere === false)) {
+      stopLive()
+      return
+    }
+    if (!m.project) {
+      await refreshModel($, options)
+      return
+    }
+    if (m.perfPending) await pollPerf($, m.perfPending)
+    if (!m.bridge.up && liveTicks % 3 && !m.perfPending) return
+    const host = await createHost($)
+    const s = await readStatus(host.fs, m.project.root, await host.now())
+    const now: UnityModel['bridge'] = s.up
+      ? {
+          up: true,
+          isPlaying: s.status.isPlaying,
+          isPaused: s.status.isPaused,
+          isCompiling: s.status.isCompiling,
+          compileSeq: s.status.compileSeq,
+          ...(s.status.bridgeVersion ? { version: s.status.bridgeVersion } : {}),
+        }
+      : { up: false, why: s.why }
+    const changed = liveSignature(now) !== liveSignature(m.bridge)
+    if (changed || (testsRunning(m) && liveTicks % 2 === 0)) await refreshModel($, options)
+  } catch {
+    // a missed tick is caught up by the next one
+  } finally {
+    liveRunning = false
+  }
+}
+
+async function pollPerf(
+  $: EngineInterface,
+  pending: NonNullable<UnityModel['perfPending']>,
+): Promise<void> {
+  const host = await createHost($)
+  const res = await readResult(host.fs, pending.resultFile)
+  if (!res) {
+    if ((await host.now()) < pending.deadline) return
+    await patchModel($, {
+      perfPending: undefined,
+      busy: undefined,
+      perfError: {
+        code: 'timeout',
+        error: `Der Editor hat die Messung nicht innerhalb von ${Math.round(play.perfTimeoutMs(pending.seconds) / 1000)} s gemeldet.`,
+      },
+    })
+    return
+  }
+  const parsed = await play.perfRecord(async () => res, pending.seconds)
+  const at = await host.now()
+  await patchModel($, m =>
+    play.isPlayError(parsed)
+      ? { perfPending: undefined, busy: undefined, perfError: { ...(parsed.code ? { code: parsed.code } : {}), error: parsed.error } }
+      : {
+          perfPending: undefined,
+          busy: undefined,
+          perfError: undefined,
+          perfRuns: [{ at, perf: JSON.parse(JSON.stringify(parsed)) as ModelPerf }, ...(m.perfRuns ?? [])].slice(0, 5),
+        },
+  )
 }
 
 // --- compile gate ---
@@ -1040,10 +1218,13 @@ export async function screenshot(
   const host = await createHost($)
   const path = join(m.project.root, 'Temp', 'ClaudeBridge', 'shots', `shot-${await host.now()}.png`)
   if (m.bridge.up && m.bridge.batchmode && m.bridge.isPlaying) return { error: BATCHMODE_SHOT }
+  const askedAt = await host.now()
   const res = await bridgeCommand($, options, { cmd: 'screenshot', path, ...size }, 20000)
   if (!res.ok)
-    return { error: m.bridge.batchmode && /no screenshot|visible/i.test(res.error) ? BATCHMODE_SHOT : res.error }
-  const written = typeof res.data.path === 'string' && res.data.path ? res.data.path : path
+    return { error: m.bridge.batchmode && /kein Bild geschrieben|sichtbares Editor-Fenster/i.test(res.error) ? BATCHMODE_SHOT : res.error }
+  const stale = play.staleShot(res.data, path, askedAt)
+  if (stale) return { error: stale }
+  const written = path
   try {
     const base64 = await host.fs.readBase64(written)
     await patchModel($, { lastShot: written })
@@ -1071,7 +1252,7 @@ export async function capture(
   if (m.bridge.up && m.bridge.batchmode && m.bridge.isPlaying) return { code: 'batchmode', error: BATCHMODE_SHOT }
   const host = await createHost($)
   const path = join(m.project.root, 'Temp', 'ClaudeBridge', 'shots', `capture-${await host.now()}.png`)
-  const res = await play.capture(playSend($, options), { path, ...size })
+  const res = await play.capture(playSend($, options), { path, ...size, askedAt: await host.now() })
   if (play.isPlayError(res)) return res
   try {
     const base64 = await host.fs.readBase64(res.path)

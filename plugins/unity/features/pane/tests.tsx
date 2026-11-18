@@ -2,7 +2,7 @@
 import type { EngineInterface, RenderElement } from 'claude-code'
 
 import type { UnityModel } from '../../types'
-import { batchAllowed, countResults, rankResults, testErrorLine } from '../../lib/unity'
+import { batchAllowed, countResults, rankResults, testErrorLine, unmatchedParts } from '../../lib/unity'
 import { ActionButton, Actions, Card, CardTitle, ListRow, Sentence, type Action, type Kit } from '../../lib/ui'
 import { affectedTests, batchTarget, landingsLine, patchModel, runTests, type Options } from '../state'
 import {
@@ -10,8 +10,10 @@ import {
   ago,
   dec,
   exactFilter,
-  fixWithClaude,
+  fixAction,
   run,
+  runLength,
+  runSeconds,
   stopTestsAction,
   testsProgress,
   type Extra,
@@ -37,7 +39,8 @@ export function testsTab(
 
 function startCard($: EngineInterface, k: Kit, x: Extra, m: UnityModel, options: Options): RenderElement {
   const { Input, Select } = x
-  const filter = m.filterInput.trim() || undefined
+  const preset = m.testArea ? m.presets.find(p => p.name === m.testArea) : undefined
+  const filter = preset?.filter || m.filterInput.trim() || undefined
   // Nothing is preselected: a filter, an area or "Alle Tests" chosen on purpose (that one asks once more).
   const all = !filter && m.testScope === 'all'
   const chosen = !!filter || all
@@ -88,7 +91,6 @@ function startCard($: EngineInterface, k: Kit, x: Extra, m: UnityModel, options:
         },
       ]
     : []
-  const preset = m.presets.find(p => p.filter === m.filterInput)
   return Card(k, {
     key: 'tests-start',
     children: [
@@ -105,7 +107,9 @@ function startCard($: EngineInterface, k: Kit, x: Extra, m: UnityModel, options:
         ]}
         onSelect={(v: string) =>
           void patchModel($, {
-            filterInput: m.presets.find(p => p.name === v)?.filter ?? '',
+            testArea: m.presets.some(p => p.name === v) ? v : undefined,
+            // an area replaces typed text: the run uses one or the other, never the area's raw filter in the field
+            ...(m.presets.some(p => p.name === v) ? { filterInput: '' } : {}),
             testScope: v === ALL ? 'all' : undefined,
           })
         }
@@ -115,8 +119,9 @@ function startCard($: EngineInterface, k: Kit, x: Extra, m: UnityModel, options:
         label="Testname enthält"
         placeholder="Testname, z. B. Mahlen"
         value={m.filterInput}
-        onSubmit={(v: string) => void patchModel($, { filterInput: v, testScope: undefined })}
+        onSubmit={(v: string) => void patchModel($, { filterInput: v, testScope: undefined, testArea: undefined })}
       />,
+      preset?.note ? Sentence(k, preset.note, { faint: true }) : null,
       canRun
         ? Sentence(
             k,
@@ -160,6 +165,26 @@ function affectedCard(k: Kit, m: UnityModel, now: number): RenderElement | null 
   })
 }
 
+/** "Bereich <name>" when the run's filter is an area's, else "Filter <filter>". */
+export function filterLine(m: Pick<UnityModel, 'presets'>, filter: string): string {
+  const area = m.presets.find(p => p.filter === filter)
+  return area ? `Bereich ${area.name}` : `Filter ${filter}`
+}
+
+/** A finished filtered run: filter parts that hit no test at all (the area misses them, green or not). */
+function missedLine(k: Kit, t: NonNullable<UnityModel['tests']>): RenderElement[] {
+  if (t.state !== 'done' || !t.filter || !t.results.length) return []
+  const missed = unmatchedParts(t.filter, t.results.map(r => r.fullName))
+  if (!missed.length) return []
+  return [
+    Sentence(
+      k,
+      `Bereich trifft ${missed.join(', ')} nicht: kein Test in diesem ${t.mode ?? ''}-Lauf passt dazu. Filter in .claude/unity.json prüfen.`,
+      { tone: 'warn' },
+    ),
+  ]
+}
+
 function resultCard($: EngineInterface, k: Kit, m: UnityModel, options: Options, now: number): RenderElement | null {
   const t = m.tests
   if (!t) return null
@@ -173,13 +198,13 @@ function resultCard($: EngineInterface, k: Kit, m: UnityModel, options: Options,
   const skippedOpen = k.isMore('tests-skipped')
   const done = t.state !== 'running' && t.state !== 'error'
   const total = c.passed + c.failed + c.skipped
-  const secs = t.results.reduce((s, r) => s + (r.duration ?? 0), 0)
+  const secs = runSeconds(t)
   const head =
     t.state === 'running'
       ? `${t.mode ?? ''} läuft${testsProgress(t, now) ? ` · ${testsProgress(t, now)}` : ' …'}`
       : t.state === 'error'
         ? testErrorLine(t)
-        : `Letzter Lauf${t.finishedAt ? ` ${ago(now, t.finishedAt)}` : ''} · ${total} Tests${secs ? ` · ${dec(secs, 0)} s` : ''}`
+        : `Letzter Lauf${t.finishedAt ? ` ${ago(now, t.finishedAt)}` : ''} · ${total} Tests${secs !== undefined ? ` · ${runLength(secs)}` : ''}`
   const row = (r: (typeof ranked)[number], i: number, group: string): RenderElement =>
     ListRow(k, {
       key: `tf-${group}-${i}`,
@@ -187,13 +212,13 @@ function resultCard($: EngineInterface, k: Kit, m: UnityModel, options: Options,
       title: r.fullName,
       meta: r.duration !== undefined ? `${dec(r.duration)} s` : undefined,
       actions: [
-        {
-          key: group === 'new' ? `tfix-${i}` : `tfix-old-${i}`,
-          label: 'Claude reparieren lassen',
-          icon: 'claude',
-          variant: 'secondary',
-          onPress: () => void fixWithClaude($, FIX_ASK.test, `${r.fullName}\n${r.message ?? ''}\n${r.stack ?? ''}`),
-        },
+        fixAction(
+          $,
+          k,
+          group === 'new' ? `tfix-${i}` : `tfix-old-${i}`,
+          FIX_ASK.test,
+          `${r.fullName}\n${r.message ?? ''}\n${r.stack ?? ''}`,
+        ),
       ],
     })
   const msgLine = (r: (typeof ranked)[number]): RenderElement | null =>
@@ -207,8 +232,9 @@ function resultCard($: EngineInterface, k: Kit, m: UnityModel, options: Options,
         title: head,
         tone: t.state === 'running' ? 'warn' : c.failed || t.state === 'error' ? 'bad' : 'ok',
       }),
-      t.filter ? Sentence(k, `Filter ${t.filter}`, { faint: true }) : null,
-      t.state === 'running' && t.current ? Sentence(k, `Gerade: ${t.current}`, { faint: true }) : null,
+      t.filter ? Sentence(k, filterLine(m, t.filter), { faint: true }) : null,
+      ...missedLine(k, t),
+      t.state === 'running' && t.current?.trim() ? Sentence(k, `Gerade: ${t.current.trim()}`, { faint: true }) : null,
       t.state === 'running' ? Actions(k, 'tests-running-acts', [stopTestsAction($, options)]) : null,
       fresh.length ? Sentence(k, `Neu rot gegenüber dem Lauf davor · ${fresh.length}`, { tone: 'bad' }) : null,
       ...fresh.slice(0, 8).flatMap((r, i) => [row(r, i, 'new'), msgLine(r)]),

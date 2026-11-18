@@ -144,10 +144,10 @@ test('an editor run left running while the heartbeat goes stale reads as aborted
   world.bridge.up = false
   await settle(world, $.tool.call({ tool: 'mcp__unity__unity_status' }))
   const results = JSON.stringify(await $.tool.call({ tool: 'mcp__unity__unity_test_results' }))
-  expect(results).toContain('Tests aborted — editor closed or crashed')
+  expect(results).toContain('Testlauf abgebrochen: Editor geschlossen oder abgestürzt')
   await settle(world, $.command.run({ command: 'unity', args: '' } as never))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await findShown(ui, /aborted — editor closed or crashed/))?.text).toBeDefined()
+  expect((await findShown(ui, /Testlauf abgebrochen: Editor geschlossen oder abgestürzt/))?.text).toBeDefined()
   await ui.unmount()
 
   const again = JSON.stringify(

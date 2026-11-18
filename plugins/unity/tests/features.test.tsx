@@ -3,6 +3,7 @@ import { findShown, shownTexts } from './shown'
 
 import { bashVerdictReason } from '../features/bash'
 import { launcherStatus } from '../features/launcher'
+import { LauncherChip, showsStatus } from '../lib/ui'
 import type { UnityModel } from '../types'
 import { BRIDGE, fakeWorld, PANE, PROJECT, ROOT, settle, type World } from './world'
 
@@ -90,7 +91,7 @@ test('worktree: git worktree add, Library cloned in the background, then batch r
   expect(batch.command).toContain('-projectPath /g/.worktrees/wt1/unity')
   expect(batch.command).toContain('-logFile /g/.worktrees/wt1/unity/Logs/claude-tests-')
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  await settle(world, ui.press({ key: 'settings' }))
+  await settle(world, ui.press({ key: 'tab-target' }))
   expect((await findShown(ui, /Worktree wt1/))?.text).toBeDefined()
   expect(await ui.find({ type: 'Button', key: 'worktree-main' })).toBeDefined()
   await ui.unmount()
@@ -218,7 +219,7 @@ test('render check: every pane section on every surface at 40x15 and 120x40 stay
   await settle(world, $.tool.call({ tool: 'mcp__unity__unity_worktree', name: 'wt' }))
   await finishBash(world, 'b1', 1, `${'robocopy says something rather long '.repeat(5)}\r\n`)
   await settle(world, $.tool.call({ tool: 'mcp__unity__unity_screenshot' }))
-  // Every tab, reached the way a person does: tab buttons, the console card's link, the header's settings knob.
+  // Every tab, reached the way a person does: tab buttons, the console card's link; Ziel is a tab (behind Mehr when narrow).
   const VIEWS: { press?: string; expect: RegExp }[] = [
     { expect: /Kompilierfehler|Kompiliert/ },
     { press: 'tab-tests', expect: /Tests starten/ },
@@ -226,7 +227,7 @@ test('render check: every pane section on every surface at 40x15 and 120x40 stay
     { press: 'tab-review', expect: /./ },
     { press: 'tab-overview', expect: /Aufgaben/ },
     { press: 'console-open', expect: /NullReferenceException/ },
-    { press: 'settings', expect: /Worauf Claude arbeitet/ },
+    { press: 'tab-target', expect: /Worauf Claude arbeitet/ },
   ]
   for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const)
     for (const [cols, rows] of [
@@ -291,7 +292,7 @@ test('starter strip: chip "Unity" in a Unity project with the editor state; open
   await $.session.start(start)
   for (const surface of ['desktop', 'terminal'] as const) {
     const band = await $.ui.mount({ plugin: 'unity', surface, component: 'AbovePrompt', props: BAND })
-    expect(((await band.drawn()) as { props?: { key?: string } }).props?.key).toBe('launch:unity@3')
+    expect(((await band.drawn()) as { props?: { key?: string } }).props?.key).toBe('launch:unity@4')
     expect(await band.find({ type: 'Button', key: 'launch-unity' })).toBeDefined()
     await band.unmount()
   }
@@ -309,18 +310,25 @@ test('starter strip: chip "Unity" in a Unity project with the editor state; open
       compile: { seq: 1, at: 0, source: 'bridge', messages: [{ severity: 'error', message: 'x' }] },
     }),
   ).toEqual({ status: '1 Fehler', tone: 'bad' })
-  // Befund 16: no editor shows in the chip, in the warn color; ready says nothing.
-  expect(launcherStatus({ ...EMPTY_STATUS, bridge: { up: false } })).toEqual({
+  // Band v4: an editor open here whose bridge does not answer is a warn; a closed editor and a ready one say nothing.
+  expect(launcherStatus({ ...EMPTY_STATUS, lock: 'held', bridge: { up: false, why: 'missing' } })).toEqual({
     status: 'nicht verbunden',
     tone: 'warn',
   })
-  expect(launcherStatus({ ...EMPTY_STATUS })).toEqual({ status: 'Editor bereit', tone: 'ok' })
+  expect(launcherStatus({ ...EMPTY_STATUS, lock: 'held', bridge: { up: false, why: 'stale' } })).toEqual({
+    status: 'antwortet nicht',
+    tone: 'warn',
+  })
+  expect(launcherStatus({ ...EMPTY_STATUS, bridge: { up: false, why: 'missing' } })).toEqual({})
+  expect(launcherStatus({ ...EMPTY_STATUS, lock: 'stale', bridge: { up: false, why: 'missing' } })).toEqual({})
+  expect(launcherStatus({ ...EMPTY_STATUS, bridge: { up: true, version: '0.3.0' } })).toEqual({})
+  expect(launcherStatus({ ...EMPTY_STATUS, bridge: { up: true } })).toEqual({ status: 'Bridge veraltet', tone: 'warn' })
   const band = await $.ui.mount({ plugin: 'unity', surface: 'desktop', component: 'AbovePrompt', props: BAND })
   await settle(world, band.press({ key: 'launch-unity' }))
   await band.unmount()
 })
 
-test('starter status (Band v3): the editor state in a few words, colour only for warn/bad', () => {
+test('starter status (Band v4): the editor state in a few words, colour only for warn/bad', () => {
   const errs = (n: number): UnityModel => ({
     ...EMPTY_STATUS,
     compile: {
@@ -343,6 +351,37 @@ test('starter status (Band v3): the editor state in a few words, colour only for
   ).toEqual({ status: 'Tests laufen', tone: 'info' })
   // errors beat everything; every status stays short for line 1
   expect(launcherStatus({ ...errs(1), bridge: { up: false } }).tone).toBe('bad')
-  for (const m of [errs(12), EMPTY_STATUS, { ...EMPTY_STATUS, bridge: { up: false } }])
+  for (const m of [errs(12), EMPTY_STATUS, { ...EMPTY_STATUS, lock: 'held' as const, bridge: { up: false } }])
     expect([...(launcherStatus(m).status ?? '')].length).toBeLessThanOrEqual(16)
+})
+
+test('starter (Band v4): ready shows only the name, a test run shows its text, compile errors are bad', () => {
+  const k = {
+    Box: 'Box',
+    Text: 'Text',
+    Button: 'Button',
+    graphical: true,
+    brand: 'neutral',
+    cols: 80,
+    t: { faint: 'inactive', tones: { ok: { fg: 'success' }, warn: { fg: 'warning' }, bad: { fg: 'error' }, info: { fg: 'suggestion' } } },
+  } as never
+  type N = { children?: unknown[] }
+  const texts = (m: UnityModel): string[] => {
+    const out: string[] = []
+    const walk = (n: N | undefined): void => {
+      for (const c of n?.children ?? []) typeof c === 'string' ? out.push(c) : walk(c as N)
+    }
+    walk(LauncherChip(k, { key: 'launch-unity', label: 'Unity', ...launcherStatus(m), onPress: () => {} }) as never)
+    return out
+  }
+  const ready: UnityModel = { ...EMPTY_STATUS, bridge: { up: true, version: '0.3.0' } }
+  expect(texts(ready)).toEqual(['Unity'])
+  expect(texts({ ...ready, bridge: { up: false, why: 'missing' } })).toEqual(['Unity']) // editor closed
+  expect(texts({ ...ready, tests: { state: 'running', results: [] } })).toEqual(['Unity', '· Tests laufen'])
+  const bad = launcherStatus({
+    ...ready,
+    compile: { seq: 1, at: 0, source: 'bridge', messages: [{ severity: 'error', message: 'x' }] },
+  })
+  expect(bad).toEqual({ status: '1 Fehler', tone: 'bad' })
+  expect(showsStatus(bad)).toBe(true)
 })

@@ -2,14 +2,12 @@
 import type { EngineInterface, RenderElement } from 'claude-code'
 
 import type { ModelConsoleEntry, UnityModel } from '../../types'
-import { ActionButton, Actions, Card, EmptyState, ListRow, Sentence, type Action, type Kit } from '../../lib/ui'
+import { ActionButton, Actions, askAction, Card, EmptyState, ListRow, Sentence, type Action, type Kit } from '../../lib/ui'
 import { bridgeCommand, patchModel, type Options } from '../state'
-import { FIX_ASK, ago, collapseConsole, consoleOrigin, fixWithClaude, msg, run } from './common'
+import { ago, collapseConsole, consoleOrigin, consolePrompt, msg, run } from './common'
 import { playActions } from './overview'
 
 const isError = (c: ModelConsoleEntry): boolean => c.type === 'Error' || c.type === 'Exception' || c.type === 'Assert'
-
-const entryText = (c: ModelConsoleEntry): string => `${c.message}\n${c.stack ?? ''}`.trim()
 
 export function consoleTab($: EngineInterface, k: Kit, m: UnityModel, options: Options, now: number): RenderElement {
   const { Box } = k
@@ -40,26 +38,18 @@ export function consoleTab($: EngineInterface, k: Kit, m: UnityModel, options: O
     ),
   }
   const tools: Action[] = m.bridge.isPlaying
-    ? playActions($, m, options).filter(a => a.key === 'stop' || a.key === 'shot')
+    ? playActions($, k, m, options).filter(a => a.key === 'stop' || a.key === 'shot')
     : []
   const handable = filter === 'all' ? [] : groups
   const kind = filter === 'error' ? 'Fehler' : 'Warnungen'
   if (handable.length > 1)
-    tools.push({
-      key: 'console-fix-all',
-      label: `Alle ${handable.length} ${kind} an Claude geben`,
-      icon: 'claude',
-      variant: 'secondary',
-      onPress: () =>
-        void fixWithClaude(
-          $,
-          `${FIX_ASK.console} (${handable.length} ${kind})`,
-          handable
-            .slice(-20)
-            .map(g => `${g.count > 1 ? `[×${g.count}] ` : ''}${entryText(g.entry)}`)
-            .join('\n\n'),
-        ),
-    })
+    tools.push(
+      askAction($, k, {
+        key: 'console-fix-all',
+        label: `Alle ${handable.length} ${kind} an Claude geben`,
+        text: consolePrompt(handable.slice(-20)),
+      }),
+    )
   return (
     <Box flexDirection="column" gap={1}>
       <Box key="con-filter-row" flexDirection="row" alignItems="center" gap={1} flexWrap="wrap">
@@ -121,13 +111,11 @@ export function consoleTab($: EngineInterface, k: Kit, m: UnityModel, options: O
                   : null,
                 c.type !== 'Log'
                   ? Actions(k, `con-acts-${c.seq}`, [
-                      {
+                      askAction($, k, {
                         key: `fix-${c.seq}`,
                         label: 'An Claude geben',
-                        icon: 'claude',
-                        variant: 'secondary',
-                        onPress: () => void fixWithClaude($, `${FIX_ASK.console} (${c.type})`, entryText(c)),
-                      },
+                        text: consolePrompt([{ entry: c, count }]),
+                      }),
                     ])
                   : null,
               ],

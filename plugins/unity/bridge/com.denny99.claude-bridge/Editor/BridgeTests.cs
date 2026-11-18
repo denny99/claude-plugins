@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.TestTools.TestRunner.Api;
 using UnityEngine;
@@ -34,7 +35,10 @@ namespace Denny99.ClaudeBridge
             public string error;
             public long finishedAt;
             public long startedAt;
-            /// <summary>Leaf tests in the run (RunStarted's TestCaseCount); 0 until it is known.</summary>
+            /// <summary>
+            /// Leaf tests in the run: counted in RunStarted from the tree, only those the filter matches (the tree there
+            /// is the whole suite, its TestCaseCount said 2059 for a 30-test area); 0 when unknown.
+            /// </summary>
             public int total;
             /// <summary>The test running now (full name); empty between tests.</summary>
             public string current;
@@ -56,7 +60,7 @@ namespace Denny99.ClaudeBridge
             public void RunStarted(ITestAdaptor testsToRun)
             {
                 if (current.state != "running") return;
-                try { current.total = testsToRun.TestCaseCount; } catch { current.total = 0; }
+                try { current.total = CountLeaves(testsToRun, FilterPatterns(current.filter)); } catch { current.total = 0; }
                 Save();
             }
 
@@ -73,8 +77,8 @@ namespace Denny99.ClaudeBridge
 
             public void TestStarted(ITestAdaptor test)
             {
-                if (current.state != "running" || test.HasChildren) return;
-                current.current = test.FullName;
+                if (current.state != "running" || !IsLeaf(test)) return;
+                current.current = test.FullName ?? test.Name ?? "";
                 Save();
             }
 
@@ -91,8 +95,50 @@ namespace Denny99.ClaudeBridge
                     stack = result.StackTrace,
                     duration = result.Duration,
                 });
+                // more finished than counted: the count was wrong (filter semantics differ), so none is better
+                if (current.total > 0 && current.results.Count > current.total) current.total = 0;
                 Save();
             }
+        }
+
+        /// <summary>A test case, not a suite (fixture, namespace, assembly); a parameterized case's cases are leaves.</summary>
+        static bool IsLeaf(ITestAdaptor t)
+        {
+            try { return !t.IsSuite && !t.HasChildren; }
+            catch { return !t.HasChildren; }
+        }
+
+        /// <summary>The run's filter as the Filter's groupNames: regexes on full test names, ';'-separated.</summary>
+        static List<Regex> FilterPatterns(string filter)
+        {
+            var list = new List<Regex>();
+            if (string.IsNullOrEmpty(filter)) return list;
+            foreach (var part in filter.Split(';'))
+            {
+                var p = part.Trim();
+                if (p.Length == 0) continue;
+                try { list.Add(new Regex(p)); }
+                catch (ArgumentException) { list.Add(new Regex(Regex.Escape(p))); }
+            }
+            return list;
+        }
+
+        /// <summary>Leaves under `t` whose full name a pattern matches (all leaves without patterns).</summary>
+        static int CountLeaves(ITestAdaptor t, List<Regex> patterns)
+        {
+            if (t == null) return 0;
+            if (IsLeaf(t))
+            {
+                if (patterns.Count == 0) return 1;
+                var name = t.FullName ?? "";
+                foreach (var p in patterns)
+                    if (p.IsMatch(name)) return 1;
+                return 0;
+            }
+            var n = 0;
+            if (t.Children != null)
+                foreach (var c in t.Children) n += CountLeaves(c, patterns);
+            return n;
         }
 
         public static void Init()
@@ -109,7 +155,7 @@ namespace Denny99.ClaudeBridge
             if (current.state == "running" && SessionState.GetString(RunKey, "") != current.runId)
             {
                 current.state = "error";
-                current.error = "The editor was closed or crashed during the run; results are incomplete.";
+                current.error = "Der Editor wurde während des Laufs geschlossen oder ist abgestürzt; die Ergebnisse sind unvollständig.";
                 current.finishedAt = ClaudeBridge.Now();
                 Save();
             }
@@ -120,7 +166,7 @@ namespace Denny99.ClaudeBridge
         /// <summary>Starts a run; `filter` holds regexes on full test names separated by ';'. Returns the run id.</summary>
         public static string Run(string mode, string filter)
         {
-            if (current.state == "running") throw new InvalidOperationException("A test run is already going (" + current.runId + ").");
+            if (current.state == "running") throw new InvalidOperationException("Es läuft schon ein Testlauf (" + current.runId + "). Warten oder ihn abbrechen.");
             var testMode = mode == "PlayMode" ? TestMode.PlayMode : TestMode.EditMode;
             current = new TestRun
             {
@@ -185,7 +231,7 @@ namespace Denny99.ClaudeBridge
         /// </summary>
         public static string Cancel()
         {
-            if (current.state != "running") throw new BridgeError("bad-input", "No test run is going.");
+            if (current.state != "running") throw new BridgeError("bad-input", "Es läuft kein Testlauf.");
             var type = typeof(TestRunnerApi);
             const BindingFlags flags = BindingFlags.Public | BindingFlags.Static;
             var cancelled = false;
@@ -210,11 +256,11 @@ namespace Denny99.ClaudeBridge
             }
             catch (TargetInvocationException e) when (e.InnerException != null)
             {
-                throw new BridgeError("cancel-failed", "Cancelling failed: " + e.InnerException.Message);
+                throw new BridgeError("cancel-failed", "Abbrechen fehlgeschlagen: " + e.InnerException.Message);
             }
             if (!cancelled)
                 throw new BridgeError("unsupported",
-                    "This Test Framework version cannot cancel a run. Wait for it to finish, or update com.unity.test-framework to 1.4 or newer.");
+                    "Diese Test-Framework-Version kann keinen Lauf abbrechen. Warten, bis er fertig ist, oder com.unity.test-framework auf 1.4 oder neuer aktualisieren.");
             current.state = "error";
             current.error = "Cancelled";
             current.current = "";
