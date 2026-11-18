@@ -2588,6 +2588,46 @@ export function fitStarters<T extends BandRow>(
   return { shown, hidden };
 }
 
+/** Cells the "‹" chip takes on a later page (`[ ‹ ]` and the gap after it). */
+const BACK_CELLS = 7;
+
+/**
+ * Line 1 in pages (pure): page 1 is what `fitStarters` keeps, each later page takes the next starters that fit beside
+ * a "‹" (and a "+N" while more follow). One page when all fit; every page holds at least one starter.
+ */
+export function starterPages<T extends BandRow>(
+  starters: readonly T[],
+  columns: number,
+): T[][] {
+  const pages: T[][] = [];
+  let rest = [...starters];
+  while (rest.length) {
+    const { shown, hidden } = fitStarters(
+      rest,
+      pages.length ? columns - BACK_CELLS : columns,
+    );
+    pages.push(shown);
+    rest = hidden;
+  }
+  return pages;
+}
+
+/**
+ * The page of line 1 the person turned to with "+N" / "‹". Kept in this module (the copy whose merger draws the
+ * band holds it; a render hook may not write `$.state`), back to the first page as soon as all starters fit again.
+ */
+let bandPage = 0;
+
+/** Turns line 1 to `page` and asks for a redraw of the band. */
+function turnBandPage($: EngineInterface, page: number): void {
+  bandPage = Math.max(0, page);
+  try {
+    $.ui.invalidate("ui.render" as never);
+  } catch {
+    // drawn anew with the next frame
+  }
+}
+
 /** The fine rule between the lines on graphical surfaces: a 1-px hairline wider than any slot, clipped to it. */
 const HAIRLINE =
   '<svg xmlns="http://www.w3.org/2000/svg" width="4000" height="1" viewBox="0 0 4000 1" preserveAspectRatio="none">' +
@@ -2598,8 +2638,8 @@ const HAIRLINE =
  * The `AbovePromptList` hook that lays the band out in **two fixed lines**, both left-aligned:
  *
  * 1. **Starters** of every mod, in their order, one line that never wraps: each row shrinks and clips by itself
- *    (`LAUNCH_ROW`), statuses go first with "…"; what does not fit at all moves into a quiet "+N" (a count, no
- *    hover card).
+ *    (`LAUNCH_ROW`), statuses go first with "…"; what does not fit at all moves behind a quiet "+N": a press turns
+ *    line 1 to those starters (with "‹" to turn back), no hover card.
  * 2. a hairline with inner margin, then the **meter line** (`isTrailing`, ds-usage-line), as wide as its content,
  *    which fits itself.
  *
@@ -2623,10 +2663,15 @@ export async function mergeLauncherRows(
   if (found.length < 2) return next(e);
   if (found.some((row) => bandVersion(row) > BAND_VERSION)) return next(e);
   const columns = Number(e.props.bodyColumns) || 80;
-  const { shown, hidden } = fitStarters(
+  const pages = starterPages(
     found.filter((row) => !isTrailing(row)),
     columns,
   );
+  // all fit again: the next overflow starts on page 1
+  if (pages.length <= 1) bandPage = 0;
+  const page = Math.min(bandPage, Math.max(0, pages.length - 1));
+  const shown = pages[page] ?? [];
+  const after = pages.slice(page + 1).reduce((n, p) => n + p.length, 0);
   const meterRows = found.filter(isTrailing);
   const others = rows.filter((row) => !isLauncherRow(row));
   const only = async (subset: readonly BandRow[]) =>
@@ -2642,18 +2687,21 @@ export async function mergeLauncherRows(
   const { Box, Text, Svg } = $.ui.resolve(e) as unknown as Els;
   const graphical =
     String((e as { surface?: string }).surface ?? "terminal") !== "terminal";
-  // "+N" is a quiet count only, no hover card: a hover card would cover the prompt.
-  const more = hidden.length ? (
-    <Box key="launch-more" flexDirection="row" flexShrink={0}>
-      <Text
-        size="footnote"
-        color={graphical ? "inactive" : undefined}
-        dimColor={graphical ? undefined : true}
-      >
-        {`+${hidden.length}`}
-      </Text>
-    </Box>
-  ) : null;
+  // "+N" turns line 1 to the starters that did not fit, "‹" back: same height, nothing wraps, line 2 stays. Quiet
+  // plain buttons, no hover card (it would cover the prompt).
+  const { Button } = $.ui.resolve(e) as unknown as Els;
+  const pager = (key: string, label: string, to: number) => (
+    <Button
+      key={key}
+      label={label}
+      plain
+      onPress={() => turnBandPage($, to)}
+    >
+      {label}
+    </Button>
+  );
+  const back = page > 0 ? pager("launch-back", "‹", page - 1) : null;
+  const more = after ? pager("launch-more", `+${after}`, page + 1) : null;
   // Only flex props on boxes that hold other plugins' rows: the engine refuses `minWidth`/`overflow` there.
   const line1 = starters.length ? (
     <Box
@@ -2663,6 +2711,7 @@ export async function mergeLauncherRows(
       alignItems="center"
       columnGap={starterGap(graphical)}
     >
+      {back}
       {starters}
       {more}
     </Box>

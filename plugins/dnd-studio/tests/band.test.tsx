@@ -1,5 +1,5 @@
 // Band v4 (two fixed lines above the prompt, both left-aligned). Same file in every plugin that carries the kit's launcher section;
-// dnd-studio: "+N" is a bare count (no hover card), checked below.
+// dnd-studio: "+N" turns line 1 to the hidden starters, "‹" back (no hover card), checked below.
 import { expect, test } from 'claude-code/testing'
 import type { RenderElement } from 'claude-code'
 import {
@@ -33,7 +33,10 @@ const k = {
   cols: 80,
   t: { faint: 'inactive', tones: { ok: { fg: 'success' }, warn: { fg: 'warning' }, bad: { fg: 'error' }, info: { fg: 'suggestion' } } },
 } as never
-const fake$ = { ui: { resolve: () => ({ Box: 'Box', Text: 'Text', Svg: 'Svg' }) } } as never
+let redraws = 0
+const fake$ = {
+  ui: { resolve: () => ({ Box: 'Box', Text: 'Text', Button: 'Button', Svg: 'Svg' }), invalidate: () => void redraws++ },
+} as never
 const starter = (plugin: string, label: string, status?: string) => ({
   plugin,
   tree: LauncherRow(k, {
@@ -105,7 +108,7 @@ test('a long status does not change line 2; what does not fit moves into "+N"', 
   ])
   expect(long.children?.[2]?.children?.[0]).toBe(short.children?.[2]?.children?.[0])
   expect(long.children?.[2]?.children?.[0]).toBe(meterLine)
-  // narrow: statuses cut first; then the last starters go into "+N" (a quiet count, no hover card)
+  // narrow: statuses cut first; then the last starters go behind "+N" (a quiet button, no hover card)
   const rows = [
     starter('dnd-studio', 'D&D', 'Tisch läuft'),
     starter('ds-solutions-flow', 'Solutions'),
@@ -186,4 +189,51 @@ test('a v2 row next to a v4 merger is drawn on line 1 as it comes; a newer row h
     return null
   }) as never)
   expect(handed).toBe(rows)
+})
+
+test('"+N" turns line 1 to the hidden starters, "‹" turns back; two lines stay, line 2 does not move', async () => {
+  const press = (n: Node | undefined) => ((n as { onPress?: () => void } | undefined)?.onPress as () => void)()
+  const rows = [
+    starter('dnd-studio', 'D&D', 'Tisch läuft'),
+    starter('ds-solutions-flow', 'Solutions'),
+    starter('ds-flutter', 'Flutter', 'Gerät fehlt'),
+    starter('ds-communication', 'Kommunikation', 'Call 15:30'),
+  ]
+  const keys = (n: Node | undefined) => n?.children?.map(c => c.props?.key)
+  const first = await merge([...rows, usage], 40)
+  const line1 = first.children?.[0]
+  const visible = keys(line1)!.filter(k => String(k).startsWith('launch:'))
+  const more = line1?.children?.at(-1)
+  expect(more?.type).toBe('Button')
+  expect(more?.props?.key).toBe('launch-more')
+  expect(line1?.children?.[0]?.props?.key).not.toBe('launch-back')
+  const n = Number(String(more?.props?.label).slice(1))
+  expect(n).toBe(4 - visible.length)
+
+  // +N: the hidden ones, with "‹" in front, nothing of page 1
+  const before = redraws
+  press(more)
+  expect(redraws).toBe(before + 1)
+  const second = await merge([...rows, usage], 40)
+  expect(second.children).toHaveLength(3)
+  const page2 = second.children?.[0]
+  expect(page2?.children?.[0]?.props?.key).toBe('launch-back')
+  expect(page2?.children?.[0]?.props?.label).toBe('‹')
+  const shown2 = keys(page2)!.filter(k => String(k).startsWith('launch:'))
+  expect(shown2.length).toBeGreaterThan(0)
+  for (const k of shown2) expect(visible).not.toContain(k)
+  expect(page2?.props?.flexWrap).toBe('nowrap')
+  expect(second.children?.[2]?.children?.[0]).toBe(meterLine)
+  expect(walk(second).filter(x => x.hover !== undefined || x.props?.hover !== undefined)).toEqual([])
+
+  // ‹: back to page 1
+  press(page2?.children?.[0])
+  const third = await merge([...rows, usage], 40)
+  expect(keys(third.children?.[0])).toEqual(keys(line1))
+
+  // turned again, then all fit: back to page 1 for the next overflow
+  press((await merge([...rows, usage], 40)).children?.[0]?.children?.at(-1))
+  const wide = await merge([...rows, usage], 200)
+  expect(keys(wide.children?.[0])?.filter(k => String(k).startsWith('launch-'))).toEqual([])
+  expect(keys((await merge([...rows, usage], 40)).children?.[0])).toEqual(keys(line1))
 })
