@@ -7,6 +7,9 @@ type On = Parameters<TestBody>[1];
 
 export const PREFIX = "mcp__plugin_dnd-studio_dnd-studio__";
 
+/** A path the POSIX way: on Windows the engine hands "/a/b" on as "C:\a\b". */
+export const posix = (p: string) => p.replace(/^[A-Za-z]:/, "").replace(/\\/g, "/");
+
 export function pane(cols = 70, rows = 40) {
   return {
     plugin: "dnd-studio",
@@ -214,9 +217,11 @@ export function world(on: On, answers: Record<string, unknown> = {}): World {
     return { value: undefined };
   });
   on("fs.read", (_, e) => {
-    if (e.path === "/Users/d/kampagne/plan.md")
+    // on Windows the engine hands "/a/b" on as "C:\a\b": compared the POSIX way
+    const path = posix(e.path);
+    if (path === "/Users/d/kampagne/plan.md")
       return { value: "# Bauplan\n- Szene 1" };
-    if (e.path.endsWith("/.claude-plugin/plugin.json"))
+    if (path.endsWith("/.claude-plugin/plugin.json"))
       return { value: '{"name":"dnd-studio","version":"9.8.7"}' };
     throw new Error("missing");
   });

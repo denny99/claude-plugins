@@ -36,7 +36,8 @@ test('the build cockpit tracks pnp agents and counts the reviewers’ findings',
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('env.get', (_, e) => ({ value: ({ HOME: '/Users/d', PATH: '/usr/bin' } as Record<string, string>)[e.name] }))
   on('fs.read', (_, e) => {
-    if (e.path === '/Users/d/kampagne/maengel-technik.md') return { value: '# Mängel\n\n1. Szene 2 ohne Bild\n2. Bartel ohne Stimme\n' }
+    // on Windows the engine hands "/a/b" on as "C:\a\b": compared the POSIX way
+    if (e.path.replace(/^[A-Za-z]:/, '').replace(/\\/g, '/') === '/Users/d/kampagne/maengel-technik.md') return { value: '# Mängel\n\n1. Szene 2 ohne Bild\n2. Bartel ohne Stimme\n' }
     throw new Error('missing')
   })
   on('agent.spawn', (_, e) => ({ model: 'opus', agentId: e.description }))

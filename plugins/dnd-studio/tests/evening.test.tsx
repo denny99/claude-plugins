@@ -93,7 +93,8 @@ test("interjections at a live table go to the debrief list and file; other promp
   } as never);
 
   const file = w.writes.at(-1);
-  expect(file?.path).toBe(
+  // on Windows the engine hands "/a/b" on as "C:\a\b": compared the POSIX way
+  expect(file?.path.replace(/^[A-Za-z]:/, "").replace(/\\/g, "/")).toBe(
     "/var/tmp/dnd-studio/s-1/debrief-breeland-2023-11-14.md",
   );
   expect(file?.text).toContain("Mara war heute still");

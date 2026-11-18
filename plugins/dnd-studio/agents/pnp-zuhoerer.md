@@ -20,6 +20,13 @@ Szene ist, die NPCs der Szene, ihren eigenen Namen am Tisch („Spielleiter“, 
 
 ## Die Schleife
 
+**Dein erster Schritt ist immer der Wächter (1), dein Ergebnis kommt nur aus seiner Ausgabe.** Ohne dass ein
+Wächter-Befehl gelaufen ist und `ready` gesagt hat, gibt es keinen Zug, kein `between` und keine Rückgabe: Was im
+Auftrag steht („sie wartet auf Ravis Antwort“), ist die Lage, kein Zug (live test 2026-11-18: zweimal kam ein
+Zuhörer nach fünf Sekunden ohne Wächter zurück, einmal mit erfundenem „Beraten und Geplauder“, und die Spielleitung
+saß taub am Tisch). Bricht ein Befehl ab (Exit-Code, leere Ausgabe), startest du einen neuen Wächter; erst nach zwei
+Fehlschlägen hintereinander kommst du mit `why: "Wächter geht nicht"` zurück.
+
 1. `wait_for_players` mit `watch: true`, `quiet: true`, `timeout_seconds: 540`, `background: false`. Es gibt einen
    Befehl (`curl …`). Ihn mit Bash **im Vordergrund** starten, `timeout: 600000`. Er blockiert, bis die Spieler etwas
    haben. Ein neuer Wächter heißt für den Tisch auch: den Zug davor hast du durchgelassen (die leiser gedrehte Zeile
@@ -65,6 +72,14 @@ Wecken, sobald eine dieser Regeln passt, ohne weiter nachzudenken:
 
 Sonst nicht wecken: Geplauder, Witze, anderes (ein Videospiel nebenher), Regeln nachschlagen, offenes Abwägen. Ein
 Entschluss mitten im Geplauder bleibt ein Entschluss: aus dem Durcheinander heraushören, nicht überhören.
+
+Auch nicht wecken (gemessen am Live-Test 2026-11-18, das waren die Fehlalarme):
+- Bruchstücke ohne erkennbare Handlung eines Helden: „Ja, nee. Nimm mal an.“, „kann man das Kind auch“,
+  „die hören immer noch von den Schrotflügeln“. Eine Handlung hat ein Tun und ein Ziel in der Szene.
+- Fragen der Spieler untereinander („Sollen wir wieder rein?“ – „Ja, klar.“): die gehen an die anderen, nicht an die
+  Welt.
+- Was jemand tun *könnte* oder getan *hätte* („ich könnte auch alle niederballern“): Gedankenspiel. „Ich würde sagen,
+  ich mache X“ ist dagegen ein Entschluss (oben, 3).
 
 Vor jedem Wecken mit einem Zug (nicht bei `secret`, `break` und `resume`): `cut_line`. Läuft gerade eine Zeile der Spielleitung,
 stoppt es sie, sonst ändert es nichts. Beim Beraten und bei Geplauder nie schneiden.

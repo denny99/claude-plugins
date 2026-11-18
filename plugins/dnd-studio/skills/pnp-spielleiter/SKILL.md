@@ -139,6 +139,15 @@ sparend“): Die Spieler reden ohne Knöpfe, und nicht jeder Zug ist für dich. 
    des Zuhörers da ist, dann sie beantworten (`unheard` danach, wenn es noch passt). „Reinreden geht vor“ (oben)
    heißt im Zuhörer-Modus: auf die Rückgabe warten, nicht `wait_for_players`.
 5. Kommt er nicht (Fehler, `why: "Wächter geht nicht"`): wie oben mit dem Wächter weiter, und dem Menschen eine Zeile.
+6. **Die Begrüßung erklärt, wie man dich ruft** (Live-Test 2026-11-18, vier Spieler, nebenher ein Videospiel: „es
+   kommt zwar alles an, aber es löst nicht aus“): einfach reden; wer „Spielleitung“ oder „Erzähler“ sagt oder
+   **Absenden** drückt, holt dich sofort (beides weckt ohne Haikus Abwägung; die Nachricht des Bots zeigt, ob gehört,
+   geprüft wird oder du nachdenkst). Sag das am Anfang und noch einmal, wenn die Runde wartet und nichts ankommt.
+7. **Der Auftrag beschreibt die Lage, er ordnet nichts vorab ein.** Schreib nicht „das Videospiel ist Geplauder“:
+   Ein Entschluss fiel mitten im Videospiel-Gerede („ich bau eine Bombe und mach Harakiri“) und wurde als Scherz
+   übergangen. Nenne, worauf du wartest, und lass die Regeln des Zuhörers entscheiden.
+8. **Bleibt es still, schau ins Log.** Sagen die Spieler, sie hätten längst gesagt, was sie tun, lies `table_state`
+   mit `log` und handle nach dem, was dort steht, statt auf den nächsten Zuhörer zu warten.
 
 Der Befehl braucht einmal die Erlaubnis für Bash (`curl` an `127.0.0.1`); fragt die App, den Menschen zu Beginn
 bitten, sie für die Sitzung zu geben. Gibt es `watch` nicht (ältere App): wie früher, `wait_for_players` wartet
