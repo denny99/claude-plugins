@@ -229,6 +229,8 @@ export type GpuState = {
   running: number;
   queued: number;
   step: string;
+  /** What the running job makes, in the game master's words ("Bild ‚Das Tor‘"); "" when the Studio does not say. */
+  doing: string;
   progress: number | null;
   busyNote: string;
   checkedAt: number;

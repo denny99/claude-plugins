@@ -136,7 +136,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
   await $.command.run({ command: "dnd", args: "table" } as never);
 
   let b = await $.ui.mount({ ...band(), surface: "desktop" });
-  expect(await findShown(b, /kein Wächter/)).toBeDefined();
+  expect(await findShown(b, /Spieler ungehört/)).toBeDefined();
   await b.unmount();
 
   // A permission query (no call) is not a watch.
@@ -145,7 +145,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
     input: { command: WATCH, run_in_background: true },
   } as never);
   b = await $.ui.mount({ ...band(), surface: "desktop" });
-  expect(await findShown(b, /kein Wächter/)).toBeDefined();
+  expect(await findShown(b, /Spieler ungehört/)).toBeDefined();
   await b.unmount();
 
   // The real call, seen at tool.check: its answer comes back untouched (no tool.call hook on Bash).
@@ -157,7 +157,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
   } as never);
   expect(JSON.stringify(ran)).toContain("bwatch1");
   b = await $.ui.mount({ ...band(), surface: "desktop" });
-  expect(await findShown(b, /Wächter läuft/)).toBeDefined();
+  expect(await findShown(b, /Spieler werden gehört/)).toBeDefined();
   await b.unmount();
 
   // Another background task ending does not end the watch.
@@ -166,7 +166,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
     origin: { kind: "task-notification" },
   } as never);
   b = await $.ui.mount({ ...band(), surface: "desktop" });
-  expect(await findShown(b, /Wächter läuft/)).toBeDefined();
+  expect(await findShown(b, /Spieler werden gehört/)).toBeDefined();
   await b.unmount();
 
   // A turn ends while the watcher runs: no reminder.
@@ -177,7 +177,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
     turnId: "t1",
     reason: "answer",
   } as never);
-  expect(w.toasts.filter((t) => /ohne Wächter/.test(t))).toEqual([]);
+  expect(w.toasts.filter((t) => /Niemand hört gerade auf die Spieler/.test(t))).toEqual([]);
 
   // The watcher's task ends.
   await $.prompt.submit({
@@ -185,7 +185,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
     origin: { kind: "task-notification" },
   } as never);
   b = await $.ui.mount({ ...band(), surface: "desktop" });
-  expect(await findShown(b, /kein Wächter/)).toBeDefined();
+  expect(await findShown(b, /Spieler ungehört/)).toBeDefined();
   await b.unmount();
 
   // A subagent's turn is not the table's; the main thread's is.
@@ -197,7 +197,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
     agentId: "a9",
     reason: "answer",
   } as never);
-  expect(w.toasts.filter((t) => /ohne Wächter/.test(t))).toEqual([]);
+  expect(w.toasts.filter((t) => /Niemand hört gerade auf die Spieler/.test(t))).toEqual([]);
   await $.turn.complete({
     answer: "",
     durationMs: 1,
@@ -212,7 +212,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
     turnId: "t4",
     reason: "answer",
   } as never);
-  expect(w.toasts.filter((t) => /ohne Wächter/.test(t)).length).toBe(1);
+  expect(w.toasts.filter((t) => /Niemand hört gerade auf die Spieler/.test(t)).length).toBe(1);
 
   // The next prompt the person types carries the reminder once.
   const r = await $.prompt.submit({

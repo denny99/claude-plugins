@@ -70,6 +70,25 @@ export function heroesOf(state: Obj): Hero[] {
   });
 }
 
+const VERDICT_DE: Record<string, string> = {
+  success: "Erfolg",
+  failure: "Fehlschlag",
+  great: "großer Erfolg",
+  "great success": "großer Erfolg",
+  extraordinary: "außergewöhnlicher Erfolg",
+  "extraordinary success": "außergewöhnlicher Erfolg",
+  automatic: "automatischer Erfolg",
+  "automatic success": "automatischer Erfolg",
+  critical: "kritischer Erfolg",
+  "critical!": "kritischer Erfolg",
+  fumble: "Patzer",
+};
+
+/** A roll's verdict as the Studio names it ("Great success") in German; unknown words pass unchanged. */
+export function verdictDe(verdict: string): string {
+  return VERDICT_DE[verdict.trim().toLowerCase()] ?? verdict;
+}
+
 /** The evening's rolls, newest last. */
 export function rollsOf(log: unknown[]): Roll[] {
   return log
@@ -79,7 +98,7 @@ export function rollsOf(log: unknown[]): Roll[] {
       who: str(e.who),
       label: str(e.label),
       total: str(e.total),
-      verdict: str(e.verdict),
+      verdict: verdictDe(str(e.verdict)),
       hidden: e.hidden === true,
     }));
 }
@@ -305,6 +324,34 @@ export function countFindings(md: string): number {
     .filter((l) => /^\s?(?:[-*]|\d+[.)])\s+\S/.test(l)).length;
   if (items) return items;
   return md.split("\n").filter((l) => /^#{2,3}\s+\S/.test(l)).length;
+}
+
+/** What the game master reads for each pnp agent: a role, never the agent's file name. */
+export const AGENT_LABEL: Record<string, string> = {
+  "pnp-architekt": "Architekt",
+  "pnp-texter": "Texter",
+  "pnp-maler": "Maler",
+  "pnp-klang": "Klang-Macher",
+  "pnp-tischbereit": "Stimmen-Macher",
+  "pnp-nachbesserer": "Nachbesserer",
+  "pnp-lore": "Welt-Notizen",
+  "pnp-pruefer": "Prüfer",
+  "pnp-chronist": "Chronist",
+  "pnp-vorbereiter": "Vorbereiter",
+  "pnp-zuhoerer": "Zuhörer",
+  "pnp-review-technik": "Prüfer Technik",
+  "pnp-review-konsistenz": "Prüfer Stimmigkeit",
+  "pnp-review-spielbarkeit": "Prüfer Spielbarkeit",
+};
+
+/** `pnp-maler` → "Maler"; a list "pnp-maler, pnp-texter (…)" → "Maler, Texter". */
+export function agentLabel(names: string): string {
+  return names
+    .replace(/\s*\(.*\)$/, "")
+    .split(/\s*[,+]\s*/)
+    .filter(Boolean)
+    .map((n) => AGENT_LABEL[n] ?? n.replace(/^pnp-/, ""))
+    .join(", ");
 }
 
 /** The build pipeline of pnp-kampagne, in order. */
@@ -561,6 +608,27 @@ export function whisperOf(json: Obj, now: number): WhisperInfo | undefined {
   };
 }
 
+const JOB_KIND: Record<string, string> = {
+  picture: "Bild",
+  image: "Bild",
+  sound: "Klang",
+  voice: "Stimme",
+  line: "Stimme",
+  clip: "Clip",
+  video: "Clip",
+  animate: "Clip",
+  map: "Karte",
+  "3d": "3D-Modell",
+};
+
+/** "Bild ‚Das Tor‘" from a job's kind and name, when the Studio names them; never a ComfyUI node. */
+function jobDoing(job: Obj): string {
+  const kind = JOB_KIND[(str(job.kind) || str(job.feature)).toLowerCase()] ?? "";
+  const name = str(job.name) || str(job.title) || str(job.label);
+  if (!kind) return "";
+  return name ? `${kind} ‚${name}‘` : kind;
+}
+
 /** Running and queued jobs from studio_status. */
 export function gpuOf(status: Obj, now: number): GpuState {
   const jobs = arr(status.jobs).map(obj);
@@ -570,6 +638,7 @@ export function gpuOf(status: Obj, now: number): GpuState {
     running: running.length,
     queued: jobs.length - running.length,
     step: str(first.step) || str(first.mode),
+    doing: jobDoing(first),
     progress: typeof first.progress === "number" ? first.progress : null,
     busyNote: str(status.computerBusy),
     checkedAt: now,
@@ -594,13 +663,18 @@ function item(
   fix: string,
   emptyStatus: AcceptItem["status"] = "idle",
 ): AcceptItem {
+  const empty = total === 0;
   return {
     key,
     label,
-    status: total === 0 ? emptyStatus : missing.length ? "failed" : "ok",
-    counts: total === 0 ? "none" : `${total - missing.length}/${total}`,
+    status: empty ? emptyStatus : missing.length ? "failed" : "ok",
+    counts: empty
+      ? emptyStatus === "idle"
+        ? "entfällt (noch nichts da)"
+        : "fehlt noch"
+      : `${total - missing.length}/${total}`,
     detail: names(missing),
-    fix: missing.length ? fix : "",
+    fix: missing.length || (empty && emptyStatus !== "idle") ? fix : "",
   };
 }
 
@@ -622,22 +696,22 @@ export function acceptanceOf(
   const sceneFix = new Set<string>();
   for (const s of scenes) {
     const lack = [
-      str(s.picture) ? "" : "picture",
-      str(s.text) ? "" : "text",
-      str(s.notes) ? "" : "recipe",
+      str(s.picture) ? "" : "Bild",
+      str(s.text) ? "" : "Vorlesetext",
+      str(s.notes) ? "" : "Ablauf",
     ].filter(Boolean);
     if (lack.length) sceneGaps.push(`${str(s.title)} (${lack.join("/")})`);
-    if (lack.includes("picture")) sceneFix.add("pnp-maler");
-    if (lack.includes("text") || lack.includes("recipe"))
+    if (lack.includes("Bild")) sceneFix.add("pnp-maler");
+    if (lack.includes("Vorlesetext") || lack.includes("Ablauf"))
       sceneFix.add("pnp-texter");
   }
   out.push(
     item(
       "scenes",
-      "Scenes: picture + text + recipe",
+      "Szenen mit Bild, Vorlesetext und Ablauf",
       scenes.length,
       sceneGaps,
-      [...sceneFix].join(", "),
+      [...sceneFix].join(", ") || "pnp-texter",
       "failed",
     ),
   );
@@ -664,11 +738,11 @@ export function acceptanceOf(
     .map((m) => str(m.name));
   for (const want of used)
     if (!maps.some((m) => str(m.name) === want))
-      unpainted.push(`${want} (missing)`);
+      unpainted.push(`${want} (fehlt)`);
   out.push(
     item(
       "maps",
-      "Maps painted",
+      "Karten gemalt",
       Math.max(mine.length, used.size),
       unpainted,
       "pnp-maler",
@@ -683,7 +757,7 @@ export function acceptanceOf(
   out.push(
     item(
       "pins",
-      "Places pinned on their map",
+      "Orte auf ihrer Karte",
       places.length,
       unpinned,
       "pnp-maler",
@@ -699,22 +773,22 @@ export function acceptanceOf(
   for (const n of talking) {
     const stock = obj(n.stock);
     const lack = [
-      str(n.portrait) ? "" : "portrait",
-      str(n.voice) || n.ownVoice === true ? "" : "voice",
-      str(n.sheet) ? "" : "sheet",
-      Object.values(stock).some((l) => arr(l).length) ? "" : "stock lines",
+      str(n.portrait) ? "" : "Bild",
+      str(n.voice) || n.ownVoice === true ? "" : "Stimme",
+      str(n.sheet) ? "" : "Werte",
+      Object.values(stock).some((l) => arr(l).length) ? "" : "Sätze",
     ].filter(Boolean);
     if (!lack.length) continue;
     npcGaps.push(`${str(n.name)} (${lack.join("/")})`);
-    if (lack.includes("portrait")) npcFix.add("pnp-maler");
-    if (lack.includes("voice")) npcFix.add("pnp-nachbesserer");
-    if (lack.includes("sheet") || lack.includes("stock lines"))
+    if (lack.includes("Bild")) npcFix.add("pnp-maler");
+    if (lack.includes("Stimme")) npcFix.add("pnp-nachbesserer");
+    if (lack.includes("Werte") || lack.includes("Sätze"))
       npcFix.add("pnp-texter");
   }
   out.push(
     item(
       "npcs",
-      "Talking NPCs: portrait, voice, sheet, lines",
+      "Sprechende NPCs mit Bild, Stimme, Werten und Sätzen",
       talking.length,
       npcGaps,
       [...npcFix].join(", "),
@@ -729,7 +803,7 @@ export function acceptanceOf(
   out.push(
     item(
       "start",
-      "Start squares in scene notes",
+      "Startfelder in den Szenen",
       onMap.length,
       noStart,
       "pnp-texter",
@@ -741,9 +815,9 @@ export function acceptanceOf(
   const partyAt = str(campaign.partyAt) || str(campaign.party_at);
   out.push({
     key: "threads",
-    label: "Threads and party_at set",
+    label: "Offene Fäden und wo die Gruppe steht",
     status: threads && partyAt ? "ok" : "warning",
-    counts: `${threads} threads · ${partyAt ? "party_at set" : "no party_at"}`,
+    counts: `${threads} Fäden · ${partyAt ? "Standort gesetzt" : "Standort fehlt"}`,
     detail: partyAt,
     fix: threads && partyAt ? "" : "pnp-texter (chapter of a campaign)",
   });
@@ -754,7 +828,7 @@ export function acceptanceOf(
   );
   out.push({
     key: "broken",
-    label: "Broken references",
+    label: "Kaputte Verweise",
     status: broken.length ? "failed" : "ok",
     counts: String(broken.length),
     detail: names(broken),
@@ -767,9 +841,11 @@ export function acceptanceOf(
   const short = m ? m[1] !== m[2] : false;
   out.push({
     key: "prepare",
-    label: "prepare_table",
+    label: "Stimmen vorbereitet",
     status: !prepared ? "idle" : failed || short ? "failed" : "ok",
-    counts: prepared || "not run yet",
+    counts: prepared
+      ? prepared.replace(/(\d+) failed/, "$1 fehlgeschlagen")
+      : "noch nicht gelaufen",
     detail: "",
     fix: !prepared || failed || short ? "pnp-tischbereit" : "",
   });
@@ -793,9 +869,9 @@ export function debriefText(
   notes: { at: number; text: string }[],
 ): string {
   return [
-    `# Interjections — ${title}`,
+    `# Einwürfe — ${title}`,
     "",
-    "What the person wrote into the chat while the table was live (for the debrief, nach-dem-abend.md).",
+    "Was du bei laufendem Tisch in den Chat geschrieben hast (für die Nachbesprechung, nach-dem-abend.md).",
     "",
     ...notes.map(
       (n) =>

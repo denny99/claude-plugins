@@ -54,7 +54,7 @@ test('the build cockpit tracks pnp agents and counts the reviewers’ findings',
 
   await $.command.run({ command: 'dnd', args: 'build' } as never).catch(() => undefined)
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect((await findShown(ui, /pnp-review-technik/))?.text).toContain('pnp-review-technik')
+  expect((await findShown(ui, /Prüfer Technik/))?.text).toContain('Prüfer Technik')
   await ui.unmount()
 
   await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 'x', agentId: 'a1', reason: 'answer' } as never)

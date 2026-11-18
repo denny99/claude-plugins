@@ -274,7 +274,7 @@ test("a subagent's watch is never the GM's watcher, with or without listener mod
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd", args: "table" } as never);
   await $.tool.check(watchCheck("sub1"));
-  expect(await bandOf($)).toContain("kein Wächter");
+  expect(await bandOf($)).toContain("Spieler ungehört");
 });
 
 test("listener mode: a subagent's watch does not set the watcher running", async ($, on) => {
@@ -288,7 +288,7 @@ test("listener mode: a subagent's watch does not set the watcher running", async
   // Listener mode off again: the band shows the watcher, which the listener's watch never started.
   w.answers.table_state = TABLE;
   await $.command.run({ command: "dnd", args: "table" } as never);
-  expect(await bandOf($)).toContain("kein Wächter");
+  expect(await bandOf($)).toContain("Spieler ungehört");
 });
 
 test("a listener's quiet take with a secret turn leaves no secret note and no pending secret", async ($, on) => {
@@ -380,7 +380,7 @@ test("listener mode: an aborted listener is an error, is no longer running, and 
     .map((x) => x.text)
     .join(" ");
   await ui.unmount();
-  expect(texts).toContain("the listener stopped");
+  expect(texts).toContain("Der Zuhörer ist abgebrochen");
   await $.turn.complete(done(undefined, "", "m1"));
   expect(w.toasts.filter((t) => /ohne Zuhörer/.test(t)).length).toBe(1);
 });

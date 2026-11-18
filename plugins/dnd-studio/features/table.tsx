@@ -147,7 +147,7 @@ export async function discardTurns(
     );
   } catch (err) {
     $.ui.toast(
-      `✗ wait_for_players: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`,
+      `✗ Züge nicht verworfen: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`,
     );
   }
   await refreshTable($, false);
@@ -165,7 +165,7 @@ export async function tableAction(
     $.ui.toast(done);
   } catch (err) {
     $.ui.toast(
-      `✗ ${tool}: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`,
+      `✗ Das Studio hat abgelehnt: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`,
     );
   }
   await refreshTable($, false);
@@ -852,8 +852,8 @@ export function renderTable(
       Sentence(
         k,
         evening.watcher.state === "running"
-          ? "● Watcher running (wait_for_players watch)"
-          : "○ No watcher: players' turns go unnoticed",
+          ? "● Claude hört auf die Spieler"
+          : "○ Niemand hört auf die Spieler – ihre Züge kommen nicht an. Claude wird beim nächsten Zug erinnert; sonst Claude bitten, wieder zuzuhören.",
         { tone: evening.watcher.state === "running" ? "ok" : "warn" },
       ),
     );
@@ -977,11 +977,7 @@ export function renderTable(
                         valueText={`${hp.hp}/${hp.max}`}
                         color={low ? k.t.tones.bad.fg : k.t.tones.ok.fg}
                       />
-                    ) : (
-                      <Text size="caption" color={k.t.faint}>
-                        –
-                      </Text>
-                    )}
+                    ) : null}
                   </Box>
                 </Box>
               );
@@ -1210,7 +1206,7 @@ export function renderTable(
       children: [
         Sentence(
           k,
-          "Kontext voll: Pause → Chronist sichert den Kanon → /compact → Kampagne und Kanon neu lesen → Weiter.",
+          "Wenn Claude der Faden ausgeht (langer Abend): Pause drücken, Claude hält das Erlebte fest, sortiert sich und macht nach „Weiter“ dort weiter, wo ihr wart.",
           { faint: true },
         ),
         Actions(
@@ -1253,7 +1249,7 @@ export function renderTable(
         ),
         Sentence(
           k,
-          "Danach: Rückblick und Ausklang · Kanon aufräumen · write_session · campaign set threads/party_at · Nachbesprechung.",
+          "Nach dem Abend: Rückblick und Ausklang · Claude schreibt die Sitzung auf und merkt sich offene Fäden und wo die Gruppe steht · Nachbesprechung.",
           { faint: true },
         ),
         ...renderInterjections($, k, evening),

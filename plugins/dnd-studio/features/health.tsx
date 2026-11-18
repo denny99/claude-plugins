@@ -69,19 +69,21 @@ export async function startApp(
     return;
   }
   await host.run(argv[0]!, argv.slice(1));
-  $.ui.toast("Starting DnD Studio… press Check in a few seconds.");
+  $.ui.toast("Studio startet … in ein paar Sekunden „Neu prüfen“ drücken.");
   $.clock.after(8000, () => void probe($, options));
 }
 
 /** The fix for an old user-level MCP server named like this plugin (its tools take the plugin's tool names). */
 export const CLASH_FIX =
+  "Im Terminal `claude mcp remove dnd-studio -s user` ausführen, dann Claude Code neu starten (der neue Installer der Studio-App erledigt das auch).";
+const CLASH_FIX_EN =
   "Run `claude mcp remove dnd-studio -s user`, then restart Claude Code (the D&D Studio app's new installer does this migration too).";
 
 /** The health line for a failed tool registration at session start. */
 export function clashText(why: string): string {
   const detail = tidyError(why);
   return /MCP server named|already/i.test(detail)
-    ? `The plugin's own tool (initiative) is missing: an MCP server named "dnd-studio" is set up at user level and holds its name (${detail}). ${CLASH_FIX}`
+    ? `The plugin's own tool (initiative) is missing: an MCP server named "dnd-studio" is set up at user level and holds its name (${detail}). ${CLASH_FIX_EN}`
     : `The plugin's own tool (initiative) could not be registered: ${detail}`;
 }
 
@@ -105,7 +107,7 @@ const RULES: { key: keyof Rules; label: string; text: string }[] = [
   {
     key: "annotate",
     label: "Claude Tipps am Tisch geben",
-    text: "Nach Tisch-Befehlen bekommt Claude kurze Hinweise, etwa wenn Discord nicht verbunden ist oder ein Spieler noch wartet.",
+    text: "Claude bekommt während des Abends kurze Erinnerungen, etwa wenn Discord nicht verbunden ist oder ein Spieler noch wartet.",
   },
   {
     key: "denyLeaks",
@@ -115,7 +117,7 @@ const RULES: { key: keyof Rules; label: string; text: string }[] = [
   {
     key: "denyTalkNpc",
     label: "NPCs am Tisch selbst sprechen lassen",
-    text: "Bei laufendem Tisch spricht Claude NPCs direkt mit ihrer Stimme, nicht über das Werkzeug für die Vorbereitung.",
+    text: "Bei laufendem Tisch antworten NPCs sofort mit ihrer eigenen Stimme, statt erst im Hintergrund vorbereitet zu werden.",
   },
   {
     key: "denyFamily",
@@ -219,7 +221,7 @@ export function renderHealth(
                 "Verbindung zu Claude",
                 health.connected
                   ? "Token gesetzt"
-                  : "Studio → Einstellungen → Verbindungen → Für Claude Code einrichten",
+                  : "Token fehlt: im Studio unter Einstellungen → Verbindungen kopieren",
               ),
             ]
           : [Sentence(k, "Noch nicht geprüft.", { faint: true })]),
@@ -256,12 +258,12 @@ export function renderHealth(
             },
             {
               key: "reconfigure",
-              label: "Token eintragen",
+              label: health?.connected ? "Token ändern" : "Token eintragen",
               icon: "gear",
-              variant: "secondary",
+              variant: health?.connected ? ("link" as const) : ("secondary" as const),
               onPress: () =>
                 $.ui.toast(
-                  "/plugin → dnd-studio → konfigurieren: Token aus Studio → Einstellungen → Verbindungen.",
+                  "1. Im Studio: Einstellungen → Verbindungen → Token kopieren. 2. Hier: /plugin → dnd-studio → Konfigurieren → Token einfügen.",
                 ),
             },
           ],

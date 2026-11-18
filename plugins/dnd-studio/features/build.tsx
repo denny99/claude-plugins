@@ -20,6 +20,7 @@ import {
   countFindings,
   findingsPathOf,
   PIPELINE,
+  agentLabel,
   pnpAgentOf,
   reviewRounds,
   localDateTime,
@@ -91,8 +92,8 @@ export function isApproved(run: AgentRun, plan: PlanApproval | null): boolean {
 export function approvalPrompt(file: string, campaign: string): string {
   const where = campaign ? ` für die Kampagne „${campaign}“` : "";
   return (
-    `Ich habe den Bauplan von pnp-architekt${file ? ` (${file})` : ""}${where} im D&D-Panel abgesegnet. ` +
-    `Bau damit weiter (pnp-kampagne: als Nächstes pnp-texter). ` +
+    `Ich habe den Bauplan des Architekten${file ? ` (${file})` : ""}${where} im D&D-Panel abgesegnet. ` +
+    `Bau damit weiter, als Nächstes schreibt der Texter die Szenen. ` +
     `Sag mir vor dem ersten Schreibaufruf, in welche Kampagne du schreibst${campaign ? ` (sie muss „${campaign}“ sein)` : ""}, und warte auf mein Ja.`
   );
 }
@@ -239,8 +240,8 @@ async function readWholeCampaign(
   if (!isCampaign(base))
     throw new Error(
       base.truncated
-        ? "the answer was cut at the output limit"
-        : `no campaign in the answer: ${String(base.text ?? "").slice(0, 120)}`,
+        ? "die Antwort des Studios war zu lang und wurde abgeschnitten"
+        : `keine Kampagne in der Antwort: ${String(base.text ?? "").slice(0, 120)}`,
     );
   const out: Record<string, unknown> = { ...base };
   for (const [list, key] of CHECK_LISTS) {
@@ -266,12 +267,18 @@ async function readWholeCampaign(
         }
     }
     if (failed) {
-      errors.push(`campaign ${list}: answer too big or not JSON`);
+      errors.push(`Kampagne (${LIST_DE[list] ?? list}): Antwort zu groß oder unlesbar`);
       // the overview's rows still count; their details are unknown
     } else out[list] = [...rows.values()];
   }
   return out;
 }
+
+const LIST_DE: Record<string, string> = {
+  scenes: "Szenen",
+  npcs: "NPCs",
+  places: "Orte",
+};
 
 /**
  * The acceptance check (a person's Check/Refresh): the open campaign, the map list and studio_status (GPU jobs), each
@@ -284,11 +291,11 @@ export async function refreshCampaign($: EngineInterface): Promise<void> {
   try {
     campaign = await readWholeCampaign($, errors);
   } catch (err) {
-    $.ui.toast(`✗ campaign: ${errText(err)}`);
+    $.ui.toast(`✗ Kampagne nicht gelesen: ${errText(err)}`);
     // no stale counts beside the error: what was read before is not this answer
     await setCampaign($, null);
     await patchCheck($, () => ({
-      error: `campaign: ${errText(err)}`,
+      error: `Kampagne nicht gelesen: ${errText(err)}`,
       items: [],
       checkedAt: now,
     }));
@@ -312,12 +319,12 @@ export async function refreshCampaign($: EngineInterface): Promise<void> {
   try {
     maps = await studioCall($, "map", { action: "list" });
   } catch (err) {
-    errors.push(`map list: ${errText(err)}`);
+    errors.push(`Kartenliste: ${errText(err)}`);
   }
   try {
     await noteStudioStatus($, await studioCall($, "studio_status", {}));
   } catch (err) {
-    errors.push(`studio_status: ${errText(err)}`);
+    errors.push(`Studio-Zustand: ${errText(err)}`);
   }
   const live = await readLive($);
   await patchCheck($, () => ({
@@ -387,10 +394,10 @@ export function fixPrompt(open: AcceptItem[]): string {
     .filter((it) => it.fix)
     .map(
       (it) =>
-        `- ${it.label} (${it.counts})${it.detail ? `: ${it.detail}` : ""} → ${it.fix}`,
+        `- ${it.label} (${it.counts})${it.detail ? `: ${it.detail}` : ""} → ${agentLabel(it.fix)} (${it.fix.replace(/\s*\(.*\)$/, "")})`,
     );
   return [
-    "Abnahme-Check im D&D-Panel: diese Punkte sind offen. Starte für jeden den genannten Agenten (pnp-kampagne, Abschnitt Nachbessern) und prüfe danach neu:",
+    "Abnahme-Check im D&D-Panel: diese Punkte sind offen. Lass sie von den genannten Agenten beheben (Kampagnen-Anleitung, Abschnitt Nachbessern) und prüfe danach neu:",
     ...lines,
   ].join("\n");
 }
@@ -429,10 +436,10 @@ export async function renderBuild(
       primary: !gpu
         ? "GPU: noch nicht geprüft"
         : gpu.running || gpu.queued
-          ? `GPU belegt · ${gpu.running} läuft, ${gpu.queued} warten${gpu.step ? ` · ${gpu.step}` : ""}${gpu.progress !== null ? ` ${gpu.progress}%` : ""}`
+          ? `GPU belegt · ${gpu.running} läuft, ${gpu.queued} warten${gpu.doing ? ` · macht gerade: ${gpu.doing}` : ""}${gpu.progress !== null ? ` ${gpu.progress}%` : ""}`
           : "GPU frei",
       secondary:
-        gpu?.busyNote || "GPU-Agenten (maler, klang, tischbereit) nacheinander",
+        gpu?.busyNote || "Bilder, Klänge und Stimmen werden nacheinander gemacht",
     }),
   );
   if (gpuRunning.length > 1)
@@ -440,18 +447,18 @@ export async function renderBuild(
       Row(k, {
         key: "gpu-clash",
         status: "warning",
-        primary: `${gpuRunning.map((r) => r.agent).join(" + ")} teilen sich gerade die GPU`,
+        primary: `${gpuRunning.map((r) => agentLabel(r.agent)).join(" + ")} teilen sich gerade die GPU`,
         secondary: "erst einen fertig werden lassen",
       }),
     );
   const STAGE_DE: Record<string, string> = {
-    Lore: "Lore abgleichen",
+    Lore: "Welt-Notizen abgleichen",
     Plan: "Bauplan",
     Texts: "Texte",
     Pictures: "Bilder",
     Sounds: "Klänge",
     Voices: "Stimmen vorbereiten",
-    Review: "Abnahme und drei Reviews",
+    Review: "Abnahme und drei Prüfungen",
     Fixes: "Nachbessern",
   };
   const steps = PIPELINE.map((p) => {
@@ -467,8 +474,8 @@ export async function renderBuild(
       key: `stage-${p.stage}`,
       title: `${STAGE_DE[p.stage] ?? p.stage}${p.stage === "Review" && st !== "idle" ? ` · ${findings} Mängel` : ""}`,
       detail: running.length
-        ? `${running.map((r) => r.agent).join(", ")} arbeitet`
-        : p.agents.join(", "),
+        ? `${running.map((r) => agentLabel(r.agent)).join(", ")} ${running.length > 1 ? "arbeiten" : "arbeitet"}`
+        : agentLabel(p.agents.join(", ")),
       state: (st === "idle"
         ? "todo"
         : st === "running"
@@ -485,7 +492,7 @@ export async function renderBuild(
         CardTitle(k, {
           icon: "hammer",
           title: campName ? `Bau-Abschnitte · ${campName}` : "Bau-Abschnitte",
-          count: `${steps.filter((x) => x.state === "done").length} von ${steps.length} · Review-Runde ${reviewRounds(mine)}/3`,
+          count: `${steps.filter((x) => x.state === "done").length} von ${steps.length} · Prüfrunde ${reviewRounds(mine)}/3`,
         }),
         Stepper(k, { key: "stages", steps }),
       ],
@@ -516,9 +523,9 @@ export async function renderBuild(
                     : "warning",
             primary:
               planRun.state === "running"
-                ? "pnp-architekt schreibt den Bauplan …"
+                ? "Der Architekt schreibt den Bauplan …"
                 : planRun.state === "failed"
-                  ? "pnp-architekt ist gescheitert: neu starten"
+                  ? "Der Architekt ist gescheitert: neu starten"
                   : approved
                     ? `Bauplan abgesegnet${check.plan?.at ? ` ${localDateTime(check.plan.at)}` : ""}`
                     : "Bauplan wartet auf deine Freigabe",
@@ -575,7 +582,7 @@ export async function renderBuild(
                     : r.state === "failed"
                       ? "failed"
                       : "ok",
-                primary: `${r.agent}${r.findings !== undefined ? ` · ${r.findings} Mängel` : ""}`,
+                primary: `${agentLabel(r.agent)}${r.findings !== undefined ? ` · ${r.findings} Mängel` : ""}`,
                 secondary: r.findingsFile ?? "",
               }),
             ),
@@ -583,7 +590,7 @@ export async function renderBuild(
               Row(k, {
                 key: `file-${r.id}`,
                 glyph: "›",
-                primary: `Mängel: ${r.agent}`,
+                primary: `Mängel: ${agentLabel(r.agent)}`,
                 dim: true,
                 actions: rules.spoilerSafe
                   ? []
@@ -600,7 +607,7 @@ export async function renderBuild(
               ? LogBox(k, { key: "preview", lines: preview.split("\n") })
               : null,
           ].filter((x): x is RenderElement => !!x)
-        : [EmptyState(k, "Noch kein pnp-Agent gelaufen.")],
+        : [EmptyState(k, "Noch kein Agent gelaufen.")],
     }),
   );
   const open = check.items.filter(
@@ -611,7 +618,8 @@ export async function renderBuild(
       key: "check",
       children: [
         CardTitle(k, {
-          icon: "check",
+          icon: campaign && open.length ? "alert" : "check",
+          tone: campaign && open.length ? "bad" : undefined,
           title: "Abnahme-Check",
           pill: campaign
             ? open.length
@@ -644,8 +652,8 @@ export async function renderBuild(
                   meta: rules.spoilerSafe ? "" : it.detail,
                   pill: it.fix
                     ? {
-                        text: `fix: ${it.fix.replace(/\s*\(.*\)$/, "")}`,
-                        tone: "info",
+                        text: `${it.status === "idle" ? "starten" : "beheben"}: ${agentLabel(it.fix)}`,
+                        tone: it.status === "idle" ? "neutral" : "info",
                         glyph: false,
                       }
                     : undefined,
@@ -657,6 +665,13 @@ export async function renderBuild(
                     message:
                       "Profil „Meine Familie“ ist offen: Schreiben wird abgelehnt.",
                   })
+                : null,
+              open.some((it) => it.fix)
+                ? Sentence(
+                    k,
+                    `„Offene Punkte beheben lassen“ bittet Claude, ${agentLabel(open.map((it) => it.fix).filter(Boolean).join(", ")).split(", ").filter((v, i, a) => a.indexOf(v) === i).join(", ")} zu starten. Sie schreiben und malen direkt in ${campName ? `„${campName}“` : "die offene Kampagne"}; danach wird neu geprüft.`,
+                    { faint: true },
+                  )
                 : null,
             ]
           : [

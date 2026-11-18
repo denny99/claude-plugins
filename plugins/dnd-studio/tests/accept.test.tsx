@@ -11,7 +11,7 @@ test("pure: the §4 checklist names what is missing and who fixes it", () => {
   expect(by.scenes).toMatchObject({
     status: "failed",
     counts: "1/2",
-    detail: "Im Wald (picture/text/recipe)",
+    detail: "Im Wald (Bild/Vorlesetext/Ablauf)",
     fix: "pnp-maler, pnp-texter",
   });
   expect(by.maps).toMatchObject({
@@ -29,7 +29,7 @@ test("pure: the §4 checklist names what is missing and who fixes it", () => {
   expect(by.npcs).toMatchObject({
     status: "failed",
     counts: "1/2",
-    detail: "Bartel (sheet)",
+    detail: "Bartel (Werte)",
     fix: "pnp-texter",
   });
   expect(by.start).toMatchObject({ status: "ok", counts: "1/1" });
@@ -45,10 +45,11 @@ test("pure: the §4 checklist names what is missing and who fixes it", () => {
   expect(e.threads?.status).toBe("warning");
   expect(e.prepare).toMatchObject({
     status: "idle",
-    counts: "not run yet",
+    counts: "noch nicht gelaufen",
     fix: "pnp-tischbereit",
   });
-  expect(e.scenes?.status).toBe("failed");
+  expect(e.scenes).toMatchObject({ status: "failed", fix: "pnp-texter" });
+  expect(e.pins?.counts).toBe("entfällt (noch nichts da)");
 
   const noStart = acceptanceOf(
     {
@@ -100,19 +101,20 @@ test("Build: Check reads campaign, maps and studio_status; rows show status and 
 
   const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
   expect((await findShown(ui, /GPU belegt/))?.text).toBe(
-    "● GPU belegt · 1 läuft, 1 warten · KSampler 40%",
+    "● GPU belegt · 1 läuft, 1 warten 40%",
   );
   expect(
-    await findShown(ui, /Scenes: picture \+ text \+ recipe · 1\/2/),
+    await findShown(ui, /Szenen mit Bild, Vorlesetext und Ablauf · 1\/2/),
   ).toBeDefined();
-  expect(await findShown(ui, /Maps painted/)).toBeDefined();
+  expect(await findShown(ui, /Karten gemalt/)).toBeDefined();
   expect(
-    await findShown(ui, /Start squares in scene notes · 1\/1/),
+    await findShown(ui, /Startfelder in den Szenen · 1\/1/),
   ).toBeDefined();
-  expect(await findShown(ui, /Threads and party_at set/)).toBeDefined();
-  expect(await findShown(ui, /prepare_table · not run yet/)).toBeDefined();
-  expect(await findShown(ui, /fix: pnp-maler, pnp-texter/)).toBeDefined();
-  expect(await findShown(ui, /fix: pnp-tischbereit/)).toBeDefined();
+  expect(await findShown(ui, /Offene Fäden und wo die Gruppe steht/)).toBeDefined();
+  expect(await findShown(ui, /Stimmen vorbereitet · noch nicht gelaufen/)).toBeDefined();
+  expect(await findShown(ui, /beheben: Maler, Texter/)).toBeDefined();
+  expect(await findShown(ui, /starten: Stimmen-Macher/)).toBeDefined();
+  expect(await findShown(ui, /pnp-/)).toBeUndefined();
   // spoiler-safe by default: counts, no names
   expect(await findShown(ui, /Im Wald/)).toBeUndefined();
   await ui.unmount();
@@ -159,7 +161,7 @@ test("Build: the plan is signed off by a press, recorded, and the main thread is
   await ui.press({ key: "plan-approve" });
   expect(w.submitted.length).toBe(1);
   expect(w.submitted[0]).toContain("~/kampagne/plan.md");
-  expect(w.submitted[0]).toContain("pnp-texter");
+  expect(w.submitted[0]).toContain("Texter");
   expect(w.submitted[0]).toContain("Ich habe den Bauplan");
   expect(w.submitted[0]).toContain("„Breeland“");
   expect(w.submitted[0]).toContain("vor dem ersten Schreibaufruf");
@@ -193,7 +195,7 @@ test("Build: two GPU agents at once are flagged", async ($, on) => {
   await $.command.run({ command: "dnd", args: "build" } as never);
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   expect(
-    await findShown(ui, /pnp-maler \+ pnp-klang teilen sich gerade die GPU/),
+    await findShown(ui, /Maler \+ Klang-Macher teilen sich gerade die GPU/),
   ).toBeDefined();
   await ui.unmount();
 });
@@ -236,7 +238,7 @@ test("Build: a list cut at the engine's output limit is read a few entries at a 
   ).toBe(true);
   const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
   expect(
-    await findShown(ui, /Scenes: picture \+ text \+ recipe · 1\/2/),
+    await findShown(ui, /Szenen mit Bild, Vorlesetext und Ablauf · 1\/2/),
   ).toBeDefined();
   await ui.unmount();
 });
@@ -248,7 +250,7 @@ test("Build: an answer that is no campaign shows an error, not zero counts", asy
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd", args: "build" } as never);
   const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
-  expect(await findShown(ui, /cut at the output limit/)).toBeDefined();
-  expect(await findShown(ui, /Scenes: picture/)).toBeUndefined();
+  expect(await findShown(ui, /zu lang und wurde abgeschnitten/)).toBeDefined();
+  expect(await findShown(ui, /Szenen mit Bild/)).toBeUndefined();
   await ui.unmount();
 });

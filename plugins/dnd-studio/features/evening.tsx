@@ -199,7 +199,7 @@ async function discordAction(
     $.ui.toast(done);
   } catch (err) {
     $.ui.toast(
-      `✗ discord: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`,
+      `✗ Discord: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`,
     );
   }
 }
@@ -274,7 +274,7 @@ export async function noteTurnEnd($: EngineInterface): Promise<boolean> {
     }));
     if (!s.remindPending)
       $.ui.toast(
-        "⚠ Antwort ohne Zuhörer beendet: pnp-zuhoerer starten (Zuhörer-Modus).",
+        "⚠ Claude hat ohne Zuhörer geantwortet: die Spieler werden gerade nicht gehört. Claude wird beim nächsten Zug daran erinnert.",
       );
     return true;
   }
@@ -282,7 +282,7 @@ export async function noteTurnEnd($: EngineInterface): Promise<boolean> {
   await patchEvening($, () => ({ remindPending: true, remindListener: false }));
   if (!s.remindPending)
     $.ui.toast(
-      "⚠ Zug ohne Wächter beendet: die Züge der Spieler gehen unter (wait_for_players watch).",
+      "⚠ Niemand hört gerade auf die Spieler: ihre Züge kommen nicht an. Claude wird beim nächsten Zug daran erinnert.",
     );
   return true;
 }
@@ -375,8 +375,8 @@ export async function noteListenerEnd(
         running: rest,
         endedAt: now,
         error: failed
-          ? "the listener stopped (error or aborted)"
-          : "the listener's answer was not its JSON",
+          ? "Der Zuhörer ist abgebrochen"
+          : "Der Zuhörer kam mit einer unlesbaren Antwort zurück",
       },
     }));
     return true;
@@ -432,12 +432,12 @@ export async function setListener(
     if (view) await setTable($, { ...view, listener: mode });
     $.ui.toast(
       mode === "haiku"
-        ? "Zuhörer an: offenes Mikro, pnp-zuhoerer wartet für die Spielleitung"
-        : "Zuhörer aus: Sprechknöpfe und der Wächter",
+        ? "Zuhörer an: die Spieler sprechen einfach los, ohne Sprechknopf; Claude meldet sich, wenn ein Zug es braucht."
+        : "Zuhörer aus: die Spieler nutzen wieder die Sprechknöpfe unter der Nachricht des Bots.",
     );
   } catch (err) {
     $.ui.toast(
-      `✗ discord listener: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`,
+      `✗ Zuhörer nicht umgeschaltet: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`,
     );
   }
 }
@@ -606,7 +606,7 @@ export function bandEvening(
   }
   return {
     watching: s.watcher.state === "running",
-    watch: s.watcher.state === "running" ? "Wächter läuft" : "kein Wächter",
+    watch: s.watcher.state === "running" ? "Spieler werden gehört" : "Spieler ungehört",
     stale,
   };
 }
@@ -624,7 +624,7 @@ export function renderListener(
     children.push(
       Sentence(
         k,
-        "Aus: Sprechknöpfe und der Wächter. An: offenes Mikro, pnp-zuhoerer (Haiku) weckt die Spielleitung nur, wenn es nötig ist.",
+        "Aus: die Spieler drücken einen Sprechknopf, wenn sie dran sind. An: offenes Mikro, sie sprechen einfach los, und Claude meldet sich nur, wenn ein Zug die Spielleitung braucht.",
         { faint: true },
       ),
     );
@@ -716,14 +716,21 @@ export function renderInterjections(
         show: !k.graphical,
       })
     : null;
+  const what = Sentence(
+    k,
+    "Alles, was du bei laufendem Tisch in den Chat tippst, landet hier für die Nachbesprechung nach dem Abend.",
+    { faint: true },
+  );
   if (!s.notes.length)
     return [
       head,
+      what,
       Sentence(k, "Am laufenden Tisch noch nichts getippt.", { faint: true }),
     ];
   const shown = s.notes.slice(-Math.max(3, Math.min(10, k.rows - 8)));
   return [
     head,
+    what,
     ...shown.map((n) =>
       Sentence(k, `${clockTime(n.at)} ${n.text}`, {
         faint: true,
@@ -768,7 +775,7 @@ export function renderDiscord(
       Sentence(
         k,
         atTable
-          ? "„Stand lesen“ fragt den Bot."
+          ? "„Aktualisieren“ fragt den Bot, wer da ist."
           : "Der Bot ist nicht am Tisch.",
         { faint: true },
       ),
@@ -813,7 +820,7 @@ export function renderDiscord(
               key: `dh-${h.name}`,
               status: "warning",
               title: `${h.name}: kein Spieler da`,
-              meta: "party set discord, oder der Spieler sagt /ich-bin",
+              meta: "Spieler im Discord /ich-bin tippen lassen oder in der Gruppe zuordnen",
             }),
           );
     for (const r of info.rooms)
@@ -875,7 +882,7 @@ export function renderDiscord(
     actions: [
       {
         key: "discord-status",
-        label: "Stand lesen",
+        label: "Aktualisieren",
         icon: "refresh",
         variant: "secondary",
         onPress: () => void refreshDiscord($),

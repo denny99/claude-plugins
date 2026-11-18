@@ -78,7 +78,7 @@ test("stranded turns show with a button that takes them through wait_for_players
   const ui = await $.ui.mount({ ...pane(90, 80), surface: "desktop" });
   expect(await findShown(ui, /2 Züge warten, keine Spielleitung hört zu/)).toBeDefined();
   // no evening: no watcher warning
-  expect(await findShown(ui, /No watcher/)).toBeUndefined();
+  expect(await findShown(ui, /Niemand hört auf die Spieler/)).toBeUndefined();
   expect(w.calls.some((c) => c.tool === "wait_for_players")).toBe(false);
   await ui.press({ key: "turns-drop" });
   expect(w.calls.some((c) => c.tool === "wait_for_players")).toBe(false);
@@ -102,11 +102,11 @@ test("the build's kept state is reset only on the second press", async ($, on) =
   } as never);
   await $.command.run({ command: "dnd", args: "build" } as never);
   const ui = await $.ui.mount({ ...pane(90, 80), surface: "desktop" });
-  expect(await findShown(ui, /Noch kein pnp-Agent gelaufen/)).toBeUndefined();
+  expect(await findShown(ui, /Noch kein Agent gelaufen/)).toBeUndefined();
   await ui.press({ key: "build-reset" });
-  expect(await findShown(ui, /Noch kein pnp-Agent gelaufen/)).toBeUndefined();
+  expect(await findShown(ui, /Noch kein Agent gelaufen/)).toBeUndefined();
   await ui.press({ key: "build-reset" });
-  expect(await findShown(ui, /Noch kein pnp-Agent gelaufen/)).toBeDefined();
+  expect(await findShown(ui, /Noch kein Agent gelaufen/)).toBeDefined();
   expect(w.store.has("runs")).toBe(false);
   expect(w.store.has("plan-approval")).toBe(false);
   await ui.unmount();

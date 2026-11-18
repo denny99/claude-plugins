@@ -70,7 +70,7 @@ export async function applyLook($: EngineInterface): Promise<void> {
       await $.theme.clear();
       await patchLook($, () => ({ applied: "" }));
       $.ui.toast(
-        "Scene look off. Another theme mod (e.g. ds-seasons) comes back after /reload-plugins or a restart.",
+        "Szenen-Look aus. Ein anderes Farbschema (etwa ds-seasons) kommt nach einem Neustart von Claude zurück.",
       );
     }
   } catch {
@@ -140,14 +140,15 @@ export function renderLookPicker(
   if (!d.enabled || !d.sceneTitle) return null;
   return Section(k, {
     key: "look",
-    title: "Look",
-    count: d.applied ? (LOOKS[d.applied as LookId]?.label ?? d.applied) : "",
+    title: d.applied
+      ? `Look: ${LOOKS[d.applied as LookId]?.label ?? d.applied}`
+      : "Look der Szene",
     collapsible: true,
     defaultOpen: false,
     children: [
       Line(
         k,
-        "Desktop and mobile draw it; the terminal only takes the colors.",
+        "Bestimmt Hintergrund und Farben zur Szene; im Terminal nur die Farben.",
         { dim: true },
       ),
       Actions(

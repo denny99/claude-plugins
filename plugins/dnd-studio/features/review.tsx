@@ -6,6 +6,7 @@
  */
 import type { EngineInterface, RenderElement } from "claude-code";
 
+import { agentLabel } from "../lib/model";
 import { autoOpen } from "./dnd-ui";
 import { submitForPerson } from "./evening";
 import { createHost } from "../lib/host";
@@ -630,7 +631,7 @@ function itemRow(
   if (i.verdict === "redo")
     out.push(
       i.note
-        ? Sentence(k, `Notiz: „${i.note}“ → ${i.agent}`, { faint: true })
+        ? Sentence(k, `Notiz: „${i.note}“ → ${agentLabel(i.agent)}`, { faint: true })
         : Input({
             key: `rv-note-${i.id}`,
             placeholder: "Was soll anders werden?",
@@ -653,7 +654,7 @@ export function renderReview(
       EmptyState(k, {
         icon: "speaker",
         title: "Nichts zu prüfen",
-        text: "Neue Klänge und Bilder landen hier, sobald Claude sie zum Prüfen ablegt (pnp-klang, pnp-maler).",
+        text: "Neue Klänge und Bilder vom Klang-Macher und vom Maler landen hier, sobald Claude sie zum Prüfen ablegt.",
       }),
     ];
   const done = r.items.filter((i) => i.verdict).length;
@@ -722,7 +723,7 @@ export function renderReview(
   out.push(
     Sentence(
       k,
-      "„Nochmal machen“ geht mit deiner Notiz direkt an den Klang-Macher (Bilder an den Maler).",
+      "„Nochmal machen“ geht mit deiner Notiz nach „Ergebnis an Claude“ an den Klang-Macher (Bilder an den Maler).",
       { faint: true },
     ),
   );

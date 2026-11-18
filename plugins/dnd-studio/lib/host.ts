@@ -82,12 +82,12 @@ export function startArgv(
 /** How a person starts the app on this OS. */
 export function startHint(platform: Platform): string {
   if (platform === "macos")
-    return 'Start "DnD Studio" from Applications (or the Dock) and wait until the Studio is open.';
+    return "„DnD Studio“ aus den Programmen (oder dem Dock) starten und warten, bis das Studio offen ist.";
   if (platform === "windows")
-    return 'Start "DnD Studio" from the Start menu and wait until the Studio is open; the tray icon is enough.';
+    return "„DnD Studio“ aus dem Startmenü starten und warten, bis das Studio offen ist; das Symbol im Infobereich reicht.";
   if (platform === "wsl")
-    return 'Start "DnD Studio" on Windows; from WSL the MCP server on 127.0.0.1 is only reachable with mirrored networking.';
-  return "Start the dnd-studio desktop app and wait until the Studio is open.";
+    return "„DnD Studio“ unter Windows starten; aus WSL ist das Studio nur mit gespiegeltem Netzwerk (mirrored networking) erreichbar.";
+  return "Die Studio-App starten und warten, bis das Studio offen ist.";
 }
 
 let cached:

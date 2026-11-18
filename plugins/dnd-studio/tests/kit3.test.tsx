@@ -14,7 +14,7 @@ test("kit v3: buttons are native with their glyph in front (if the action has on
     glyphLabel("mic", "Zuhörer an"),
   );
   expect((await ui.find({ type: "Button", key: "discord-status" }))?.text).toBe(
-    glyphLabel("refresh", "Stand lesen"),
+    glyphLabel("refresh", "Aktualisieren"),
   );
   // nothing graphical inside or beside a button: the engine drops a Svg in a Button
   expect(
