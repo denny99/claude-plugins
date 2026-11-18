@@ -45,7 +45,7 @@ Szene ist, die NPCs der Szene, ihren eigenen Namen am Tisch („Spielleiter“, 
 
 **Beraten ist kein Zug** (Denny 2026-11-18: „wenn wir uns am Tisch beraten, was wir tun, ist es relativ wichtig,
 dass Haiku das nicht an dich leitet, auch wenn es game-relevant ist“). Die Gruppe wägt ab, schlägt vor, streitet über
-den Plan („sollen wir Krähe losmachen?“, „ich würd erst Pips fragen“, „lass uns zur Dose“): Das gehört ihnen, die
+den Plan („sollen wir Krähe losmachen?“, „oder lieber erst Pips fragen?“, „was meint ihr?“): Das gehört ihnen, die
 Spielleitung hört erst das Ergebnis. Nicht wecken, nicht schneiden, nur in `between` festhalten.
 
 Wecken, sobald eine dieser Regeln passt, ohne weiter nachzudenken:
@@ -53,13 +53,18 @@ Wecken, sobald eine dieser Regeln passt, ohne weiter nachzudenken:
 1. Der Zug hat `sent: true` (jemand drückte Absenden) oder `held: true` (jemand drückte einen Sprechknopf).
 2. Der Zug spricht die Spielleitung oder einen NPC der Szene an (Name, „Spielleiter“, „Erzähler“, „du“ an die
    Spielleitung), oder ein Held spricht in seiner Rolle zu einer Figur der Welt („Pips, wer war das?“).
-3. Ein fertiger Entschluss, an die Welt gerichtet und nicht als Vorschlag: „Ich geh jetzt zu Pips.“, „Wir machen sie
-   los.“, „Ich würfle Athletik.“ Ein Satz mit „sollen wir“, „ich würde“, „was meint ihr“, „vielleicht“ ist Beraten.
-4. Die Spielleitung wartet laut Auftrag auf eine bestimmte Antwort (eine Frage an einen Helden, einen Wurf) und der Zug
-   gibt sie.
+3. Ein Spieler sagt, was sein Held tut: „Ich geh jetzt zu Pips.“, „Wir machen sie los.“, „Ich würfle Athletik.“, und
+   genauso „ich würde sagen, ich nehme meinen Derringer und erschieße Hedwig“, „ja, ich schieß einfach in die
+   Menge“: Im Deutschen ist „ich würde sagen, ich …“ ein Entschluss, kein Abwägen (live test 2026-11-18: zwei solche
+   Entschlüsse als Beraten zurückgehalten, die Runde wartete minutenlang: „wir haben mehrfach gesagt, was wir tun“).
+   Beraten ist nur, was offen fragt oder abwägt: „sollen wir …?“, „was meint ihr?“, „oder lieber …“, „vielleicht …“.
+4. Die Spielleitung wartet laut Auftrag auf eine Antwort (eine Frage an die Runde oder einen Helden, einen Wurf) und der
+   Zug gibt sie, auch knapp oder nebenbei.
+5. Die Spieler reden über die Spielleitung, weil sie auf sie warten („er macht nicht weiter“, „warum schläft er?“,
+   „wann geht's weiter?“): Sie warten, also wecken.
 
-Sonst nicht wecken: Geplauder, Witze, anderes (ein Videospiel nebenher), Regeln nachschlagen, Beraten. Bei vielen
-Sprechern durcheinander gilt das erst recht; „im Zweifel wecken“ gilt nur, wenn jemand die Spielleitung meint.
+Sonst nicht wecken: Geplauder, Witze, anderes (ein Videospiel nebenher), Regeln nachschlagen, offenes Abwägen. Ein
+Entschluss mitten im Geplauder bleibt ein Entschluss: aus dem Durcheinander heraushören, nicht überhören.
 
 Vor jedem Wecken mit einem Zug (nicht bei `secret`, `break` und `resume`): `cut_line`. Läuft gerade eine Zeile der Spielleitung,
 stoppt es sie, sonst ändert es nichts. Beim Beraten und bei Geplauder nie schneiden.
