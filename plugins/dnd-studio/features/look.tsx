@@ -5,9 +5,11 @@
  */
 import type { EngineInterface, On, ThemeSetArgs } from "claude-code";
 
+import { detectPlatform } from "../lib/host";
 import { LOOKS, phaseLook } from "../lib/looks";
 import type { LookId } from "../lib/looks";
 import { buildPhase, isLive } from "../lib/model";
+import { fromBase64, parseBmp, pictureSvg } from "../lib/picture";
 import {
   patchLook,
   readInitiative,
@@ -17,6 +19,7 @@ import {
   readTable,
 } from "../lib/state";
 import type { TableView } from "../types";
+import { fetchFromStudio } from "./review";
 
 const SCENE_PREFIX = "dnd-";
 /** A scene picture's look: `pic-<key>` as the wanted look, `dnd-pic-<key>` as the backdrop scene. */
@@ -28,15 +31,96 @@ export type PictureLook = { key: string; svg: string; alt: string };
 /** Picture looks made this session, by key, for the Backdrop render (which cannot wait). */
 const pictureLooks = new Map<string, PictureLook>();
 
+/** Pictures being turned into looks now (by key), and those that could not be (fetch or sips failed): no retry. */
+const pictureJobs = new Set<string>();
+const pictureFailed = new Set<string>();
+
+/** A short stable key for a picture's URL or path (FNV-1a, base 36). */
+export function pictureKey(picture: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < picture.length; i++) h = Math.imul(h ^ picture.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(36);
+}
+
+/**
+ * The Studio path of a table picture: the window names it as ComfyUI's `/view?filename=a.png&subfolder=s&type=output`,
+ * results save wants `s/a.png [output]`. Anything else as it is.
+ */
+export function studioPathOfPicture(picture: string): string {
+  const q = /^\/?view\?(.*)$/.exec(picture.trim());
+  if (!q) return picture.trim();
+  const args: Record<string, string> = {};
+  for (const part of q[1]!.split("&")) {
+    const [k, v = ""] = part.split("=");
+    args[k!] = decodeURIComponent(v.replace(/\+/g, " "));
+  }
+  const sub = (args.subfolder ?? "").replace(/\\/g, "/");
+  return `${sub ? `${sub}/` : ""}${args.filename ?? ""} [${args.type || "output"}]`;
+}
+
+/** Only stills become backdrops (a clip keeps the game table). */
+function isStill(path: string): boolean {
+  return /\.(png|jpe?g|webp)(\s*\[\w+\])?$/i.test(path.trim());
+}
+
+/** Runs one macOS command; its stdout, or throws with its stderr. */
+async function run($: EngineInterface, argv: string[]): Promise<string> {
+  const r = await $.process.run(argv, { timeoutMs: 20000 } as never);
+  if ((r.exitCode ?? 1) !== 0) throw new Error(r.stderr || `${argv[0]} failed`);
+  return r.stdout;
+}
+
+/** The picture on this computer as a backdrop SVG (macOS: sips shrinks it to a BMP, base64 brings its bytes). */
+export async function makePictureSvg(
+  $: EngineInterface,
+  local: string,
+  tmp: string,
+): Promise<string | undefined> {
+  const props = await run($, ["/usr/bin/sips", "-g", "pixelWidth", "-g", "pixelHeight", local]);
+  const width = Number(/pixelWidth:\s*(\d+)/.exec(props)?.[1]);
+  const height = Number(/pixelHeight:\s*(\d+)/.exec(props)?.[1]);
+  if (!width || !height) throw new Error("sips read no size");
+  return pictureSvg({ width, height }, async (w, h) => {
+    await run($, ["/usr/bin/sips", "-s", "format", "bmp", "-z", String(h), String(w), local, "--out", tmp]);
+    return parseBmp(fromBase64(await run($, ["/usr/bin/base64", "-i", tmp])));
+  });
+}
+
+/** Fetches the picture (results save) and turns it into a look; then the backdrop is set again (applyLook). */
+async function makePictureLook($: EngineInterface, key: string, picture: string, title: string): Promise<void> {
+  try {
+    const local = await fetchFromStudio($, { source: studioPathOfPicture(picture), resultId: undefined, local: undefined });
+    const svg = await makePictureSvg($, local, `${local.replace(/\.[^./\\]+$/, "")}.dnd-backdrop.bmp`);
+    if (!svg) throw new Error("too big");
+    pictureLooks.set(key, { key, svg, alt: title ? `Szenenbild: ${title}` : "Szenenbild" });
+  } catch {
+    pictureFailed.add(key);
+  } finally {
+    pictureJobs.delete(key);
+  }
+  if (pictureLooks.has(key)) await applyLook($);
+}
+
 /**
  * The shown scene's picture as a backdrop SVG (400 x 250 pixel raster, same rules as lib/looks/*: no `<image>`, no
- * links, light and dark, under 128 KB), or undefined: then the live table gets the pixel game table.
- * Stub: fills in when pictures become backdrops; until then every live scene gets the game table.
+ * links, light and dark, under 128 KB), or undefined: then the live table gets the pixel game table. Made once per
+ * picture on macOS in a job of its own (fetch and sips take longer than a hook may), applyLook runs again when it is
+ * ready; until then, on other systems and when it fails the game table stands.
  */
 export async function scenePictureLook(
-  _$: EngineInterface,
-  _view: TableView,
+  $: EngineInterface,
+  view: TableView,
 ): Promise<PictureLook | undefined> {
+  const picture = view.scene?.picture ?? "";
+  if (!picture || !isStill(studioPathOfPicture(picture))) return undefined;
+  const key = pictureKey(picture);
+  const made = pictureLooks.get(key);
+  if (made) return made;
+  if (pictureFailed.has(key) || pictureJobs.has(key)) return undefined;
+  if ((await detectPlatform($)) !== "macos") return undefined;
+  pictureJobs.add(key);
+  const title = view.scene?.title ?? "";
+  $.clock.after(0, () => void makePictureLook($, key, picture, title));
   return undefined;
 }
 

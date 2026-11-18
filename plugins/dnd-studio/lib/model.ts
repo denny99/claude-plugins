@@ -183,6 +183,7 @@ export function toTableView(state: Obj, campaign: Obj, now: number): TableView {
           place,
           notes: scene ? str(scene.notes) : "",
           pictured,
+          picture: onWindow ? str(shown.picture) : "",
         }
       : undefined,
     shown: onWindow && (!!title || pictured),

@@ -57,7 +57,7 @@ test("a live table gets the game table backdrop, with or without a picture, and 
   });
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd-scene", args: "" } as never);
-  // a picture: scenePictureLook makes nothing yet, so the game table stands
+  // a picture: it is made into a look in a job of its own, meanwhile (and when no result has it) the game table stands
   expect(w.themes).toEqual(["dnd-table"]);
   // the window is cleared: no evening on it, the person's theme comes back
   w.answers.table_state = { ...TABLE, discord: false, scene: { kind: "clear" } };

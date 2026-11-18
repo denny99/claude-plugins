@@ -39,7 +39,14 @@ export type TableView = {
   fetchedAt: number;
   error?: string;
   /** The scene on the players' window; `pictured`: it has a picture or a clip (then scenePictureLook may make it the backdrop). */
-  scene?: { title: string; place: string; notes: string; pictured?: boolean };
+  scene?: {
+    title: string;
+    place: string;
+    notes: string;
+    pictured?: boolean;
+    /** The picture on the window as the table names it (ComfyUI's `/view?filename=…&subfolder=…&type=…`), '' none. */
+    picture?: string;
+  };
   /** Something stands on the players' window (a show, not the bare felt after clear). */
   shown?: boolean;
   party: Hero[];
