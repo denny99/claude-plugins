@@ -98,6 +98,10 @@ namespace Denny99.ClaudeBridge
             public string startScene;
             public bool batchmode;
             public string bridgeVersion;
+            /// <summary>Unity is the front app (false: Claude or another app is in front; Play mode may be throttled).</summary>
+            public bool focused;
+            /// <summary>Play mode keeps running in the background right now (project setting or a bridge lease).</summary>
+            public bool runInBackground;
         }
 
         static string bridgeVersion;
@@ -107,7 +111,7 @@ namespace Denny99.ClaudeBridge
         /// package info). Bump together with package.json and BRIDGE_VERSION in the plugin's lib/bridge.ts: the panel
         /// takes a running bridge without a version for one older than the plugin needs.
         /// </summary>
-        public const string Version = "0.3.0";
+        public const string Version = "0.4.0";
 
         /// <summary>This package's version from its package.json (via the Package Manager), else <see cref="Version"/>.</summary>
         static string BridgeVersion()
@@ -144,6 +148,8 @@ namespace Denny99.ClaudeBridge
                 startScene = StartScene(),
                 batchmode = Application.isBatchMode,
                 bridgeVersion = BridgeVersion(),
+                focused = UnityEditorInternal.InternalEditorUtility.isApplicationActive,
+                runInBackground = Application.runInBackground,
             };
             WriteAtomic("status.json", JsonUtility.ToJson(s));
         }
@@ -219,6 +225,8 @@ namespace Denny99.ClaudeBridge
             public long takenAt;
             /// <summary>Machine-readable error kind (e.g. "no-provider", "not-playing"); empty when none.</summary>
             public string code;
+            /// <summary>Screenshot: what is in the picture (see <see cref="lastShotUi"/>); empty for other commands.</summary>
+            public string ui;
         }
 
         internal static void ProcessCommands()
@@ -325,12 +333,40 @@ namespace Denny99.ClaudeBridge
         static void Screenshot(Command c)
         {
             TakeShot(c.path, c.width, c.height,
-                p => Answer(new Result { id = c.id, ok = true, path = p, takenAt = lastShotAt }),
+                p => Answer(new Result { id = c.id, ok = true, path = p, takenAt = lastShotAt, ui = lastShotUi }),
                 err => Answer(new Result { id = c.id, ok = false, error = err }));
         }
 
         /// <summary>Unix ms at which the last picture was written (sent back as takenAt).</summary>
         internal static long lastShotAt;
+
+        /// <summary>
+        /// What the last picture shows: "game" = the Game view as drawn (all UI, also UI Toolkit) · "cameras" = the
+        /// cameras rendered directly, uGUI overlays included, no UI Toolkit panel on screen · "no-toolkit" = cameras
+        /// only although UI Toolkit panels are on screen (menu / HUD missing) · "camera" = Edit mode, main camera only.
+        /// </summary>
+        internal static string lastShotUi = "";
+
+        /// <summary>
+        /// A UI Toolkit panel draws onto the screen (an enabled UIDocument whose PanelSettings has no target texture).
+        /// Camera.Render never draws those: the Game view composites them, so such a shot needs a real frame.
+        /// IM EDITOR NACHZUTESTEN.
+        /// </summary>
+        internal static bool ToolkitOnScreen()
+        {
+            try
+            {
+#pragma warning disable 0618
+                foreach (var d in UnityEngine.Object.FindObjectsOfType<UnityEngine.UIElements.UIDocument>())
+#pragma warning restore 0618
+                    if (d != null && d.isActiveAndEnabled && d.panelSettings != null && d.panelSettings.targetTexture == null) return true;
+            }
+            catch
+            {
+                // no UI Toolkit module / type: no panels
+            }
+            return false;
+        }
 
         /// <summary>
         /// Play mode without the Game view: renders every enabled camera that draws to the screen, lowest depth first,
@@ -434,23 +470,30 @@ namespace Denny99.ClaudeBridge
             if (shotPath != null) throw new BridgeError("busy", "Unity schreibt noch ein anderes Bild. Kurz warten und nochmal versuchen.");
             if (EditorApplication.isPlaying)
             {
-                // First choice: the cameras directly, synchronous and without focus (a click in Claude sends Unity to
-                // the background, the Game view then draws no frame).
-                try
+                // UI Toolkit panels (menu, HUD) are composited by the Game view, no camera draws them: with such a panel
+                // on screen the Game view's own frame is the only true picture. Without one, the cameras directly:
+                // synchronous and without focus (a click in Claude sends Unity to the background).
+                var toolkit = ToolkitOnScreen();
+                if (!toolkit)
                 {
-                    if (RenderCameras(path, width, height))
+                    try
                     {
-                        done(path.Replace('\\', '/'));
-                        return;
+                        if (RenderCameras(path, width, height))
+                        {
+                            lastShotUi = "cameras";
+                            done(path.Replace('\\', '/'));
+                            return;
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogWarning("[ClaudeBridge] Kamera-Bild fehlgeschlagen, nehme den Game-Tab: " + e.Message);
+                        if (File.Exists(path)) File.Delete(path);
                     }
                 }
-                catch (Exception e)
-                {
-                    Debug.LogWarning("[ClaudeBridge] Kamera-Bild fehlgeschlagen, nehme den Game-Tab: " + e.Message);
-                    if (File.Exists(path)) File.Delete(path);
-                }
-                // Fallback: the Game view as the player sees it; written at the end of a frame. Ask for that frame
-                // even when the editor is in the background.
+                // The Game view as the player sees it, written at the end of a frame. Keep Play mode running while
+                // Unity is in the background (Application.runInBackground lease) and ask for that frame.
+                KeepRunning(10);
                 ScreenCapture.CaptureScreenshot(path);
                 EditorApplication.QueuePlayerLoopUpdate();
                 UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
@@ -459,8 +502,10 @@ namespace Denny99.ClaudeBridge
                 shotFailed = failed;
                 shotWidth = width;
                 shotHeight = height;
-                // Below the plugin's 10 s command timeout, so it gets this error instead of a timeout.
-                shotDeadline = EditorApplication.timeSinceStartup + 7;
+                shotToolkit = toolkit;
+                // Below the plugin's 10 s command timeout, so it gets an answer instead of a timeout. With UI Toolkit
+                // the cameras are the fallback after 4 s (the answer then says the UI is missing).
+                shotDeadline = EditorApplication.timeSinceStartup + (toolkit ? 4 : 7);
                 return;
             }
             // Edit mode: render the main camera into a texture (no overlay UI).
@@ -480,6 +525,7 @@ namespace Denny99.ClaudeBridge
                 tex.Apply();
                 File.WriteAllBytes(path, tex.EncodeToPNG());
                 lastShotAt = Now();
+                lastShotUi = "camera";
             }
             finally
             {
@@ -492,6 +538,7 @@ namespace Denny99.ClaudeBridge
         }
 
         static int shotWidth, shotHeight;
+        static bool shotToolkit;
 
         /// <summary>
         /// Shrinks a Play-mode capture (ScreenCapture writes the Game view's size) to fit width x height, aspect kept.
@@ -539,11 +586,30 @@ namespace Denny99.ClaudeBridge
                 shotPath = null;
                 if (shotWidth > 0 && shotHeight > 0) ScaleShot(path, shotWidth, shotHeight);
                 lastShotAt = Now();
+                lastShotUi = "game";
                 done(path.Replace('\\', '/'));
             }
             else if (EditorApplication.timeSinceStartup > shotDeadline)
             {
                 shotPath = null;
+                // No Game view frame came. With UI Toolkit on screen the cameras still give the scene, without the UI;
+                // the answer says so (ui = "no-toolkit") instead of passing it off as the full picture.
+                if (shotToolkit)
+                {
+                    try
+                    {
+                        if (RenderCameras(path, shotWidth, shotHeight))
+                        {
+                            lastShotUi = "no-toolkit";
+                            done(path.Replace('\\', '/'));
+                            return;
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogWarning("[ClaudeBridge] Kamera-Bild fehlgeschlagen: " + e.Message);
+                    }
+                }
                 failed("Unity hat kein Bild geschrieben. Unity-Fenster nach vorn holen und den Game-Tab sichtbar lassen, dann nochmal versuchen.");
             }
         }

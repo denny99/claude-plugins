@@ -4,7 +4,7 @@
  * the editor closes, so a stale folder never outlives the editor for long):
  *
  * - `status.json`  — heartbeat the bridge rewrites every second: `{ updatedAt, pid, unityVersion, projectPath,
- *                    isCompiling, isPlaying, isPaused, compileSeq, scene, batchmode?, bridgeVersion? }`. Older than {@link STALE_MS} → bridge down (10 s: a domain reload pauses the heartbeat for a few seconds).
+ *                    isCompiling, isPlaying, isPaused, compileSeq, scene, batchmode?, bridgeVersion?, focused?, runInBackground? }`. Older than {@link STALE_MS} → bridge down (10 s: a domain reload pauses the heartbeat for a few seconds).
  * - `cmd-<id>.json` — written by the mod: one flat object `{ id, cmd, mode?, filter?, path?, width?, height?, spot?,
  *                    seconds?, sound?, group?, db? }`. The
  *                    bridge picks it up on EditorApplication.update and deletes it.
@@ -40,10 +40,16 @@ export interface BridgeStatus {
   batchmode?: boolean
   /** The package version of the bridge itself (absent from bridges before it reported one). */
   bridgeVersion?: string
+  /** Process id of the editor (lib/front.ts brings that window to the front). */
+  pid?: number
+  /** Bridge 0.4+: Unity is the frontmost app; absent from older bridges. */
+  focused?: boolean
+  /** Bridge 0.4+: Application.runInBackground right now (the bridge leases it on while a Play-mode job runs). */
+  runInBackground?: boolean
 }
 
 /** The bridge version this plugin ships (bridge/com.denny99.claude-bridge/package.json; a test keeps them equal). */
-export const BRIDGE_VERSION = '0.3.0'
+export const BRIDGE_VERSION = '0.4.0'
 
 /** `a` is an older version than `b` (numeric x.y.z compare; anything unparsable counts as not older). */
 export function versionOlder(a: string, b: string): boolean {
@@ -110,6 +116,9 @@ export async function readStatus(
   if (typeof raw.startScene === 'string' && raw.startScene) status.startScene = raw.startScene
   if (typeof raw.batchmode === 'boolean') status.batchmode = raw.batchmode
   if (typeof raw.bridgeVersion === 'string' && raw.bridgeVersion) status.bridgeVersion = raw.bridgeVersion
+  if (typeof raw.pid === 'number' && Number.isInteger(raw.pid) && raw.pid > 0) status.pid = raw.pid
+  if (typeof raw.focused === 'boolean') status.focused = raw.focused
+  if (typeof raw.runInBackground === 'boolean') status.runInBackground = raw.runInBackground
   if (now - status.updatedAt > STALE_MS) return { up: false, why: 'stale', status }
   return { up: true, status }
 }

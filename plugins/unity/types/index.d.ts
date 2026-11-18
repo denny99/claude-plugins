@@ -115,6 +115,9 @@ export type ModelPerf = {
   sincePlay?: number
   worstAt?: number
   spot?: Record<string, unknown>
+  /** Bridge 0.4+: Unity was not in front during the recording; runInBackground during it. */
+  background?: boolean
+  runInBackground?: boolean
 }
 
 /** The pane's tabs (console and target sit behind "More"). */
@@ -197,7 +200,15 @@ export type UnityModel = {
   /** Why the last recording failed (code from lib/play.ts PlayError). */
   perfError?: { code?: string; error: string }
   /** A perf recording queued at the bridge: its result file, polled by the live watch until it lands or `deadline`. */
-  perfPending?: { resultFile: string; seconds: number; deadline: number }
+  perfPending?: {
+    resultFile: string
+    seconds: number
+    deadline: number
+    /** „Unity vorn messen“: the app that was in front before (its pid gets the focus back when the result lands). */
+    frontPrev?: number
+    /** The bridge version at the start (an old one gets the longer deadline). */
+    bridgeVersion?: string
+  }
   /** Console tab filter. */
   consoleFilter?: 'error' | 'warning' | 'all'
 }
@@ -228,6 +239,8 @@ export type ReviewReportState = {
   spot?: unknown
   spotLine?: string
   facts: string[]
+  /** What the picture shows (bridge 0.4 `ui`). */
+  shotUi?: string
   kind?: string
   note: string
   measure: boolean
@@ -258,6 +271,9 @@ export type ReviewUiState = {
     /** How many rows of the open group / of the music are shown (pages of 20, "weitere"). */
     more?: number
     musicMore?: number
+    /** What the last play said about hearing it (muted, Unity in the background); `front`: offer „Unity vorn“. */
+    hint?: string
+    front?: boolean
   }
 }
 

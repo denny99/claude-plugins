@@ -23,6 +23,7 @@ import {
 } from '../lib/bridge'
 import * as play from '../lib/play'
 import { createHost, type Host } from '../lib/host'
+import { activatePid } from '../lib/front'
 import { lockState } from '../lib/lock'
 import { affectedAreas, affectedText, changedFiles, landingsReminder } from '../lib/affected'
 import { basename, join, relative } from '../lib/path'
@@ -472,14 +473,35 @@ export async function queuePerf(
   $: EngineInterface,
   options: Options,
   seconds: number,
+  opts: { front?: boolean } = {},
 ): Promise<BridgeResult | { queued: true }> {
   const s = Math.min(play.PERF_MAX_SECONDS, Math.max(0.5, Number.isFinite(seconds) ? seconds : 5))
   const ready = await bridgeReady($, options)
   if ('ok' in ready) return ready
   const host = await createHost($)
+  const beat = await readStatus(host.fs, ready.root, await host.now())
+  const version = beat.status?.bridgeVersion
+  // „Unity vorn messen“: Unity to the front first; the app in front before gets the focus back when the result lands
+  let frontPrev: number | undefined
+  if (opts.front) {
+    const f = await activatePid(host, beat.status?.pid ?? 0)
+    if (!f.ok) return { ok: false, error: f.error, code: 'front' }
+    frontPrev = f.prev
+  }
   const q = await queueCommand(host, ready.root, { cmd: 'perf_record', seconds: s })
-  if ('ok' in q) return q
-  await patchModel($, { perfPending: { resultFile: q.resultFile, seconds: s, deadline: q.at + play.perfTimeoutMs(s) } })
+  if ('ok' in q) {
+    if (frontPrev) await activatePid(host, frontPrev)
+    return q
+  }
+  await patchModel($, {
+    perfPending: {
+      resultFile: q.resultFile,
+      seconds: s,
+      deadline: q.at + play.perfTimeoutMs(s, version),
+      ...(frontPrev ? { frontPrev } : {}),
+      ...(version ? { bridgeVersion: version } : {}),
+    },
+  })
   ensureLive($, options)
   return { queued: true }
 }
@@ -569,14 +591,16 @@ async function pollPerf(
 ): Promise<void> {
   const host = await createHost($)
   const res = await readResult(host.fs, pending.resultFile)
+  if (!res && (await host.now()) < pending.deadline) return
+  // the recording is over (result or deadline): give the focus back to the app that was in front before
+  if (pending.frontPrev) await activatePid(host, pending.frontPrev)
   if (!res) {
-    if ((await host.now()) < pending.deadline) return
     await patchModel($, {
       perfPending: undefined,
       busy: undefined,
       perfError: {
         code: 'timeout',
-        error: `Der Editor hat die Messung nicht innerhalb von ${Math.round(play.perfTimeoutMs(pending.seconds) / 1000)} s gemeldet.`,
+        error: `Der Editor hat die Messung nicht innerhalb von ${Math.round(play.perfTimeoutMs(pending.seconds, pending.bridgeVersion) / 1000)} s gemeldet.`,
       },
     })
     return
@@ -1212,7 +1236,7 @@ export async function screenshot(
   $: EngineInterface,
   options: Options,
   size?: { width?: number; height?: number },
-): Promise<{ path: string; base64: string } | { error: string }> {
+): Promise<{ path: string; base64: string; ui?: play.ShotUi } | { error: string }> {
   const m = await refreshModel($, options)
   if (!m.project) return { error: 'Hier ist kein Unity-Projekt.' }
   const host = await createHost($)
@@ -1228,7 +1252,8 @@ export async function screenshot(
   try {
     const base64 = await host.fs.readBase64(written)
     await patchModel($, { lastShot: written })
-    return { path: written, base64 }
+    const ui = play.parseShotUi(res.data.ui)
+    return { path: written, base64, ...(ui ? { ui } : {}) }
   } catch (e) {
     return { error: `Screenshot geschrieben, aber nicht lesbar (${written}): ${e instanceof Error ? e.message : String(e)}` }
   }
@@ -1272,8 +1297,25 @@ export function perfRecord($: EngineInterface, options: Options, seconds: number
 export function soundList($: EngineInterface, options: Options) {
   return play.soundList(playSend($, options))
 }
-export function soundPlay($: EngineInterface, options: Options, sound: string, mode: 'near' | 'flat' = 'near') {
-  return play.soundPlay(playSend($, options), sound, mode)
+/**
+ * Plays a sound; a sound that played but may stay silent (Game view muted, Unity in the background with an editor
+ * that pauses its audio, a bridge before 0.4 that does not say) raises a toast that says why.
+ */
+export async function soundPlay($: EngineInterface, options: Options, sound: string, mode: 'near' | 'flat' = 'near') {
+  const res = await play.soundPlay(playSend($, options), sound, mode)
+  const hints = play.isPlayError(res) ? [] : play.soundHints(res)
+  if (hints.length) $.ui.toast(hints.map(h => h.text).join(' · '), { timeoutMs: 8000 })
+  return res
+}
+
+/** „Unity vorn“: brings the editor to the front (macOS), without giving the focus back. */
+export async function unityToFront($: EngineInterface, options: Options): Promise<string | undefined> {
+  const ready = await bridgeReady($, options)
+  if ('ok' in ready) return ready.error
+  const host = await createHost($)
+  const beat = await readStatus(host.fs, ready.root, await host.now())
+  const f = await activatePid(host, beat.status?.pid ?? 0)
+  return f.ok ? undefined : f.error
 }
 export function soundStop($: EngineInterface, options: Options) {
   return play.soundStop(playSend($, options))

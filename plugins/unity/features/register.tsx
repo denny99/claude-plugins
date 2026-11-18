@@ -3,6 +3,7 @@ import type { EngineInterface, On } from 'claude-code'
 
 import { autoOpenFacts, decideAutoOpen } from '../lib/autoopen'
 import { createHost } from '../lib/host'
+import { shotUiNote, shotUiPrompt } from '../lib/play'
 import { askTurnComplete, askTurnStart } from '../lib/ui'
 import { isAbsolute, join, relative } from '../lib/path'
 import { formatMessage, isScriptFile, splitFilter, type ProjectConfig } from '../lib/unity'
@@ -361,7 +362,10 @@ export function registerUnity(on: On, options: Options): void {
     // The engine takes content blocks as the result itself (an MCP `{ content: [{ data, mimeType }] }` is refused).
     return {
       result: [
-        { type: 'text' as const, text: `Game view screenshot: ${shot.path}` },
+        {
+          type: 'text' as const,
+          text: [`Game view screenshot: ${shot.path}`, shotUiPrompt(shot.ui)].filter(Boolean).join('\n'),
+        },
         {
           type: 'image' as const,
           source: { type: 'base64' as const, media_type: 'image/png' as const, data: shot.base64 },
@@ -407,7 +411,9 @@ export function registerUnity(on: On, options: Options): void {
 
   on('command.run', { command: 'unity-screenshot' }, async $ => {
     const shot = await screenshot($, options)
-    return { text: 'error' in shot ? `Kein Screenshot: ${shot.error}` : `Screenshot gespeichert: ${shot.path}` }
+    if ('error' in shot) return { text: `Kein Screenshot: ${shot.error}` }
+    const note = shotUiNote(shot.ui)
+    return { text: `Screenshot gespeichert: ${shot.path}${note ? `\n${note}.` : ''}` }
   }).catch(() => ({ text: 'Screenshot ging nicht.' }))
 
   on('command.run', { command: 'unity-init' }, async $ => {

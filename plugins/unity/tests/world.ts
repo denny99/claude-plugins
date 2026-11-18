@@ -32,7 +32,19 @@ export type World = {
     shotPath?: string
     /** Captures wait in `held` until the test calls them (Unity slow in the background). */
     holdCaptures?: boolean
+    /** Bridge 0.4 fields merged into the perf_record answer's `perf` (background, wallSeconds, frames …). */
+    perfExtra?: Record<string, unknown>
+    /** Bridge 0.4 fields merged into a sound_play answer (muted, focused, runInBackground). */
+    soundExtra?: Record<string, unknown>
+    /** sound_play fails with code sound-refused and this project text. */
+    soundRefused?: string
+    /** screenshot / capture answer with this `ui` (bridge 0.4). */
+    shotUi?: string
   }
+  /** argv of every spawned process (osascript included), as arrays. */
+  spawns: string[][]
+  /** What the faked osascript prints (the pid of the app that was in front). */
+  frontPrev: string
   /** Held capture answers (bridge.holdCaptures): call each to answer. */
   held: (() => void)[]
   /** Texts of $.ui.toast calls. */
@@ -76,6 +88,8 @@ export function fakeWorld(
     prompts: [],
     held: [],
     toasts: [],
+    spawns: [],
+    frontPrev: '777',
     statusExtra: {},
     bridge: { up: opts.bridge ?? true, isPlaying: false, compileSeq: 3, errors: true },
     clock: mock.clock(on, { now: 1000 }),
@@ -167,7 +181,7 @@ export function fakeWorld(
         fail(world.bridge.shotError, '')
       } else if (cmd.cmd === 'screenshot') {
         files[String(cmd.path)] = 'PNG!'
-        done({ path: world.bridge.shotPath ?? cmd.path })
+        done({ path: world.bridge.shotPath ?? cmd.path, ...(world.bridge.shotUi ? { ui: world.bridge.shotUi } : {}) })
       } else if (cmd.cmd === 'capture' && world.bridge.holdCaptures) {
         world.held.push(() => {
           files[String(cmd.path)] = 'PNG!'
@@ -182,6 +196,7 @@ export function fakeWorld(
           provider: true,
           camera: { name: 'Main Camera', position: [1, 2, 3], rotation: [10, 0, 0], fov: 60 },
           spot: { pos: [4, 5, 6], weather: 'rain' },
+          ...(world.bridge.shotUi ? { ui: world.bridge.shotUi } : {}),
         })
       } else if (cmd.cmd === 'perf_record') {
         if (!world.bridge.isPlaying) fail('perf_record needs Play mode.', 'not-playing')
@@ -201,13 +216,15 @@ export function fakeWorld(
               seriesStep: 1,
               series: [10, 5, 30],
               costs: [{ name: 'AI', avgMs: 2, maxMs: 5, hitchAvgMs: 5, hitchMaxMs: 5, hitchShare: 0.16 }],
+              ...world.bridge.perfExtra,
             },
             spot: { pos: [4, 5, 6] },
           })
       } else if (opts.board && /^(sound_|mix_|goto$)/.test(String(cmd.cmd))) {
         const b = opts.board
         if (cmd.cmd === 'sound_list') done({ sounds: b.sounds })
-        else if (cmd.cmd === 'sound_play') done({ sound: cmd.sound, mode: cmd.mode })
+        else if (cmd.cmd === 'sound_play' && world.bridge.soundRefused) fail(world.bridge.soundRefused, 'sound-refused')
+        else if (cmd.cmd === 'sound_play') done({ sound: cmd.sound, mode: cmd.mode, ...world.bridge.soundExtra })
         else if (cmd.cmd === 'mix_get') done({ groups: b.mix })
         else if (cmd.cmd === 'mix_set') {
           const g = b.mix.find(x => x.group === cmd.group)
@@ -229,6 +246,11 @@ export function fakeWorld(
   })
   on('process.spawn', async function* (_, e) {
     world.argv.push(e.argv.join(' '))
+    world.spawns.push([...e.argv])
+    if (e.argv[0] === '/usr/bin/osascript') {
+      yield { stream: 'stdout' as const, text: `${world.frontPrev}\n` }
+      return { value: { code: 0, signal: null } }
+    }
     if (e.argv[0] === 'git') {
       const a = e.argv.slice(1)
       const out = a.includes('--show-toplevel')

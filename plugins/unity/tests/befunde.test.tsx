@@ -12,7 +12,7 @@ const PKG = 'com.denny99.claude-bridge'
 
 test('bridge version: BRIDGE_VERSION is the shipped package.json version; versions compare numerically', () => {
   // A test cannot import JSON: bump this together with bridge/com.denny99.claude-bridge/package.json.
-  expect(BRIDGE_VERSION).toBe('0.3.0')
+  expect(BRIDGE_VERSION).toBe('0.4.0')
   expect(versionOlder('0.1.0', '0.2.0')).toBe(true)
   expect(versionOlder('0.10.0', '0.2.0')).toBe(false)
   expect(versionOlder('0.2.0', '0.2.0')).toBe(false)

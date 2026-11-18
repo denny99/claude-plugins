@@ -1,6 +1,6 @@
 {
   "name": "com.denny99.claude-bridge",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "displayName": "Claude Code Bridge",
   "description": "Editor file-queue bridge for the Claude Code `unity` plugin: status heartbeat, refresh + compile messages, console, Play/Stop/Pause, EditMode/PlayMode test runs, Game view screenshots, and project providers for spots (capture/goto), frame-time recording and a sound board via <project>/Temp/ClaudeBridge. No network.",
   "unity": "2021.3",

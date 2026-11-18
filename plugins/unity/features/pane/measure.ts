@@ -8,8 +8,15 @@ import { patchModel, queuePerf, readModel, type Options } from '../state'
  * Starts recording `seconds` of frame times and returns right away: the button hook only marks the model busy
  * („Messe 10 s …“) and queues the command; the live watch in state.ts fetches the result on its own ticks and patches
  * the model, so the card is drawn as soon as the bridge answers. The result is kept newest first, at most 5.
+ * `front`: Unity is brought to the front for the recording and the app in front before gets the focus back.
  */
-export async function measure($: EngineInterface, options: Options, seconds: number, switchTab = false): Promise<void> {
+export async function measure(
+  $: EngineInterface,
+  options: Options,
+  seconds: number,
+  switchTab = false,
+  front = false,
+): Promise<void> {
   const m = await readModel($)
   if (m.busy?.startsWith('perf ')) return
   await patchModel($, {
@@ -18,7 +25,8 @@ export async function measure($: EngineInterface, options: Options, seconds: num
     ...(switchTab ? { tab: 'perf' as const } : {}),
   })
   try {
-    const res = await queuePerf($, options, seconds)
+    // front: „Unity vorn messen“ (macOS) – Unity to the front for the recording, the focus back afterwards
+    const res = await queuePerf($, options, seconds, { front })
     if ('ok' in res && !res.ok) {
       // the same German texts as a failed recording (not-playing, bridge down …)
       const err = await perfRecord(async () => res, seconds)

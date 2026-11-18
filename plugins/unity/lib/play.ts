@@ -7,7 +7,7 @@
  * What the data means comes from the project: a spot is whatever its IClaudeSpotProvider writes (free-form JSON), sound
  * ids and mix groups are its IClaudeSoundBoard's. Without a provider the bridge answers `code: 'no-provider'`.
  */
-import { BRIDGE_VERSION, SHOT_WAY, type BridgeCommand, type BridgeResult } from './bridge'
+import { BRIDGE_VERSION, SHOT_WAY, versionOlder, type BridgeCommand, type BridgeResult } from './bridge'
 
 export type Send = (command: BridgeCommand, timeoutMs: number) => Promise<BridgeResult>
 
@@ -15,6 +15,7 @@ export type Send = (command: BridgeCommand, timeoutMs: number) => Promise<Bridge
  * `no-provider` the project registered no provider for this · `not-playing` needs Play mode · `busy` one already runs ·
  * `batchmode` no Game view in a batchmode editor · `aborted` / `no-frames` perf_record ended without (full) data ·
  * `bad-input` · `outdated` the installed bridge does not know the command · `timeout` · `no-project` · `bridge-down` · `bridge-busy` the editor is busy running tests (stale heartbeat).
+ * `sound-refused` (bridge 0.4+) the project refused to play the sound (e.g. no world loaded); the text is the project's.
  */
 export type PlayErrorCode =
   | 'no-provider'
@@ -29,6 +30,7 @@ export type PlayErrorCode =
   | 'no-project'
   | 'bridge-down'
   | 'bridge-busy'
+  | 'sound-refused'
 
 export type PlayError = { error: string; code?: PlayErrorCode | (string & {}) }
 
@@ -36,6 +38,13 @@ export type PlayError = { error: string; code?: PlayErrorCode | (string & {}) }
 export type Spot = Record<string, unknown>
 
 export type Vec3 = [number, number, number]
+
+/**
+ * What a picture shows (bridge 0.4+): `game` the Game view's own frame (all UI), `cameras` cameras + uGUI (no UI
+ * Toolkit panel on screen), `no-toolkit` cameras only although UI Toolkit panels are on screen (menu/HUD missing,
+ * Unity was in the background), `camera` Edit mode. Absent from older bridges.
+ */
+export type ShotUi = 'game' | 'cameras' | 'no-toolkit' | 'camera'
 
 export interface CaptureResult {
   /** PNG of the Game view (Play mode, UI included) or of the main camera (Edit mode). */
@@ -46,6 +55,27 @@ export interface CaptureResult {
   provider: boolean
   camera?: { name: string; position: Vec3; rotation: Vec3; fov: number }
   spot?: Spot
+  /** Bridge 0.4+: what the picture shows (see {@link ShotUi}). */
+  ui?: ShotUi
+}
+
+/** The bridge's `ui` field, if it is one of the known values. */
+export function parseShotUi(v: unknown): ShotUi | undefined {
+  return v === 'game' || v === 'cameras' || v === 'no-toolkit' || v === 'camera' ? v : undefined
+}
+
+/** For the human: a picture without its UI Toolkit menu/HUD; undefined for every complete picture. */
+export function shotUiNote(ui: ShotUi | undefined): string | undefined {
+  return ui === 'no-toolkit'
+    ? 'Bild ohne Oberfläche: Menü/HUD (UI Toolkit) fehlen – Unity war im Hintergrund'
+    : undefined
+}
+
+/** For Claude's prompt: how to read a picture without its UI Toolkit layer; undefined for every complete picture. */
+export function shotUiPrompt(ui: ShotUi | undefined): string | undefined {
+  return ui === 'no-toolkit'
+    ? 'Hinweis zum Bild: Unity war im Hintergrund, das Bild zeigt nur, was die Kameras zeichnen. Menü und HUD (UI Toolkit) fehlen darauf, obwohl sie im Spiel zu sehen sind. Fehlende Oberfläche ist hier kein Fehler des Spiels.'
+    : undefined
 }
 
 export interface PerfCost {
@@ -91,6 +121,10 @@ export interface PerfResult {
   worstAt?: number
   /** The spot at the start of the recording, if the project has a spot provider. */
   spot?: Spot
+  /** Bridge 0.4+: Unity was not the frontmost app during the recording. */
+  background?: boolean
+  /** Bridge 0.4+: Application.runInBackground during the recording. */
+  runInBackground?: boolean
 }
 
 export interface SoundInfo {
@@ -128,6 +162,7 @@ export function parseCapture(d: Record<string, unknown>): CaptureResult {
   const cam = obj(d.camera)
   const spot = obj(d.spot)
   const scene = str(d.scene)
+  const ui = parseShotUi(d.ui)
   return {
     path: String(d.path ?? ''),
     playing: d.playing === true,
@@ -144,6 +179,7 @@ export function parseCapture(d: Record<string, unknown>): CaptureResult {
         }
       : {}),
     ...(spot ? { spot } : {}),
+    ...(ui ? { ui } : {}),
   }
 }
 
@@ -181,6 +217,8 @@ export function parsePerf(d: Record<string, unknown>): PerfResult | undefined {
     ...(typeof p.sincePlay === 'number' ? { sincePlay: p.sincePlay } : {}),
     ...(typeof p.worstAt === 'number' ? { worstAt: p.worstAt } : {}),
     ...(aborted ? { aborted } : {}),
+    ...(typeof p.background === 'boolean' ? { background: p.background } : {}),
+    ...(typeof p.runInBackground === 'boolean' ? { runInBackground: p.runInBackground } : {}),
     ...(spot ? { spot } : {}),
   }
 }
@@ -232,9 +270,16 @@ export const GOTO_TIMEOUT_MS = 15000
 export const SOUND_TIMEOUT_MS = 10000
 export const PERF_MAX_SECONDS = 120
 
-/** The bridge gives up after 2 × seconds + 5 s of wall clock (paused / throttled editor); wait a bit longer. */
-export function perfTimeoutMs(seconds: number): number {
-  return Math.round(seconds * 2000) + 10000
+/** First bridge whose perf_record gives up after seconds + 5 s of wall clock (before: 2 × seconds + 5 s). */
+export const PERF_STOPWATCH_SINCE = '0.4.0'
+
+/**
+ * How long the mod waits for a recording: the bridge's own emergency stop plus 5 s. Bridge 0.4+ stops after
+ * seconds + 5 s; an older one (or one that names no version) after 2 × seconds + 5 s.
+ */
+export function perfTimeoutMs(seconds: number, bridgeVersion?: string): number {
+  const old = !bridgeVersion || versionOlder(bridgeVersion, PERF_STOPWATCH_SINCE)
+  return Math.round(seconds * (old ? 2000 : 1000)) + 10000
 }
 
 export async function capture(
@@ -284,9 +329,9 @@ export async function gotoSpot(send: Send, spot: Spot | string): Promise<{ spot?
 }
 
 /** Records frame times for `seconds` (clamped to 0.5..120) in Play mode; resolves when the recording is done. */
-export async function perfRecord(send: Send, seconds: number): Promise<PerfResult | PlayError> {
+export async function perfRecord(send: Send, seconds: number, bridgeVersion?: string): Promise<PerfResult | PlayError> {
   const s = Math.min(PERF_MAX_SECONDS, Math.max(0.5, Number.isFinite(seconds) ? seconds : 5))
-  const res = await send({ cmd: 'perf_record', seconds: s }, perfTimeoutMs(s))
+  const res = await send({ cmd: 'perf_record', seconds: s }, perfTimeoutMs(s, bridgeVersion))
   if (!res.ok) {
     if (res.code === 'not-playing')
       return { code: 'not-playing', error: 'Messen geht nur im Play-Modus: erst Play drücken.' }
@@ -298,7 +343,37 @@ export async function perfRecord(send: Send, seconds: number): Promise<PerfResul
 const NO_BOARD = 'Dieses Projekt hat kein Soundboard (es hat dafür nichts registriert).'
 
 function soundError(res: { error: string; code?: string }, what: string): PlayError {
+  if (res.code === 'sound-refused') return { code: 'sound-refused', error: soundRefusedText(res.error) }
   return res.code === 'no-provider' ? { code: 'no-provider', error: NO_BOARD } : playError(res, what)
+}
+
+/** The project refused a sound (bridge 0.4+, `sound-refused`): in German, the project's own text cleaned. */
+export function soundRefusedText(projectText: string): string {
+  if (/running game|play mode/i.test(projectText))
+    return 'Erst eine Welt betreten – im Hauptmenü gibt es keine Klangbühne.'
+  const t = boardText(projectText, 200)
+  return t ? `Das Spiel hat den Klang abgelehnt: ${t}` : 'Das Spiel hat den Klang abgelehnt.'
+}
+
+export interface SoundPlayed {
+  sound: string
+  mode: 'near' | 'flat'
+  /** Bridge 0.4+: the Game view's „Mute Audio“ is on. */
+  muted?: boolean
+  /** Bridge 0.4+: Unity is the frontmost app. Absent: an older bridge. */
+  focused?: boolean
+  /** Bridge 0.4+: Application.runInBackground while the sound plays. */
+  runInBackground?: boolean
+}
+
+/** Why a sound that played may still be silent: each a German line; `front` asks for the „Unity vorn“ button. */
+export function soundHints(r: Pick<SoundPlayed, 'muted' | 'focused' | 'runInBackground'>): { text: string; front?: true }[] {
+  const out: { text: string; front?: true }[] = []
+  if (r.muted) out.push({ text: 'Ton ist im Game-Tab stumm geschaltet (Mute Audio)' })
+  // an older bridge says nothing about focus: then the editor may well pause its audio in the background
+  if (r.focused === undefined || (r.focused === false && r.runInBackground !== true))
+    out.push({ text: 'Unity im Hintergrund – Klang erst hörbar, wenn Unity vorn ist', front: true })
+  return out
 }
 
 export async function soundList(send: Send): Promise<{ sounds: SoundInfo[] } | PlayError> {
@@ -310,10 +385,18 @@ export async function soundPlay(
   send: Send,
   sound: string,
   mode: 'near' | 'flat' = 'near',
-): Promise<{ sound: string; mode: 'near' | 'flat' } | PlayError> {
+): Promise<SoundPlayed | PlayError> {
   if (!sound) return { code: 'bad-input', error: 'Welcher Klang? (eine Kennung aus der Klangliste)' }
   const res = await send({ cmd: 'sound_play', sound, mode }, SOUND_TIMEOUT_MS)
-  return res.ok ? { sound, mode } : soundError(res, 'einen Klang abspielen')
+  if (!res.ok) return soundError(res, 'einen Klang abspielen')
+  const d = res.data
+  return {
+    sound,
+    mode,
+    ...(typeof d.muted === 'boolean' ? { muted: d.muted } : {}),
+    ...(typeof d.focused === 'boolean' ? { focused: d.focused } : {}),
+    ...(typeof d.runInBackground === 'boolean' ? { runInBackground: d.runInBackground } : {}),
+  }
 }
 
 export async function soundStop(send: Send): Promise<{ stopped: true } | PlayError> {

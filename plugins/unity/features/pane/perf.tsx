@@ -6,9 +6,11 @@ import type { EngineInterface, RenderElement } from 'claude-code'
 
 import type { ModelPerf, UnityModel } from '../../types'
 import { versionOlder } from '../../lib/bridge'
+import { canFront, FRONT_HINT } from '../../lib/front'
+import { knownPlatform } from '../../lib/host'
 import { isPlayError } from '../../lib/play'
 import { schemeSvg } from '../../lib/theme'
-import { Actions, askAction, Card, CardTitle, ProblemCard, Sentence, sanitize, truncate, type Kit } from '../../lib/ui'
+import { Actions, askAction, Card, type Action, CardTitle, ProblemCard, Sentence, sanitize, truncate, type Kit } from '../../lib/ui'
 import { gotoSpot, patchModel, type Options } from '../state'
 import { bridgeUpdateAction, clockTime, dec, thousands } from './common'
 import { measure, measuringSeconds } from './measure'
@@ -114,6 +116,50 @@ function chartWidth(k: Kit): number {
   return Math.round(Math.min(1400, Math.max(160, k.cols * 7.5 - 32)))
 }
 
+/** Under this many frames per second a background recording counts as throttled. */
+export const THROTTLED_FPS = 20
+
+export const THROTTLED_TEXT = 'Unity lag im Hintergrund und lief gedrosselt – Werte nicht aussagekräftig'
+export const KEPT_TEXT = 'Unity lag im Hintergrund, lief aber ungedrosselt weiter – Werte gelten.'
+
+/**
+ * Bridge 0.4+: how Unity ran while it was not in front. `throttled` under {@link THROTTLED_FPS} frames per second of
+ * wall clock, or clearly shorter than asked (under 80 %, not aborted); `kept` it ran on at normal speed; undefined
+ * when Unity was in front (or the bridge does not say).
+ */
+export function perfBackground(
+  p: Pick<ModelPerf, 'background' | 'frames' | 'seconds' | 'wallSeconds' | 'requestedSeconds' | 'aborted'>,
+): 'throttled' | 'kept' | undefined {
+  if (!p.background) return undefined
+  const wall = p.wallSeconds ?? p.seconds
+  const fps = wall > 0 ? p.frames / wall : 0
+  const short = !p.aborted && p.requestedSeconds > 0 && wall < p.requestedSeconds * 0.8
+  return fps < THROTTLED_FPS || short ? 'throttled' : 'kept'
+}
+
+/** „9 Bilder/s · 1 s von 10 s“: what made a background recording count as throttled. */
+function throttleDetail(p: ModelPerf): string {
+  const wall = p.wallSeconds ?? p.seconds
+  const fps = wall > 0 ? p.frames / wall : 0
+  return `${dec(fps, 0)} Bilder/s · ${dec(wall, 1)} s von ${dec(p.requestedSeconds, 0)} s`
+}
+
+/** „Unity vorn messen“ (macOS only): Unity to the front, record, the focus back to the app that was in front. */
+export function frontMeasureAction(
+  $: EngineInterface,
+  options: Options,
+  seconds: number,
+  variant: Action['variant'] = 'link',
+): Action {
+  return {
+    key: variant === 'link' ? 'perf-front' : 'perf-front-run',
+    label: 'Unity vorn messen',
+    ...(variant === 'link' ? {} : { icon: 'gauge' as const }),
+    variant,
+    onPress: () => void measure($, options, Math.max(1, Math.round(seconds)), false, true),
+  }
+}
+
 function runCard(
   $: EngineInterface,
   k: Kit,
@@ -125,23 +171,35 @@ function runCard(
   const { Svg, Box } = k
   const where = spotLine(p.spot)
   const costs = p.costs.slice(0, 5)
+  const bg = perfBackground(p)
+  const throttled = bg === 'throttled'
+  const front = canFront(knownPlatform())
   return Card(k, {
     key: 'perf-run',
     children: [
       CardTitle(k, {
         icon: 'gauge',
         title: `Messung ${clockTime(at)}`,
-        pill: p.hitches
-          ? { text: `${p.hitches} ${p.hitches === 1 ? 'Ruckler' : 'Ruckler'}`, tone: 'warn' }
-          : { text: 'flüssig', tone: 'ok' },
+        pill: throttled
+          ? { text: 'nicht aussagekräftig', tone: 'bad' }
+          : p.hitches
+            ? { text: `${p.hitches} ${p.hitches === 1 ? 'Ruckler' : 'Ruckler'}`, tone: 'warn' }
+            : { text: 'flüssig', tone: 'ok' },
       }),
+      throttled ? Sentence(k, `${THROTTLED_TEXT} (${throttleDetail(p)}).`, { tone: 'bad' }) : null,
+      throttled && !front ? Sentence(k, `${FRONT_HINT} und neu messen.`, { faint: true }) : null,
+      bg === 'kept' ? Sentence(k, KEPT_TEXT, { faint: true }) : null,
       Sentence(
         k,
         `${where ? `${where} · ` : ''}${perfLength(p, bridgeVersion)} · ${thousands(p.frames)} Frames${p.aborted ? ` · abgebrochen: ${p.aborted}` : ''}`,
         { faint: true },
       ),
       outlierNote(p) ? Sentence(k, outlierNote(p)!, { faint: true }) : null,
-      Sentence(k, `${dec(p.p50)} ms Median · ${dec(p.p95)} ms p95 · ${dec(p.worst)} ms schlimmster`),
+      Sentence(
+        k,
+        `${throttled ? 'Gedrosselt gemessen: ' : ''}${dec(p.p50)} ms Median · ${dec(p.p95)} ms p95 · ${dec(p.worst)} ms schlimmster`,
+        throttled ? { faint: true } : {},
+      ),
       k.graphical && Svg ? (
         <Box key="perf-chart" flexDirection="column">
           <Svg
@@ -163,7 +221,13 @@ function runCard(
       ...costs.map((c, i) => costRow(k, `cost-${i}`, c.name, p.hitches ? c.hitchAvgMs : c.avgMs)),
       !costs.length ? Sentence(k, noCostsText(p), { faint: true }) : null,
       Actions(k, 'perf-run-acts', [
-        askAction($, k, { key: 'perf-ask', label: 'Claude analysieren lassen', text: perfPrompt(at, p) }),
+        ...(throttled && front ? [frontMeasureAction($, options, p.requestedSeconds || 10, 'primary')] : []),
+        askAction($, k, {
+          key: 'perf-ask',
+          label: 'Claude analysieren lassen',
+          text: perfPrompt(at, p),
+          ...(throttled ? { variant: 'secondary' as const } : {}),
+        }),
         ...(p.spot
           ? [
               {
@@ -259,7 +323,12 @@ export function perfPrompt(at: number, p: ModelPerf): string {
     hasOutlier(p)
       ? `${outlierNote(p)}. ${outlierEarly(p) ? 'Der Ausreißer liegt in der Ladephase: getrennt bewerten und nicht als Laufzeit-Problem behandeln, außer er wiederholt sich.' : 'Prüfe, ob der Ausreißer ein einmaliger Lade-Ruckler ist, bevor du ihn als Laufzeit-Problem behandelst.'}`
       : '',
-    'Finde die wahrscheinliche Ursache im Code und schlag eine Lösung vor.',
+    perfBackground(p) === 'throttled'
+      ? `Achtung: Unity lag während der Messung im Hintergrund und lief gedrosselt (${throttleDetail(p)}). Die Werte sind nicht aussagekräftig; bewerte sie nicht als Leistungsproblem des Spiels und sag mir, dass ich mit Unity im Vordergrund neu messen soll.`
+      : perfBackground(p) === 'kept'
+        ? 'Unity lag während der Messung im Hintergrund, lief aber ungedrosselt weiter (Run In Background); die Werte gelten.'
+        : '',
+    perfBackground(p) === 'throttled' ? '' : 'Finde die wahrscheinliche Ursache im Code und schlag eine Lösung vor.',
   ]
     .filter(Boolean)
     .join('\n')
@@ -328,6 +397,7 @@ export function perfTab($: EngineInterface, k: Kit, m: UnityModel, options: Opti
                         onPress: () => void measure($, options, 10),
                       },
                       { key: 'perf-30', label: '30 s', variant: 'link', onPress: () => void measure($, options, 30) },
+                      ...(canFront(knownPlatform()) ? [frontMeasureAction($, options, 10)] : []),
                     ]
                   : m.bridge.up
                     ? playActions($, k, m, options).filter(a => a.key === 'play')

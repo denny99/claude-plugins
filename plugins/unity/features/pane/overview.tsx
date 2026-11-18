@@ -44,6 +44,7 @@ import {
   testsProgress,
 } from './common'
 import { measure } from './measure'
+import { shotUiNote, shotUiPrompt, type ShotUi } from '../../lib/play'
 
 export function overviewTab($: EngineInterface, k: Kit, m: UnityModel, options: Options, now: number): RenderElement {
   const { Box } = k
@@ -129,7 +130,9 @@ export function playActions($: EngineInterface, k: Kit, m: UnityModel, options: 
             void $.ui.toast(`Screenshot fehlgeschlagen: ${r.error}`)
             return undefined
           }
-          return shotPrompt(m, r.path)
+          const note = shotUiNote(r.ui)
+          if (note) void $.ui.toast(note, { timeoutMs: 8000 })
+          return shotPrompt(m, r.path, r.ui)
         } catch (e) {
           await patchModel($, { error: e instanceof Error ? e.message : String(e) })
           return undefined
@@ -155,12 +158,14 @@ export function noSceneOpen(b: UnityModel['bridge']): boolean {
 }
 
 /** The prompt of the overview's "Screenshot" button: the picture goes to Claude. */
-export function shotPrompt(m: UnityModel, path: string): string {
+export function shotPrompt(m: UnityModel, path: string, ui?: ShotUi): string {
   const b = m.bridge
   const scene = sceneLabel(b)
   const state = b.isPlaying ? 'Play-Modus' : 'Edit-Modus'
+  const note = shotUiPrompt(ui)
   return [
     `Screenshot aus dem Unity-Editor (${state}${scene ? `, Szene ${scene}` : ''}): ${path}`,
+    ...(note ? [note] : []),
     '',
     'Sieh dir das Bild an (Datei lesen) und sag mir, was dir auffällt.',
   ].join('\n')

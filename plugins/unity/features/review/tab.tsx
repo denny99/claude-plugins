@@ -25,7 +25,9 @@ import {
 import type { IconName } from '../../lib/icons'
 import { join } from '../../lib/path'
 import * as play from '../../lib/play'
-import { gotoSpot, mixGet, mixSet, soundList, soundPlay, soundStop, type Options } from '../state'
+import { canFront } from '../../lib/front'
+import { knownPlatform } from '../../lib/host'
+import { gotoSpot, mixGet, mixSet, soundList, soundPlay, soundStop, unityToFront, type Options } from '../state'
 import { pngSize, spotText, verdictOf, type Answer, type Question, type Verdict } from './data'
 import {
   appendAnswer,
@@ -244,12 +246,45 @@ export async function loadSounds($: EngineInterface, options: Options, tries = S
   }))
 }
 
+/** The last play's hint at the sounds, with „Unity vorn“ (macOS) when Unity in the background keeps it silent. */
+function soundHintRows(
+  $: EngineInterface,
+  k: Kit,
+  snd: { hint?: string; front?: boolean },
+  options: Options,
+): RenderElement[] {
+  if (!snd.hint) return []
+  const out: RenderElement[] = [Sentence(k, snd.hint, { tone: 'warn' })]
+  if (snd.front && canFront(knownPlatform()))
+    out.push(
+      Actions(k, 'rv-snd-front', [
+        {
+          key: 'rv-front',
+          label: 'Unity vorn',
+          icon: 'up',
+          variant: 'secondary',
+          onPress: () =>
+            void unityToFront($, options).then(err => {
+              if (err) $.ui.toast(err)
+            }),
+        },
+      ]),
+    )
+  return out
+}
+
 export async function playSound($: EngineInterface, options: Options, id: string): Promise<void> {
   const s = await readReview($)
   const res = await soundPlay($, options, id, s.sounds?.mode ?? 'near')
+  // Why it may stay silent stands at the sounds (a toast alone was gone before the button could be pressed).
+  const hints = play.isPlayError(res) ? [] : play.soundHints(res)
+  const hint = hints.map(h => h.text).join(' · ') || undefined
+  const front = hints.some(h => h.front) || undefined
   await patchReview($, x => ({
     open: `ton:${id}`,
-    sounds: x.sounds ? { ...x.sounds, playing: play.isPlayError(res) ? undefined : id } : x.sounds,
+    sounds: x.sounds
+      ? { ...x.sounds, playing: play.isPlayError(res) ? undefined : id, hint, front }
+      : x.sounds,
     ...(play.isPlayError(res) ? say(`Abspielen ging nicht: ${res.error}`) : {}),
   }))
 }
@@ -696,6 +731,7 @@ function soundsBody(
           ],
           3,
         ),
+        ...soundHintRows($, k, snd, options),
         ...rows,
       ],
     }),

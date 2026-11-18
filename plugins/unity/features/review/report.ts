@@ -45,9 +45,11 @@ export const MEASURE_SECONDS = 10
  * itself (scene, camera) plus why there is no spot.
  */
 export function captureFacts(shot: play.CaptureResult): string[] {
+  // A picture without its UI Toolkit layer says so first: it does not show what the player sees.
+  const ui = play.shotUiNote(shot.ui)
   const facts = spotFacts(shot.spot)
-  if (facts.length) return facts
-  const out: string[] = []
+  if (facts.length) return ui ? [ui, ...facts] : facts
+  const out: string[] = ui ? [ui] : []
   if (shot.scene) out.push(`Szene ${shot.scene.split('/').pop()?.replace(/\.unity$/, '') ?? shot.scene}`)
   const p = shot.camera?.position
   if (p) out.push(`Kamera ${p.map(n => Math.round(n)).join(' / ')}`)
@@ -99,6 +101,7 @@ export async function openReport($: EngineInterface, options: Options): Promise<
       spot: shot.spot ?? null,
       spotLine: spotText(shot.spot),
       facts: captureFacts(shot),
+      ...(shot.ui ? { shotUi: shot.ui } : {}),
       note: s.report?.note ?? '',
       measure: s.report?.measure ?? false,
       ...(s.report?.kind ? { kind: s.report.kind } : {}),
@@ -141,6 +144,7 @@ function reportText(r: Report, marks: string[], svg: string | undefined): string
     r.note ? `Notiz: ${r.note}` : '',
     ...marks,
     r.screenshot ? `Screenshot: ${r.screenshot}` : '',
+    r.screenshot ? (play.shotUiPrompt(r.ui as play.ShotUi | undefined) ?? '') : '',
     svg ? `Markierungen (SVG über dem Bild): ${svg}` : '',
     spotText(r.spot) ? `Stelle (für unity goto): ${spotText(r.spot)}` : '',
     r.perf ? `Leistung: ${r.perf}` : '',
@@ -227,6 +231,7 @@ async function buildReport($: EngineInterface, send: boolean, perf: string | und
     note: r.note,
     spot: r.spot ?? null,
     screenshot: r.shot ?? null,
+    ...(r.shotUi ? { ui: r.shotUi } : {}),
     ...(v?.marks.length ? { marks: v.marks } : {}),
     ...(perf ? { perf } : {}),
     time: (await nowStamp($)).iso,

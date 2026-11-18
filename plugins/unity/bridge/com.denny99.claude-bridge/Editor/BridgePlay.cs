@@ -64,15 +64,78 @@ namespace Denny99.ClaudeBridge
         {
             EditorApplication.playModeStateChanged += s =>
             {
-                if (s == PlayModeStateChange.ExitingPlayMode && perf != null) FinishPerf("Play mode ended during the recording.");
+                if (s == PlayModeStateChange.ExitingPlayMode && perf != null) FinishPerf("Der Play-Modus endete während der Messung.");
+                if (s == PlayModeStateChange.ExitingPlayMode) EndKeepRunning();
             };
+            // A domain reload drops the lease's statics but not Application.runInBackground: give it back.
+            if (SessionState.GetBool(KeepRunningKey, false)) EndKeepRunning();
+        }
+
+        // --- Unity in the background ---
+        //
+        // A click in Claude sends Unity to the background. Without "Run In Background" the editor then pauses Play mode
+        // (no frames: a 10 s measurement got 9 frames) and its audio (a sound played "ok" but stayed silent). While the
+        // bridge has a job that needs the running game (perf_record, sound_play, a Game-view shot), it sets
+        // Application.runInBackground = true and gives the project's value (PlayerSettings) back afterwards. The
+        // project setting itself is never written (no dirty ProjectSettings.asset).
+        // Not touched: Preferences > Interaction Mode (throttles only the idle editor, not a running game; an EditorPref
+        // of the user) and the Game view's Mute Audio (EditorUtility.audioMasterMute: the user's choice; sound_play
+        // reports it).
+        // IM EDITOR NACHZUTESTEN (macOS, Claude vorn: Messung ~60 fps, Klang hörbar).
+
+        const string KeepRunningKey = "ClaudeBridge.keepRunning";
+        static double keepRunningUntil;
+
+        /// <summary>Keeps Play mode running in the background for at least `seconds` from now.</summary>
+        internal static void KeepRunning(double seconds)
+        {
+            if (!EditorApplication.isPlaying) return;
+            keepRunningUntil = Math.Max(keepRunningUntil, EditorApplication.timeSinceStartup + seconds);
+            if (SessionState.GetBool(KeepRunningKey, false) || Application.runInBackground) return;
+            Application.runInBackground = true;
+            SessionState.SetBool(KeepRunningKey, true);
+        }
+
+        static void EndKeepRunning()
+        {
+            keepRunningUntil = 0;
+            if (!SessionState.GetBool(KeepRunningKey, false)) return;
+            SessionState.SetBool(KeepRunningKey, false);
+            try
+            {
+                Application.runInBackground = PlayerSettings.runInBackground;
+            }
+            catch
+            {
+                // best effort; entering Play mode resets it from the project setting anyway
+            }
+        }
+
+        static void TickBackground()
+        {
+            if (!SessionState.GetBool(KeepRunningKey, false)) return;
+            if (perf != null || shotPath != null) return;
+            if (EditorApplication.timeSinceStartup < keepRunningUntil) return;
+            EndKeepRunning();
         }
 
         static void TickPlay()
         {
             // Paused or throttled: frames stop arriving. Finish with what we have after the wall-clock limit.
             // OnPerfFrame only flags the end: the player loop is not rebuilt from inside one of its own systems.
-            if (perf != null && (perf.done || EditorApplication.timeSinceStartup > perf.wallDeadline)) FinishPerf(null);
+            var run = perf;
+            if (run != null)
+            {
+                if (!UnityEditorInternal.InternalEditorUtility.isApplicationActive) run.background = true;
+                // The stopwatch ends the recording, not the next frame: a throttled game may not send one for long.
+                if (run.wall != null && run.wall.Elapsed.TotalSeconds >= run.seconds)
+                {
+                    run.wallSeconds = run.wall.Elapsed.TotalSeconds;
+                    run.done = true;
+                }
+                if (run.done || EditorApplication.timeSinceStartup > run.wallDeadline) FinishPerf(null);
+            }
+            TickBackground();
         }
 
         static bool HandlePlay(Command c)
@@ -113,12 +176,32 @@ namespace Denny99.ClaudeBridge
                 {
                     if (string.IsNullOrEmpty(c.sound)) throw new BridgeError("bad-input", "sound_play braucht eine Klang-Id.");
                     var mode = string.Equals(c.mode, "flat", StringComparison.OrdinalIgnoreCase) ? ClaudeSoundMode.Flat : ClaudeSoundMode.Near;
-                    Board().Play(c.sound, mode);
-                    AnswerJson(c.id, new JsonOut().Str("sound", c.sound).Str("mode", mode == ClaudeSoundMode.Flat ? "flat" : "near"));
+                    var board = Board();
+                    // Audible with Unity in the background too: keep the game running for the sound (+ a margin).
+                    KeepRunning(SoundSeconds(board, c.sound) + 5);
+                    try
+                    {
+                        board.Play(c.sound, mode);
+                    }
+                    catch (BridgeError)
+                    {
+                        throw;
+                    }
+                    catch (Exception e)
+                    {
+                        // The project refused (e.g. no sound stage in the main menu). Its text goes to the panel as is,
+                        // under a code the panel can explain.
+                        throw new BridgeError("sound-refused", (e.InnerException ?? e).Message);
+                    }
+                    AnswerJson(c.id, new JsonOut().Str("sound", c.sound).Str("mode", mode == ClaudeSoundMode.Flat ? "flat" : "near")
+                        .Bool("muted", EditorUtility.audioMasterMute)
+                        .Bool("focused", UnityEditorInternal.InternalEditorUtility.isApplicationActive)
+                        .Bool("runInBackground", Application.runInBackground));
                     return true;
                 }
                 case "sound_stop":
                     Board().Stop();
+                    keepRunningUntil = Math.Min(keepRunningUntil, EditorApplication.timeSinceStartup + 1);
                     AnswerJson(c.id, new JsonOut());
                     return true;
                 case "mix_get":
@@ -140,6 +223,21 @@ namespace Denny99.ClaudeBridge
         internal static void AnswerJson(string id, JsonOut fields)
         {
             WriteAtomic("result-" + id + ".json", new JsonOut().Str("id", id).Bool("ok", true).Merge(fields).ToString());
+        }
+
+        /// <summary>The sound's length in seconds from the board's list (10 when unknown, at most 60).</summary>
+        static double SoundSeconds(IClaudeSoundBoard board, string id)
+        {
+            try
+            {
+                foreach (var s in board.List() ?? new List<ClaudeSound>())
+                    if (s != null && s.id == id && s.duration > 0) return Math.Min(60, s.duration);
+            }
+            catch
+            {
+                // the length is only for the lease
+            }
+            return 10;
         }
 
         static IClaudeSoundBoard Board()
@@ -193,7 +291,7 @@ namespace Denny99.ClaudeBridge
             var playing = EditorApplication.isPlaying;
             TakeShot(c.path, c.width, c.height,
                 path => AnswerJson(c.id, new JsonOut().Str("path", path).Raw("takenAt", lastShotAt.ToString(System.Globalization.CultureInfo.InvariantCulture)).Bool("playing", playing).Str("scene", scene)
-                    .Bool("provider", provider != null).Raw("camera", camera).Raw("spot", spot)),
+                    .Bool("provider", provider != null).Raw("camera", camera).Raw("spot", spot).Str("ui", lastShotUi)),
                 err => Answer(new Result { id = c.id, ok = false, error = err }));
         }
 
@@ -227,6 +325,10 @@ namespace Denny99.ClaudeBridge
             public readonly Dictionary<string, CostAcc> costs = new Dictionary<string, CostAcc>();
             public int hitches;
             public double hitchMs;
+            /// <summary>Unity was not the front app at some point of the recording.</summary>
+            public bool background;
+            /// <summary>Play mode was set to keep running in the background (see KeepRunning).</summary>
+            public bool runInBackground;
         }
 
         class CostAcc
@@ -248,11 +350,15 @@ namespace Denny99.ClaudeBridge
             {
                 id = c.id,
                 seconds = seconds,
-                wallDeadline = EditorApplication.timeSinceStartup + seconds * 2 + 5,
+                // The stopwatch ends it after `seconds` (TickPlay); this only catches a first frame that never comes.
+                wallDeadline = EditorApplication.timeSinceStartup + seconds + 5,
                 spot = SpotJson(ClaudeProviders.Get<IClaudeSpotProvider>()),
                 sincePlay = Time.unscaledTime,
             };
             perf.sources.AddRange(ClaudeProviders.GetAll<IClaudePerfSource>());
+            KeepRunning(seconds + 6);
+            perf.runInBackground = Application.runInBackground;
+            perf.background = !UnityEditorInternal.InternalEditorUtility.isApplicationActive;
             SetPerfHook(true);
         }
 
@@ -397,6 +503,7 @@ namespace Denny99.ClaudeBridge
                 .Num("seriesStep", step).Raw("series", series.ToString()).Raw("costs", costs.ToString())
                 .Num("sources", run.sources.Count)
                 .Num("wallSeconds", run.wallSeconds).Num("sincePlay", run.sincePlay).Num("worstAt", WorstAt(run));
+            o.Bool("background", run.background).Bool("runInBackground", run.runInBackground);
             if (abortReason != null) o.Str("aborted", abortReason);
             return o.ToString();
         }

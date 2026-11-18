@@ -57,6 +57,8 @@ export type Report = {
   screenshot: string | null
   marks?: unknown
   perf?: string
+  /** What the picture shows (bridge 0.4 `ui`); "no-toolkit": menu/HUD missing (Unity was in the background). */
+  ui?: string
   time: string
   sent: boolean
 }

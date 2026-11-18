@@ -153,6 +153,11 @@ export async function readHostEnv($: EngineInterface): Promise<HostEnv> {
   return env
 }
 
+/** The OS once any hook has built a Host (render hooks read it to pick a button), else undefined. */
+export function knownPlatform(): Platform | undefined {
+  return cachedEnv?.platform
+}
+
 /** Test hook: forget the cached env (each test sets its own OS). */
 export function resetHostEnv(): void {
   cachedEnv = undefined

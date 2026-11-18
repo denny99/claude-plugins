@@ -108,11 +108,12 @@ test('(a) paging: "Weitere" adds 20 rows, another group unfolds, music pages too
   await ui.unmount()
 })
 
-test('(b) bridge 0.3.0: copied address pins the tag; a running bridge without bridgeVersion counts as old', () => {
-  expect(BRIDGE_VERSION).toBe('0.3.0')
-  expect(BRIDGE_GIT_URL_TAGGED.endsWith('#unity-bridge-v0.3.0')).toBe(true)
+test('(b) bridge version: copied address pins the tag; a running bridge without bridgeVersion counts as old', () => {
+  expect(BRIDGE_VERSION).toBe('0.4.0')
+  expect(BRIDGE_GIT_URL_TAGGED.endsWith('#unity-bridge-v0.4.0')).toBe(true)
   expect(bridgeOutdated({ bridgeInstalled: undefined, bridge: { up: true } as never })).toBe(true)
-  expect(bridgeOutdated({ bridgeInstalled: '0.3.0', bridge: { up: true, version: '0.3.0' } as never })).toBe(false)
+  expect(bridgeOutdated({ bridgeInstalled: '0.4.0', bridge: { up: true, version: '0.4.0' } as never })).toBe(false)
+  expect(bridgeOutdated({ bridgeInstalled: '0.3.0', bridge: { up: true, version: '0.3.0' } as never })).toBe(true)
   expect(bridgeOutdated({ bridgeInstalled: '0.2.0', bridge: { up: true, version: '0.2.0' } as never })).toBe(true)
   // editor closed, version unknown: no warning
   expect(bridgeOutdated({ bridgeInstalled: undefined, bridge: { up: false } as never })).toBe(false)

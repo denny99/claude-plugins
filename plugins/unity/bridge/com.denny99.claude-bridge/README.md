@@ -12,9 +12,9 @@ https://github.com/denny99/claude-plugins.git?path=/plugins/unity/bridge/com.den
 ```
 
 Pinned to this version (what the panel's „Paket-Adresse kopieren“ gives):
-`https://github.com/denny99/claude-plugins.git?path=/plugins/unity/bridge/com.denny99.claude-bridge#unity-bridge-v0.3.0`.
+`https://github.com/denny99/claude-plugins.git?path=/plugins/unity/bridge/com.denny99.claude-bridge#unity-bridge-v0.4.0`.
 
-**Version 0.3.0.** The heartbeat names it (`bridgeVersion`, from `package.json`, else `ClaudeBridge.Version`). A bump
+**Version 0.4.0.** The heartbeat names it (`bridgeVersion`, from `package.json`, else `ClaudeBridge.Version`). A bump
 changes three places together: `package.json`, `ClaudeBridge.Version` and `BRIDGE_VERSION` in the plugin's
 `lib/bridge.ts`, then the tag `unity-bridge-v<version>` on the release commit. The panel warns when the bridge is
 older than the plugin needs, and also when a running bridge names no version (bridges before 0.2).
@@ -93,14 +93,27 @@ Errors carry a `code`: `no-provider`, `not-playing`, `busy`, `batchmode`, `abort
 
 | `cmd` | Fields | Answer (`{ id, ok: true, … }`) |
 | --- | --- | --- |
-| `capture` | `path?`, `width?`, `height?` | `path` (PNG, as `screenshot`), `playing`, `scene`, `provider` (bool), `camera` `{ name, position:[x,y,z], rotation:[x,y,z] (euler), fov }` or null, `spot` (provider JSON or null) |
+| `capture` | `path?`, `width?`, `height?` | `path` (PNG, as `screenshot`), `playing`, `scene`, `provider` (bool), `camera` `{ name, position:[x,y,z], rotation:[x,y,z] (euler), fov }` or null, `spot` (provider JSON or null), `ui` (see below) |
 | `goto` | `spot` (JSON **text** of a spot) | `spot` (the spot after the jump); `no-provider` without spot provider |
-| `perf_record` | `seconds` (default 5, max 120) | after the recording: `perf` `{ seconds, requestedSeconds, frames, budgetMs: 16.6, avgMs, p50, p95, p99, worst, hitches, seriesStep, series: [ms…] (≤ 200 points, each the worst frame of `seriesStep` frames), costs: [{ name, avgMs, maxMs, hitchAvgMs, hitchMaxMs, hitchShare }], aborted? }`, `spot` (at the start) |
+| `perf_record` | `seconds` (default 5, max 120) | after the recording: `perf` `{ seconds, requestedSeconds, frames, budgetMs: 16.6, avgMs, p50, p95, p99, worst, hitches, seriesStep, series: [ms…] (≤ 200 points, each the worst frame of `seriesStep` frames), costs: [{ name, avgMs, maxMs, hitchAvgMs, hitchMaxMs, hitchShare }], wallSeconds, background (Unity was not in front during the recording), runInBackground, aborted? }`, `spot` (at the start) |
 | `sound_list` | – | `sounds: [{ id, name, group, duration, takes }]` |
-| `sound_play` | `sound` (id), `mode` (`near`\|`flat`, default near) | `sound`, `mode` |
+| `sound_play` | `sound` (id), `mode` (`near`\|`flat`, default near) | `sound`, `mode`, `muted` (Game view „Mute Audio“), `focused`, `runInBackground`; the project refusing (e.g. no world loaded) answers code `sound-refused` with its own text |
 | `sound_stop` | – | – |
 | `mix_get` | – | `groups: [{ group, db }]` |
 | `mix_set` | `group`, `db` | `groups` (after the change) |
+
+**Unity in the background (0.4.0).** A click in Claude sends Unity to the background; without „Run In Background“
+the editor then pauses Play mode and its audio. While the bridge has a job that needs the running game (`perf_record`,
+`sound_play`, a Game-view shot) it sets `Application.runInBackground = true` and afterwards gives back the project's
+value (`PlayerSettings.runInBackground`; the project setting is never written). The heartbeat carries `focused` and
+`runInBackground`. Not touched: Preferences → Interaction Mode (throttles only the idle editor) and the Game view's
+„Mute Audio“ (reported as `muted`).
+
+**What a Play-mode picture shows (`ui`, 0.4.0).** `game` = the Game view's own frame (all UI, UI Toolkit included),
+`cameras` = cameras rendered directly incl. uGUI overlays (no UI Toolkit panel on screen), `no-toolkit` = cameras only
+although UI Toolkit panels are on screen (menu/HUD missing: the Game view gave no frame within 4 s), `camera` = Edit
+mode. UI Toolkit panels are composited by the Game view, no camera draws them; with one on screen the bridge waits for
+a Game-view frame first.
 
 `perf_record` needs Play mode. It adds a system to the player loop (`PostLateUpdate`) that records
 `Time.unscaledDeltaTime` per frame (the first delta, from before the start, is skipped) and asks every
