@@ -222,7 +222,7 @@ test('sounds after an error: "Nochmal holen", Aktualisieren and the bridge comin
   await ui.press({ key: 'rv-snd-load' })
   await world.clock.advance(100)
   expect((await findShown(ui, 'Soundboard nicht erreichbar'))?.text).toBeDefined()
-  expect((await findShown(ui, /Die Editor-Bridge läuft nicht/))?.text).toBeDefined()
+  expect((await findShown(ui, /nicht mit dem Unity-Editor verbunden/))?.text).toBeDefined()
   world.bridge.up = true
   await ui.press({ key: 'rv-snd-retry' })
   await world.clock.advance(100)
@@ -283,7 +283,7 @@ test('viewer: unity_review_show draws the frame as Svg with a paint Client; a st
   expect((await findShown(ui, /2 Markierungen/))?.text).toBeDefined()
   await settle(world, ui.press({ key: 'rv-view-send' }))
   expect(world.prompts.at(-1)).toContain('Markierung rot')
-  expect(world.prompts.at(-1)).toContain('mcp__unity__unity_review_feedback')
+  expect(world.prompts.at(-1)).toContain('Bild mit Markierungen holen mit unity_review_feedback')
   await ui.unmount()
   const fb = (await settle(world, $.tool.call({ tool: 'mcp__unity__unity_review_feedback' }))) as { result?: unknown }
   const blocks = fb.result as { type: string }[]

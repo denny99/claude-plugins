@@ -39,7 +39,7 @@ import {
   reportsDir,
   type ReviewData,
 } from './store'
-import { describeMarks, markedSvg, SVG_IMAGE_LIMIT } from './viewer'
+import { describeMarks, markedSvg, marksLine, SVG_IMAGE_LIMIT } from './viewer'
 import { openReport, reportCard, sendStoredReport } from './report'
 
 type El = (props: Record<string, unknown>) => RenderElement
@@ -188,7 +188,7 @@ export async function sendView($: EngineInterface, options: Options, fits: boole
     ...marks,
     saved.frame ? `Bild: ${saved.frame}` : '',
     saved.svg ? `Markierungen (SVG über dem Bild): ${saved.svg}` : '',
-    'Bild mit Markierungen: mcp__unity__unity_review_feedback',
+    marksLine(marks.length, true),
   ].filter(Boolean)
   await patchReview($, {
     view: undefined,
@@ -471,7 +471,7 @@ function soundsBody(
       EmptyState(k, {
         icon: 'speaker',
         title: 'Klänge aus dem Spiel',
-        text: 'Liste und Mix kommen über die Bridge vom Soundboard des Projekts.',
+        text: 'Liste und Mix kommen aus dem Unity-Editor vom Soundboard des Projekts.',
         action: {
           key: 'rv-snd-load',
           label: 'Klänge holen',
@@ -604,14 +604,14 @@ function soundsBody(
           [
             {
               key: 'rv-mode-near',
-              label: 'neben dir',
+              label: 'Klang an der Figur (3D)',
               icon: snd.mode === 'near' ? 'check' : 'circle',
               variant: 'secondary',
               onPress: () => void setSoundMode($, 'near'),
             },
             {
               key: 'rv-mode-flat',
-              label: 'flach',
+              label: 'ohne Raum (2D)',
               icon: snd.mode === 'flat' ? 'check' : 'circle',
               variant: 'secondary',
               onPress: () => void setSoundMode($, 'flat'),

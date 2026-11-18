@@ -4,7 +4,7 @@ import type { EngineInterface, RenderElement } from 'claude-code'
 import type { ModelConsoleEntry, UnityModel } from '../../types'
 import { Actions, Card, EmptyState, ListRow, Sentence, type Action, type Kit } from '../../lib/ui'
 import { bridgeCommand, patchModel, type Options } from '../state'
-import { ago, fixWithClaude, msg, run } from './common'
+import { FIX_ASK, ago, fixWithClaude, msg, run } from './common'
 import { playActions } from './overview'
 
 const isError = (c: ModelConsoleEntry): boolean => c.type === 'Error' || c.type === 'Exception' || c.type === 'Assert'
@@ -15,7 +15,7 @@ export function consoleTab($: EngineInterface, k: Kit, m: UnityModel, options: O
     return EmptyState(k, {
       icon: 'terminal',
       title: 'Keine Konsole ohne Editor',
-      text: 'Die Konsole kommt über die Editor-Bridge. Öffne den Editor, dann steht sie hier.',
+      text: 'Die Konsole kommt direkt aus dem Unity-Editor. Öffne den Editor, dann steht sie hier.',
     })
   const filter = m.consoleFilter ?? 'error'
   const errors = m.console.filter(isError)
@@ -83,7 +83,7 @@ export function consoleTab($: EngineInterface, k: Kit, m: UnityModel, options: O
                         icon: 'claude',
                         variant: 'secondary',
                         onPress: () =>
-                          void fixWithClaude($, `console ${c.type.toLowerCase()}`, `${c.message}\n${c.stack ?? ''}`),
+                          void fixWithClaude($, `${FIX_ASK.console} (${c.type})`, `${c.message}\n${c.stack ?? ''}`),
                       },
                     ])
                   : null,

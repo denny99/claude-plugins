@@ -165,11 +165,11 @@ describe('narrow-test picker', () => {
     ])
     expect(a.uncovered).toEqual(['unity/Assets/Game/Ui/Hud.cs'])
     expect(a.ignored).toBe(2)
-    expect(affectedText(a)).toContain('No area covers 1 changed file(s)')
+    expect(affectedText(a)).toContain('1 geänderte Datei gehört zu keinem Test-Bereich')
   })
   test('landings reminder after N', () => {
     expect(landingsReminder({ count: 4, every: 5 })).toBeUndefined()
-    expect(landingsReminder({ count: 5, every: 5 })).toContain('5 commits landed since the last full test suite')
+    expect(landingsReminder({ count: 5, every: 5 })).toContain('5 Commits seit dem letzten vollen Testlauf')
   })
   test('config: tests.paths + fullSuiteEvery; code-map paths per area', () => {
     const cfg = parseProjectConfig(

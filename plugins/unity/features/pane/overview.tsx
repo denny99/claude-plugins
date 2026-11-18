@@ -32,6 +32,7 @@ import {
   ago,
   bridgeUpdateCard,
   exactFilter,
+  FIX_ASK,
   fixWithClaude,
   msg,
   run,
@@ -52,15 +53,8 @@ export function overviewTab($: EngineInterface, k: Kit, m: UnityModel, options: 
       {testsCard($, k, m, options, now)}
       {consoleCard($, k, m)}
       {jobsCard($, k, m, options)}
-      <Box flexDirection="column">
-        {Sentence(k, target.text, { faint: true, tone: target.ok ? undefined : 'warn' })}
-        {ActionButton(k, {
-          key: 'target-pick',
-          label: 'Ziel wählen',
-          variant: 'link',
-          onPress: selectTab($, 'target'),
-        })}
-      </Box>
+      {/* The header's "Ziel" knob opens the target tab; here only where runs go. */}
+      {Sentence(k, target.text, { faint: true, tone: target.ok ? undefined : 'warn' })}
     </Box>
   )
 }
@@ -171,7 +165,7 @@ function editorCard($: EngineInterface, k: Kit, m: UnityModel, options: Options,
               label: 'Claude reparieren lassen',
               icon: 'claude',
               variant: 'secondary',
-              onPress: () => void fixWithClaude($, 'compile error', formatMessage(x)),
+              onPress: () => void fixWithClaude($, FIX_ASK.compile, formatMessage(x)),
             },
           ],
         }),
@@ -224,7 +218,7 @@ export function testsCard($: EngineInterface, k: Kit, m: UnityModel, options: Op
       onPress: run($, 'rerun red', () => runTests($, options, mode, exactFilter(ranked.map(r => r.fullName)), 0)),
     })
   if (running) acts.push(stopTestsAction($, options))
-  acts.push({ key: 'tests-open', label: 'Alle Tests', variant: 'link', onPress: selectTab($, 'tests') })
+  acts.push({ key: 'tests-open', label: 'Zum Tab Tests', variant: 'link', onPress: selectTab($, 'tests') })
   return Card(k, {
     key: 'tests-card',
     children: [

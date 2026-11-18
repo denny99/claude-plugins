@@ -5,7 +5,7 @@ import type { UnityModel } from '../../types'
 import { batchAllowed, countResults, rankResults, testErrorLine } from '../../lib/unity'
 import { Actions, Card, CardTitle, ListRow, Sentence, type Action, type Kit } from '../../lib/ui'
 import { affectedTests, batchTarget, landingsLine, patchModel, runTests, type Options } from '../state'
-import { ago, dec, fixWithClaude, run, stopTestsAction, testsProgress, type Extra } from './common'
+import { FIX_ASK, ago, dec, fixWithClaude, run, stopTestsAction, testsProgress, type Extra } from './common'
 
 export function testsTab(
   $: EngineInterface,
@@ -108,8 +108,8 @@ function startCard($: EngineInterface, k: Kit, x: Extra, m: UnityModel, options:
       />,
       <Input
         key="filter"
-        label="Eigener Filter"
-        placeholder="Regex auf volle Testnamen; ';' trennt"
+        label="Testname enthält"
+        placeholder="Testname, z. B. Mahlen"
         value={m.filterInput}
         onSubmit={(v: string) => void patchModel($, { filterInput: v, testScope: undefined })}
       />,
@@ -123,7 +123,7 @@ function startCard($: EngineInterface, k: Kit, x: Extra, m: UnityModel, options:
                 : 'Läuft im Hintergrund ohne Editor-Fenster.',
             { faint: true },
           )
-        : Sentence(k, 'Tests brauchen die Editor-Bridge oder ein Projekt, das kein Editor offen hat.', {
+        : Sentence(k, 'Tests brauchen die Verbindung zum Unity-Editor oder ein Projekt, das kein Editor offen hat.', {
             tone: 'warn',
           }),
       acts.length ? Actions(k, 'tests-start-acts', acts, 3) : null,
@@ -160,7 +160,7 @@ function resultCard($: EngineInterface, k: Kit, m: UnityModel, options: Options,
           label: 'Claude reparieren lassen',
           icon: 'claude',
           variant: 'secondary',
-          onPress: () => void fixWithClaude($, 'failing test', `${r.fullName}\n${r.message ?? ''}\n${r.stack ?? ''}`),
+          onPress: () => void fixWithClaude($, FIX_ASK.test, `${r.fullName}\n${r.message ?? ''}\n${r.stack ?? ''}`),
         },
       ],
     })

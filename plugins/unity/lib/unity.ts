@@ -16,7 +16,10 @@ export interface UnityProject {
   version: string
   /** `b22767f04f04` when ProjectVersion.txt carries it. */
   revision?: string
+  /** The checkout's name (`cozy-game-panels`), not the project subfolder (`unity`). */
   name: string
+  /** Where the project sits for a human: `cozy-game-panels/unity`, or just the name when it is the root. */
+  label: string
 }
 
 /** Reads `m_EditorVersion` and the revision from ProjectVersion.txt. */
@@ -36,6 +39,7 @@ const SKIP_DIRS = new Set(['node_modules', '.git', 'Library', 'Temp', 'Logs', 'o
 export async function detectProject(
   sessionRoot: string,
   fs: Pick<HostFs, 'read' | 'exists' | 'list'>,
+  checkout?: string,
 ): Promise<UnityProject | undefined> {
   const base = norm(sessionRoot)
   const tryAt = async (root: string): Promise<UnityProject | undefined> => {
@@ -43,8 +47,12 @@ export async function detectProject(
     if (!(await fs.exists(file))) return undefined
     const parsed = parseProjectVersion(await fs.read(file))
     if (!parsed) return undefined
-    const name = root.replace(/\/+$/, '').split('/').pop() ?? root
-    return { root, sessionRoot: base, name, ...parsed }
+    const last = (p: string) => p.replace(/\/+$/, '').split('/').pop() || p
+    const folder = last(root)
+    const top = norm(checkout ?? base)
+    const name = norm(root) === top ? folder : last(top)
+    const label = name === folder ? name : `${name}/${folder}`
+    return { root, sessionRoot: base, name, label, ...parsed }
   }
   const here = await tryAt(base)
   if (here) return here
@@ -152,10 +160,10 @@ export function batchAllowed(s: { lock: LockState; bridgeUp: boolean }): { ok: b
   if (s.bridgeUp)
     return {
       ok: false,
-      reason: 'An editor has this project open (bridge is up). Use the editor, or run batch jobs in a worktree.',
+      reason: 'Der Editor hat das Projekt offen. Arbeite im Editor, oder lass Hintergrund-Läufe in einem Worktree laufen.',
     }
   if (s.lock === 'held')
-    return { ok: false, reason: 'An editor holds Temp/UnityLockfile. Close it, or run batch jobs in a worktree.' }
+    return { ok: false, reason: 'Ein Editor hat das Projekt offen (Sperrdatei). Schließ ihn, oder lass Hintergrund-Läufe in einem Worktree laufen.' }
   return { ok: true }
 }
 

@@ -210,7 +210,7 @@ function statusText(m: Awaited<ReturnType<typeof readModel>>): string {
     )
   lines.push(m.configFound ? 'Config: .claude/unity.json' : 'Config: none (/unity-init drafts one)')
   if (m.presets.length) lines.push(`Test areas: ${m.presets.map(p => p.name).join(', ')}`)
-  if (cfg.customJobs?.length) lines.push(`Custom jobs: ${cfg.customJobs.map(j => j.name).join(', ')}`)
+  if (cfg.customJobs?.length) lines.push(`Project tasks ("Aufgaben" in the pane, customJobs): ${cfg.customJobs.map(j => j.name).join(', ')}`)
   if (cfg.restoreBeforeCommit?.length) lines.push(`Restore before commit: ${cfg.restoreBeforeCommit.join(', ')}`)
   return lines.join('\n')
 }
@@ -356,8 +356,8 @@ export function registerUnity(on: On, options: Options): void {
   // --- commands ---
   on('command.run', { command: 'unity' }, async $ => {
     await openPane($, options)
-    return { text: 'Unity pane opened.' }
-  }).catch(() => ({ text: 'unity: opening the pane failed.' }))
+    return { text: 'Unity-Panel geöffnet.' }
+  }).catch(() => ({ text: 'Unity-Panel ließ sich nicht öffnen.' }))
 
   on('command.run', { command: 'unity-test' }, async ($, e) => {
     const words = (e.args ?? '').trim().split(/\s+/).filter(Boolean)
@@ -368,49 +368,49 @@ export function registerUnity(on: On, options: Options): void {
     await openPane($, options)
     const text = await runTests($, options, mode, filter, 0)
     return { text }
-  }).catch(() => ({ text: 'unity: starting the tests failed.' }))
+  }).catch(() => ({ text: 'Tests ließen sich nicht starten.' }))
 
   on('command.run', { command: 'unity-affected' }, async ($, e) => {
     const mode = (e.args ?? '').trim().toLowerCase().startsWith('play') ? 'PlayMode' : 'EditMode'
     await openPane($, options)
     return { text: await affectedTests($, options, { mode, run: true, waitMs: 0 }) }
-  }).catch(() => ({ text: 'unity: picking the affected tests failed.' }))
+  }).catch(() => ({ text: 'Betroffene Tests ließen sich nicht bestimmen.' }))
 
   on('command.run', { command: 'unity-worktree' }, async ($, e) => {
     const name = (e.args ?? '').trim()
-    if (!name) return { text: 'Usage: /unity-worktree <name>' }
+    if (!name) return { text: 'Aufruf: /unity-worktree <name>' }
     return { text: await createWorktree($, options, name) }
-  }).catch(() => ({ text: 'unity: adding the worktree failed.' }))
+  }).catch(() => ({ text: 'Worktree ließ sich nicht anlegen.' }))
 
   on('command.run', { command: 'unity-play' }, async $ => {
     const m = await refreshModel($, options)
     const r = await bridgeCommand($, options, { cmd: m.bridge.isPlaying ? 'stop' : 'play' })
-    return { text: r.ok ? (m.bridge.isPlaying ? 'Stopped Play mode.' : 'Entered Play mode.') : r.error }
-  }).catch(() => ({ text: 'unity: toggling Play failed.' }))
+    return { text: r.ok ? (m.bridge.isPlaying ? 'Play-Modus beendet.' : 'Play-Modus gestartet.') : r.error }
+  }).catch(() => ({ text: 'Play-Modus ließ sich nicht umschalten.' }))
 
   on('command.run', { command: 'unity-screenshot' }, async $ => {
     const shot = await screenshot($, options)
-    return { text: 'error' in shot ? `No screenshot: ${shot.error}` : `Screenshot saved: ${shot.path}` }
-  }).catch(() => ({ text: 'unity: screenshot failed.' }))
+    return { text: 'error' in shot ? `Kein Screenshot: ${shot.error}` : `Screenshot gespeichert: ${shot.path}` }
+  }).catch(() => ({ text: 'Screenshot ging nicht.' }))
 
   on('command.run', { command: 'unity-init' }, async $ => {
     const m = await refreshModel($, options)
-    if (!m.project) return { text: 'No Unity project here.' }
+    if (!m.project) return { text: 'Hier ist kein Unity-Projekt.' }
     const host = await createHost($)
     const draft = draftJson(await draftConfig(m.project.sessionRoot, m.project, host.fs))
     const target = join(m.project.sessionRoot, '.claude', 'unity.json')
     return {
       text: [
         m.configFound
-          ? `${target} exists already; this draft is for comparison only.`
-          : `Draft for ${target} — review it, then ask Claude to write it:`,
+          ? `${target} gibt es schon; dieser Entwurf ist nur zum Vergleich.`
+          : `Entwurf für ${target} — prüf ihn, dann lass Claude ihn schreiben:`,
         '',
         draft,
         '',
-        `Keys: unityPath, projectDir, worktreeDir, editorEnv, tests.areas, filterDocs, bannedApis, restoreBeforeCommit, syncReminders, customJobs, playRestart, refreshWhilePlaying, watchdogMinutes, buildMethod, buildTarget. Bridge package: ${BRIDGE_README}`,
+        `Schlüssel: unityPath, projectDir, worktreeDir, editorEnv, tests.areas, filterDocs, bannedApis, restoreBeforeCommit, syncReminders, customJobs, playRestart, refreshWhilePlaying, watchdogMinutes, buildMethod, buildTarget. Paket Claude Bridge: ${BRIDGE_README}`,
       ].join('\n'),
     }
-  }).catch(() => ({ text: 'unity: drafting the config failed.' }))
+  }).catch(() => ({ text: 'Entwurf der Einstellungen ging nicht.' }))
 
   // --- pane ---
   on('ui.render', { component: 'Pane', requestId: PANE_ID }, async ($, e) => renderPane($, e, options))

@@ -366,7 +366,8 @@ namespace Denny99.ClaudeBridge
             var o = new JsonOut().Num("seconds", run.recordedMs / 1000f).Num("requestedSeconds", run.seconds).Num("frames", n)
                 .Num("budgetMs", BudgetMs).Num("avgMs", run.recordedMs / n).Num("p50", Pct(0.5)).Num("p95", Pct(0.95))
                 .Num("p99", Pct(0.99)).Num("worst", sorted[n - 1]).Num("hitches", run.hitches)
-                .Num("seriesStep", step).Raw("series", series.ToString()).Raw("costs", costs.ToString());
+                .Num("seriesStep", step).Raw("series", series.ToString()).Raw("costs", costs.ToString())
+                .Num("sources", run.sources.Count);
             if (abortReason != null) o.Str("aborted", abortReason);
             return o.ToString();
         }

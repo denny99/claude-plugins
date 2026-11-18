@@ -85,7 +85,7 @@ describe('project detection', () => {
         { '/game': ['docs', 'node_modules', 'unity'] },
       ),
     )
-    expect(below).toMatchObject({ root: '/game/unity', sessionRoot: '/game', version: '6000.6.7f1', name: 'unity' })
+    expect(below).toMatchObject({ root: '/game/unity', sessionRoot: '/game', version: '6000.6.7f1', name: 'game', label: 'game/unity' })
     expect(await detectProject('/x', memFs({}, { '/x': ['a'] }))).toBeUndefined()
   })
 })

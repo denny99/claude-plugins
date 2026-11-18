@@ -76,7 +76,7 @@ test('worktree: git worktree add, Library cloned in the background, then batch r
   world.files[`${PROJECT}/Library`] = ''
   await $.session.start(start)
   const res = JSON.stringify(await settle(world, $.tool.call({ tool: 'mcp__unity__unity_worktree', name: 'wt1' })))
-  expect(res).toContain('Worktree /g/.worktrees/wt1 added; copying Library/')
+  expect(res).toContain('Worktree /g/.worktrees/wt1 angelegt; Library/ wird im Hintergrund kopiert')
   expect(world.argv).toContain('git -C /g worktree add /g/.worktrees/wt1')
   const copy = world.calls.find(c => c.tool === 'Bash') as { command: string; run_in_background: boolean }
   expect(copy.run_in_background).toBe(true)
@@ -95,7 +95,7 @@ test('worktree: git worktree add, Library cloned in the background, then batch r
   expect(await ui.find({ type: 'Button', key: 'worktree-main' })).toBeDefined()
   await ui.unmount()
   expect(JSON.stringify(await $.tool.call({ tool: 'mcp__unity__unity_worktree', name: '../x' }))).toContain(
-    'Invalid worktree name',
+    'Ungültiger Worktree-Name',
   )
 })
 
@@ -119,15 +119,15 @@ test('affected tests: changed files → area run through the bridge; reminder af
   const res = JSON.stringify(
     await settle(world, $.tool.call({ tool: 'mcp__unity__unity_affected_tests', waitSeconds: 5 })),
   )
-  expect(res).toContain('Core (1 file): unity/Assets/Game/Core/Adder.cs')
-  expect(res).toContain('No area covers 1 changed file(s): unity/Assets/Game/Ui/Hud.cs')
-  expect(res).toContain('6 commits landed since the last full test suite')
+  expect(res).toContain('Core (1 Datei): unity/Assets/Game/Core/Adder.cs')
+  expect(res).toContain('1 geänderte Datei gehört zu keinem Test-Bereich: unity/Assets/Game/Ui/Hud.cs')
+  expect(res).toContain('6 Commits seit dem letzten vollen Testlauf')
   expect(world.argv).toContain('git rev-list --count old..HEAD')
   const cmd = Object.entries(world.files).find(([f, t]) => f.includes('/cmd-') && t.includes('run-tests'))
   expect(JSON.parse(cmd?.[1] ?? '{}')).toMatchObject({ cmd: 'run-tests', filter: 'Game.Tests.Core' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await settle(world, ui.press({ key: 'tab-tests' }))
-  expect((await findShown(ui, /6 commits landed/))?.text).toBeDefined()
+  expect((await findShown(ui, /6 Commits seit dem letzten/))?.text).toBeDefined()
   expect(await ui.find({ type: 'Button', key: 'affected-tests' })).toBeDefined()
   await ui.unmount()
 })
@@ -160,7 +160,7 @@ test('failed batch job: last 60 lines of its -logFile in the pane and in unity_s
   expect(status).toContain('Last failed job')
   expect(status).toContain('log 99!')
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect((await findShown(ui, /^Letzte 60 Log-Zeilen · EditMode tests/))?.text).toBeDefined()
+  expect((await findShown(ui, /^Letzte 60 Log-Zeilen · EditMode-Tests/))?.text).toBeDefined()
   expect((await findShown(ui, /^log 99!$/))?.text).toBeDefined()
   await ui.unmount()
 })

@@ -60,14 +60,14 @@ describe('capture', () => {
   test('an old bridge says how to update instead of "unknown command"', async () => {
     const { send } = fakeSend(() => ({ ok: false, error: 'ArgumentException: unknown command capture' }))
     const r = await capture(send)
-    expect(r).toEqual({ code: 'outdated', error: expect.stringContaining('Update com.denny99.claude-bridge to 0.2.0') })
+    expect(r).toEqual({ code: 'outdated', error: expect.stringContaining('Package Manager → Claude Bridge → Update') })
   })
 
   test('a timeout is named with what was attempted', async () => {
-    const { send } = fakeSend(() => ({ ok: false, error: 'no answer from the bridge within 20 s' }))
+    const { send } = fakeSend(() => ({ ok: false, code: 'timeout', error: 'Der Editor hat nicht innerhalb von 20 s geantwortet' }))
     expect(await capture(send)).toEqual({
       code: 'timeout',
-      error: 'no answer from the bridge within 20 s (capture the view).',
+      error: 'Der Editor hat nicht innerhalb von 20 s geantwortet (die Ansicht aufnehmen).',
     })
   })
 })
@@ -83,7 +83,7 @@ describe('goto', () => {
     const { send } = fakeSend(() => noProvider)
     expect(await gotoSpot(send, '{"a":1}')).toEqual({
       code: 'no-provider',
-      error: 'This project offers no jump to a spot (it registers no IClaudeSpotProvider).',
+      error: 'Dieses Projekt kann nicht zu einer Stelle springen (es hat dafür nichts registriert).',
     })
   })
 
@@ -123,7 +123,7 @@ describe('perf_record', () => {
     const { send } = fakeSend(() => ({ ok: false, error: 'perf_record needs Play mode.', code: 'not-playing' }))
     expect(await perfRecord(send, 5)).toEqual({
       code: 'not-playing',
-      error: 'A perf recording needs Play mode: press Play first.',
+      error: 'Messen geht nur im Play-Modus: erst Play drücken.',
     })
   })
 
@@ -157,7 +157,7 @@ describe('sounds and mix', () => {
     const { send } = fakeSend(() => noProvider)
     const want = {
       code: 'no-provider',
-      error: 'This project offers no sound board (it registers no IClaudeSoundBoard).',
+      error: 'Dieses Projekt hat kein Soundboard (es hat dafür nichts registriert).',
     }
     expect(await soundList(send)).toEqual(want)
     expect(await soundPlay(send, 'x')).toEqual(want)

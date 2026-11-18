@@ -29,7 +29,7 @@ export async function setupView(
 ): Promise<RenderElement> {
   const { Box } = k
   const root = m.project?.root ?? ''
-  const name = m.project?.name ?? 'dem Projekt'
+  const where = m.project?.label
   const installed = await bridgeInManifest($, root)
   const stale = m.bridge.why === 'stale'
   const target = batchTarget(m)
@@ -88,7 +88,7 @@ export async function setupView(
                 state: old ? 'failed' : installed ? 'done' : 'active',
               },
               {
-                title: `Unity-Editor mit ${name} öffnen`,
+                title: where ? `Projekt ${where} im Unity-Editor öffnen` : 'Projekt im Unity-Editor öffnen',
                 detail: 'Sobald er fertig importiert hat, wird der Status hier grün.',
                 state: installed ? 'active' : 'todo',
               },
@@ -104,7 +104,7 @@ export async function setupView(
             k,
             batchOk
               ? 'Tests laufen dann im Hintergrund ohne Fenster. Das dauert länger, blockiert aber nichts.'
-              : 'Gerade nicht: ein Editor hält das Projekt (Temp/UnityLockfile). Schließ ihn oder nimm einen Worktree.',
+              : 'Gerade nicht: ein Editor hat das Projekt offen. Schließ ihn oder nimm einen Worktree.',
             { faint: true },
           ),
           batchOk

@@ -22,7 +22,7 @@ import {
   reportsDir,
   reviewRoot,
 } from './store'
-import { describeMarks } from './viewer'
+import { describeMarks, marksLine } from './viewer'
 import { newView, saveMarks } from './tab'
 import { bridgeUpdateAction } from '../pane/common'
 
@@ -86,7 +86,7 @@ function reportText(r: Report, marks: string[], svg: string | undefined): string
     svg ? `Markierungen (SVG über dem Bild): ${svg}` : '',
     spotText(r.spot) ? `Stelle (für unity goto): ${spotText(r.spot)}` : '',
     r.perf ? `Leistung: ${r.perf}` : '',
-    r.screenshot ? 'Bild mit Markierungen: mcp__unity__unity_review_feedback' : '',
+    marksLine(marks.length, !!r.screenshot),
   ]
     .filter(Boolean)
     .join('\n')

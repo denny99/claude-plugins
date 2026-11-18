@@ -88,6 +88,8 @@ export type ModelPerf = {
   seriesStep: number
   series: number[]
   costs: { name: string; avgMs: number; maxMs: number; hitchAvgMs: number; hitchMaxMs: number; hitchShare: number }[]
+  /** How many cost sources the project registered; missing from older bridges (written since this change, not yet tried in the editor). */
+  sources?: number
   aborted?: string
   spot?: Record<string, unknown>
 }

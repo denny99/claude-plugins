@@ -7,7 +7,7 @@
  * What the data means comes from the project: a spot is whatever its IClaudeSpotProvider writes (free-form JSON), sound
  * ids and mix groups are its IClaudeSoundBoard's. Without a provider the bridge answers `code: 'no-provider'`.
  */
-import type { BridgeCommand, BridgeResult } from './bridge'
+import { BRIDGE_VERSION, type BridgeCommand, type BridgeResult } from './bridge'
 
 export type Send = (command: BridgeCommand, timeoutMs: number) => Promise<BridgeResult>
 
@@ -79,6 +79,8 @@ export interface PerfResult {
   series: number[]
   /** Named costs from the project's IClaudePerfSource(s), biggest share of the hitches first. Empty without source. */
   costs: PerfCost[]
+  /** How many cost sources the project registered (missing from older bridges; untested in the editor). */
+  sources?: number
   /** Why the recording stopped early (Play mode ended). */
   aborted?: string
   /** The spot at the start of the recording, if the project has a spot provider. */
@@ -110,9 +112,9 @@ export function playError(res: { error: string; code?: string }, what: string): 
   if (/unknown command/i.test(res.error))
     return {
       code: 'outdated',
-      error: `The installed editor bridge cannot ${what} yet. Update com.denny99.claude-bridge to 0.2.0 or newer.`,
+      error: `Das Unity-Paket Claude Bridge im Projekt kann ${what} noch nicht. Aktualisieren: Unity → Package Manager → Claude Bridge → Update (Version ${BRIDGE_VERSION} oder neuer).`,
     }
-  if (/^no answer from the bridge/i.test(res.error)) return { code: 'timeout', error: `${res.error} (${what}).` }
+  if (res.code === 'timeout') return { code: 'timeout', error: `${res.error} (${what}).` }
   return res.code ? { error: res.error, code: res.code } : { error: res.error }
 }
 
@@ -168,6 +170,7 @@ export function parsePerf(d: Record<string, unknown>): PerfResult | undefined {
         hitchShare: num(o.hitchShare),
       }
     }),
+    ...(typeof p.sources === 'number' ? { sources: p.sources } : {}),
     ...(aborted ? { aborted } : {}),
     ...(spot ? { spot } : {}),
   }
@@ -208,24 +211,24 @@ export async function capture(
   opts: { path?: string; width?: number; height?: number } = {},
 ): Promise<CaptureResult | PlayError> {
   const res = await send({ cmd: 'capture', ...opts }, CAPTURE_TIMEOUT_MS)
-  if (!res.ok) return playError(res, 'capture the view')
+  if (!res.ok) return playError(res, 'die Ansicht aufnehmen')
   const out = parseCapture(res.data)
-  return out.path ? out : { error: 'The bridge answered capture without a picture path.' }
+  return out.path ? out : { error: 'Der Editor hat aufgenommen, aber keinen Bildpfad gemeldet.' }
 }
 
 /** Jumps to a spot from an earlier capture (object or its JSON text). Answers with the spot reached, if any. */
 export async function gotoSpot(send: Send, spot: Spot | string): Promise<{ spot?: Spot } | PlayError> {
   const text = typeof spot === 'string' ? spot.trim() : JSON.stringify(spot)
   if (!text || !text.startsWith('{'))
-    return { code: 'bad-input', error: 'A spot is a JSON object from an earlier capture.' }
+    return { code: 'bad-input', error: 'Eine Stelle ist ein JSON-Objekt aus einer früheren Aufnahme.' }
   const res = await send({ cmd: 'goto', spot: text }, GOTO_TIMEOUT_MS)
   if (!res.ok) {
     if (res.code === 'no-provider')
       return {
         code: 'no-provider',
-        error: 'This project offers no jump to a spot (it registers no IClaudeSpotProvider).',
+        error: 'Dieses Projekt kann nicht zu einer Stelle springen (es hat dafür nichts registriert).',
       }
-    return playError(res, 'jump to a spot')
+    return playError(res, 'zu einer Stelle springen')
   }
   const reached = obj(res.data.spot)
   return reached ? { spot: reached } : {}
@@ -237,13 +240,13 @@ export async function perfRecord(send: Send, seconds: number): Promise<PerfResul
   const res = await send({ cmd: 'perf_record', seconds: s }, perfTimeoutMs(s))
   if (!res.ok) {
     if (res.code === 'not-playing')
-      return { code: 'not-playing', error: 'A perf recording needs Play mode: press Play first.' }
-    return playError(res, 'record frame times')
+      return { code: 'not-playing', error: 'Messen geht nur im Play-Modus: erst Play drücken.' }
+    return playError(res, 'Frame-Zeiten messen')
   }
-  return parsePerf(res.data) ?? { error: 'The bridge answered perf_record without data.' }
+  return parsePerf(res.data) ?? { error: 'Der Editor hat gemessen, aber keine Werte gemeldet.' }
 }
 
-const NO_BOARD = 'This project offers no sound board (it registers no IClaudeSoundBoard).'
+const NO_BOARD = 'Dieses Projekt hat kein Soundboard (es hat dafür nichts registriert).'
 
 function soundError(res: { error: string; code?: string }, what: string): PlayError {
   return res.code === 'no-provider' ? { code: 'no-provider', error: NO_BOARD } : playError(res, what)
@@ -251,7 +254,7 @@ function soundError(res: { error: string; code?: string }, what: string): PlayEr
 
 export async function soundList(send: Send): Promise<{ sounds: SoundInfo[] } | PlayError> {
   const res = await send({ cmd: 'sound_list' }, SOUND_TIMEOUT_MS)
-  return res.ok ? { sounds: parseSounds(res.data) } : soundError(res, 'list sounds')
+  return res.ok ? { sounds: parseSounds(res.data) } : soundError(res, 'Klänge auflisten')
 }
 
 export async function soundPlay(
@@ -259,27 +262,27 @@ export async function soundPlay(
   sound: string,
   mode: 'near' | 'flat' = 'near',
 ): Promise<{ sound: string; mode: 'near' | 'flat' } | PlayError> {
-  if (!sound) return { code: 'bad-input', error: 'Which sound? (an id from the sound list)' }
+  if (!sound) return { code: 'bad-input', error: 'Welcher Klang? (eine Kennung aus der Klangliste)' }
   const res = await send({ cmd: 'sound_play', sound, mode }, SOUND_TIMEOUT_MS)
-  return res.ok ? { sound, mode } : soundError(res, 'play a sound')
+  return res.ok ? { sound, mode } : soundError(res, 'einen Klang abspielen')
 }
 
 export async function soundStop(send: Send): Promise<{ stopped: true } | PlayError> {
   const res = await send({ cmd: 'sound_stop' }, SOUND_TIMEOUT_MS)
-  return res.ok ? { stopped: true } : soundError(res, 'stop sounds')
+  return res.ok ? { stopped: true } : soundError(res, 'Klänge stoppen')
 }
 
 export async function mixGet(send: Send): Promise<{ groups: MixGroup[] } | PlayError> {
   const res = await send({ cmd: 'mix_get' }, SOUND_TIMEOUT_MS)
-  return res.ok ? { groups: parseMix(res.data) } : soundError(res, 'read the mix')
+  return res.ok ? { groups: parseMix(res.data) } : soundError(res, 'den Mix lesen')
 }
 
 /** Sets one group's volume (dB, clamped to -80..20); the project persists it. Answers with the whole mix. */
 export async function mixSet(send: Send, group: string, db: number): Promise<{ groups: MixGroup[] } | PlayError> {
-  if (!group) return { code: 'bad-input', error: 'Which mix group?' }
-  if (!Number.isFinite(db)) return { code: 'bad-input', error: 'The volume must be a number in dB.' }
+  if (!group) return { code: 'bad-input', error: 'Welche Mix-Gruppe?' }
+  if (!Number.isFinite(db)) return { code: 'bad-input', error: 'Die Lautstärke muss eine Zahl in dB sein.' }
   const res = await send({ cmd: 'mix_set', group, db: Math.min(20, Math.max(-80, db)) }, SOUND_TIMEOUT_MS)
-  return res.ok ? { groups: parseMix(res.data) } : soundError(res, 'set the mix')
+  return res.ok ? { groups: parseMix(res.data) } : soundError(res, 'den Mix setzen')
 }
 
 export function isPlayError(v: unknown): v is PlayError {

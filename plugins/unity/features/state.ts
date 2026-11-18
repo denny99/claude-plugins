@@ -114,7 +114,7 @@ export async function refreshModel($: EngineInterface, options: Options): Promis
   const loaded = await loadProjectConfig(sessionRoot, host.fs)
   const cfg = loaded.config
   const project = cfg.projectDir
-    ? await detectProject(join(sessionRoot, cfg.projectDir), host.fs)
+    ? await detectProject(join(sessionRoot, cfg.projectDir), host.fs, sessionRoot)
     : await detectProject(sessionRoot, host.fs)
   if (!project) {
     await patchModel($, { phase: 'none', sessionRoot, configFound: loaded.configFound, config: { ...cfg } })
@@ -316,7 +316,7 @@ export async function unlockBridgePackage($: EngineInterface, options: Options):
   delete lock.dependencies[BRIDGE_PACKAGE]
   await host.fs.write(file, `${JSON.stringify(lock, null, 2)}\n`)
   await refreshModel($, options)
-  return 'Sperre gelöst: wechsle in den Unity-Editor, er lädt die Bridge neu (dauert einen Moment).'
+  return 'Sperre gelöst: wechsle in den Unity-Editor, er lädt das Paket Claude Bridge neu (dauert einen Moment).'
 }
 
 /** Stops the running test run: the editor run through the bridge (`cancel-tests`), a batch run through its job. */
@@ -328,12 +328,12 @@ export async function cancelTests($: EngineInterface, options: Options): Promise
   if (!m.project || !m.bridge.up)
     return editorBusyWithTests(m)
       ? 'Der Editor ist gerade mit den Tests beschäftigt und nimmt den Stopp an, sobald er wieder antwortet.'
-      : 'Die Editor-Bridge antwortet nicht; der Lauf lässt sich nicht stoppen.'
+      : 'Der Unity-Editor antwortet nicht; der Lauf lässt sich nicht stoppen.'
   const host = await createHost($)
   const res = await sendCommand(host, m.project.root, { cmd: 'cancel-tests' })
   if (!res.ok)
     return /unknown command/i.test(res.error)
-      ? 'Die Bridge im Projekt kann Testläufe noch nicht stoppen: Bridge aktualisieren.'
+      ? 'Das Unity-Paket Claude Bridge im Projekt kann Testläufe noch nicht stoppen: Bridge aktualisieren.'
       : `Nicht gestoppt: ${res.error}`
   const at = await host.now()
   await patchModel($, x => ({
@@ -363,7 +363,7 @@ export async function bridgeCommand(
     return {
       ok: false,
       code: 'no-project',
-      error: 'No Unity project here (no ProjectSettings/ProjectVersion.txt at the root or one level down).',
+      error: 'Hier ist kein Unity-Projekt (keine ProjectSettings/ProjectVersion.txt hier oder eine Ebene tiefer).',
     }
   if (!m.bridge.up)
     return editorBusyWithTests(m)
@@ -379,7 +379,7 @@ export async function bridgeCommand(
             code: 'bridge-down',
             error: m.editorElsewhere
               ? `Der Editor läuft für ${m.editorElsewhere.name}, nicht für diesen Checkout (${m.editorElsewhere.here}).`
-              : 'Die Editor-Bridge läuft nicht. Öffne das Projekt in Unity mit dem Paket com.denny99.claude-bridge (/unity zeigt, wie).',
+              : 'Claude ist nicht mit dem Unity-Editor verbunden. Öffne das Projekt in Unity mit dem Paket Claude Bridge (/unity zeigt, wie).',
           }
   const host = await createHost($)
   const res = await sendCommand(host, m.project.root, command, timeoutMs)
@@ -520,27 +520,27 @@ export async function runTests(
   waitMs: number,
 ): Promise<string> {
   const m = await refreshModel($, options)
-  if (!m.project) return 'No Unity project here.'
+  if (!m.project) return 'Hier ist kein Unity-Projekt.'
   const previous = Object.fromEntries((m.tests?.results ?? []).map(r => [r.fullName, r.status]))
   const host = await createHost($)
   const viaWorktree = m.bridge.up && m.bridge.isPlaying && m.worktree?.status === 'ready'
   if (m.bridge.up && !viaWorktree) {
     if (m.bridge.isPlaying)
-      return 'The editor is in Play mode: stop it first (unity_stop) — tests would interrupt the running game. A worktree (unity_worktree) lets tests run beside the game.'
+      return 'Der Editor ist im Play-Modus: erst stoppen (unity_stop), sonst unterbrechen die Tests das laufende Spiel. In einem Worktree (unity_worktree) laufen Tests neben dem Spiel.'
     const res = await sendCommand(host, m.project.root, { cmd: 'run-tests', mode, ...(filter ? { filter } : {}) })
-    if (!res.ok) return `Tests not started: ${res.error}`
+    if (!res.ok) return `Tests nicht gestartet: ${res.error}`
     const runId = String(res.data.runId ?? '')
     await patchModel($, {
       previous,
       tests: { runId, state: 'running', mode, ...(filter ? { filter } : {}), results: [], startedAt: await host.now() },
       fullPending: filter ? undefined : runId,
     })
-    if (waitMs <= 0) return `Started ${mode} tests in the editor (run ${runId}). The unity pane shows the results.`
+    if (waitMs <= 0) return `${mode}-Tests im Editor gestartet (Lauf ${runId}). Das Unity-Panel zeigt die Ergebnisse.`
     const run = await awaitBridgeTests(host, m.project.root, runId, waitMs)
     if (run) await patchModel($, { tests: run, ...(run.state !== 'running' ? { fullPending: undefined } : {}) })
     if (run && !filter && fullRunGreen(run)) await recordFullRun($, options)
     if (!run || run.state === 'running')
-      return `${mode} tests still running after ${Math.round(waitMs / 1000)} s (run ${runId}). Call unity_test_results later.`
+      return `${mode}-Tests laufen nach ${Math.round(waitMs / 1000)} s noch (Lauf ${runId}). Später unity_test_results aufrufen.`
     return testReport(run, previous)
   }
   const started = await startBatchJob($, options, 'tests', { mode, filter })
@@ -601,10 +601,10 @@ export async function affectedTests(
   spec: { mode?: 'EditMode' | 'PlayMode'; run?: boolean; waitMs?: number } = {},
 ): Promise<string> {
   const m = await ensureModel($, options)
-  if (!m.project || !m.sessionRoot) return 'No Unity project here.'
+  if (!m.project || !m.sessionRoot) return 'Hier ist kein Unity-Projekt.'
   const host = await createHost($)
   const top = (await gitOut(host, m.sessionRoot, ['rev-parse', '--show-toplevel']))?.trim()
-  if (!top) return 'Not a git repository: no changed files to pick tests from.'
+  if (!top) return 'Kein Git-Repository: keine geänderten Dateien, aus denen sich Tests wählen ließen.'
   const diff = (await gitOut(host, m.sessionRoot, ['diff', '--name-only', '--relative', 'HEAD'])) ?? ''
   const untracked = (await gitOut(host, m.sessionRoot, ['ls-files', '--others', '--exclude-standard'])) ?? ''
   const projectDir = relative(m.sessionRoot, m.project.root)
@@ -616,7 +616,7 @@ export async function affectedTests(
   const landings = await refreshLandings($, options)
   let text = affectedText(picked, landings)
   if (!m.presets.length)
-    text = `No test areas configured (tests.areas in .claude/unity.json or a code map), so nothing can be narrowed.\n${text}`
+    text = `Keine Test-Bereiche eingerichtet (tests.areas in .claude/unity.json oder eine Code-Karte), darum lässt sich nichts eingrenzen.\n${text}`
   await patchModel($, { affected: { text, areas: picked.areas.map(a => a.name), at: await host.now() } })
   if (spec.run === false || !picked.areas.length) return text
   const filter = picked.areas.map(a => a.filter).join(';')
@@ -636,17 +636,17 @@ export function landingsLine(m: UnityModel): string | undefined {
  * ends the worktree becomes the batch target.
  */
 export async function createWorktree($: EngineInterface, options: Options, name: string): Promise<string> {
-  if (!WORKTREE_NAME.test(name)) return `Invalid worktree name "${name}": letters, digits, '.', '_' and '-' only.`
+  if (!WORKTREE_NAME.test(name)) return `Ungültiger Worktree-Name "${name}": nur Buchstaben, Ziffern, '.', '_' und '-'.`
   const m = await refreshModel($, options)
-  if (!m.project || !m.sessionRoot) return 'No Unity project here.'
+  if (!m.project || !m.sessionRoot) return 'Hier ist kein Unity-Projekt.'
   const host = await createHost($)
   const wt = worktreePaths(m.sessionRoot, m.project.root, configOf(m).worktreeDir, name)
-  if (await host.fs.exists(wt.path)) return `${wt.path} exists already; pick another name.`
+  if (await host.fs.exists(wt.path)) return `${wt.path} gibt es schon; nimm einen anderen Namen.`
   const add = await host.run('git', worktreeAddArgs(m.sessionRoot, wt.path), {
     cwd: m.sessionRoot,
     log: () => undefined,
   })
-  if (add.code !== 0) return `git worktree add failed: ${(add.stderr || add.stdout).trim().split('\n')[0] ?? ''}`
+  if (add.code !== 0) return `Worktree anlegen ging nicht: ${(add.stderr || add.stdout).trim().split('\n')[0] ?? ''}`
   const worktree: NonNullable<UnityModel['worktree']> = {
     name,
     path: wt.path,
@@ -656,7 +656,7 @@ export async function createWorktree($: EngineInterface, options: Options, name:
   if (!(await host.fs.exists(wt.library.from))) {
     await patchModel($, { worktree: { ...worktree, status: 'ready' } })
     await refreshModel($, options)
-    return `Worktree ${wt.path} added (no Library/ to copy: the first batch run imports from scratch). Batch runs now go there.`
+    return `Worktree ${wt.path} angelegt (kein Library/ zum Kopieren: der erste Hintergrund-Lauf importiert alles neu). Hintergrund-Läufe gehen jetzt dorthin.`
   }
   const command = wrapCommand(libraryCopyLine(host.platform, wt.library.from, wt.library.to))
   const started = await startShell($, {
@@ -667,10 +667,10 @@ export async function createWorktree($: EngineInterface, options: Options, name:
   })
   if ('error' in started) {
     await patchModel($, { worktree: { ...worktree, status: 'failed', error: started.error } })
-    return `Worktree ${wt.path} added, but the Library copy did not start: ${started.error}`
+    return `Worktree ${wt.path} angelegt, aber das Kopieren von Library/ startete nicht: ${started.error}`
   }
   await patchModel($, { worktree: { ...worktree, jobKey: started.job.key } })
-  return `Worktree ${wt.path} added; copying Library/ in the background (task ${started.job.taskId ?? '?'}). Batch runs switch to it when the copy ends.`
+  return `Worktree ${wt.path} angelegt; Library/ wird im Hintergrund kopiert (Task ${started.job.taskId ?? '?'}). Hintergrund-Läufe wechseln dorthin, sobald die Kopie fertig ist.`
 }
 
 /** Batch runs go back to the main checkout (the worktree stays on disk). */
@@ -708,17 +708,17 @@ export async function startBatchJob(
   spec: { mode?: 'EditMode' | 'PlayMode'; filter?: string; custom?: string },
 ): Promise<string> {
   const m = await refreshModel($, options)
-  if (!m.project) return 'No Unity project here.'
+  if (!m.project) return 'Hier ist kein Unity-Projekt.'
   const cfg = configOf(m)
   const custom = kind === 'custom' ? cfg.customJobs?.find(j => j.name === spec.custom) : undefined
-  if (kind === 'custom' && !custom) return `No custom job named "${spec.custom ?? ''}" in .claude/unity.json.`
+  if (kind === 'custom' && !custom) return `Keine Aufgabe "${spec.custom ?? ''}" in .claude/unity.json (customJobs).`
   const target = batchTarget(m)
   if (kind !== 'custom' || custom?.batch) {
     const allowed = batchAllowed({ lock: target.lock, bridgeUp: target.bridgeUp })
-    if (!allowed.ok) return `Not started: ${allowed.reason ?? ''}`
+    if (!allowed.ok) return `Nicht gestartet: ${allowed.reason ?? ''}`
   }
   if (m.jobs.some(j => j.status === 'running' && j.kind !== 'custom') && kind !== 'custom')
-    return 'A batchmode job is already running for this project; wait for it or stop it in the unity pane.'
+    return 'Für dieses Projekt läuft schon ein Hintergrund-Lauf; warte ihn ab oder stopp ihn im Unity-Panel.'
   const host = await createHost($)
   const now = await host.now()
   let command: string
@@ -733,21 +733,21 @@ export async function startBatchJob(
     command = wrapCommand(`${envPrefix(cfg.editorEnv)}${custom.command}`, cwd)
   } else {
     if (!m.editorPath)
-      return `Unity ${m.project.version} not found. Tried: ${m.editorTried.join(', ') || '(none)'}. Set the editor path in the plugin options or unityPath in .claude/unity.json.`
+      return `Unity ${m.project.version} nicht gefunden. Gesucht: ${m.editorTried.join(', ') || '(nirgends)'}. Editor-Pfad in den Plugin-Optionen oder unityPath in .claude/unity.json setzen.`
     let args: string[]
     logFile = join(root, 'Logs', `claude-${kind}-${now}.log`)
     if (kind === 'tests') {
       const mode = spec.mode ?? 'EditMode'
       resultsFile = join(root, 'Logs', `claude-tests-${now}.xml`)
       args = batchTestArgs(root, mode, resultsFile, spec.filter, logFile)
-      name = `${mode} tests (batch)${spec.filter ? ` · ${spec.filter}` : ''}${where}`
+      name = `${mode}-Tests (Hintergrund)${spec.filter ? ` · ${spec.filter}` : ''}${where}`
     } else if (kind === 'build') {
-      if (!cfg.buildMethod) return 'No buildMethod in .claude/unity.json.'
+      if (!cfg.buildMethod) return 'Kein buildMethod in .claude/unity.json.'
       args = batchBuildArgs(root, cfg.buildMethod, cfg.buildTarget, logFile)
       name = `Build ${cfg.buildTarget ?? ''}${where}`.trim()
     } else {
       args = batchCompileArgs(root, logFile)
-      name = `Compile check (batch)${where}`
+      name = `Kompilier-Check (Hintergrund)${where}`
     }
     command = wrapCommand(`${envPrefix(cfg.editorEnv)}${shJoin([m.editorPath, ...args])}`)
   }
@@ -761,7 +761,7 @@ export async function startBatchJob(
     ...(spec.mode ? { mode: spec.mode } : {}),
     ...(kind === 'tests' && !spec.filter ? { full: true } : {}),
   })
-  if ('error' in started) return `Not started: ${started.error}`
+  if ('error' in started) return `Nicht gestartet: ${started.error}`
   const job = started.job
   if (kind === 'tests') {
     const previous = Object.fromEntries((m.tests?.results ?? []).map(r => [r.fullName, r.status]))
@@ -775,7 +775,7 @@ export async function startBatchJob(
       },
     })
   }
-  return `Started "${name}" as background task ${job.taskId ?? '(id unknown)'}${job.outputPath ? `; output: ${job.outputPath}` : ''}. You get a task notification when it ends; the unity pane shows the log tail.`
+  return `"${name}" läuft als Hintergrund-Task ${job.taskId ?? '(ohne Kennung)'}${job.outputPath ? `; Ausgabe: ${job.outputPath}` : ''}. Am Ende kommt eine Task-Meldung; das Unity-Panel zeigt das Log-Ende.`
 }
 
 /** Starts a wrapped command as a background Bash and records it as a job (polled for its exit marker). */
@@ -805,7 +805,7 @@ async function startShell(
     return { error: res.deny }
   }
   if (res.isError) {
-    const error = res.text ?? 'Bash reported an error'
+    const error = res.text ?? 'Bash meldete einen Fehler'
     await pushJob($, { ...base, status: 'failed', endedAt: now, error })
     return { error }
   }
@@ -868,7 +868,7 @@ export async function pollJobs($: EngineInterface): Promise<void> {
                 worktree: {
                   ...mm.worktree,
                   status: out.exitCode === 0 ? ('ready' as const) : ('failed' as const),
-                  ...(out.exitCode === 0 ? {} : { error: `Library copy failed (exit ${out.exitCode})` }),
+                  ...(out.exitCode === 0 ? {} : { error: `Kopieren von Library/ fehlgeschlagen (Exit ${out.exitCode})` }),
                 },
               }
             : {},
@@ -882,8 +882,8 @@ export async function pollJobs($: EngineInterface): Promise<void> {
       }
       patch.status = 'timeout'
       patch.endedAt = now
-      patch.error = `stopped by the watchdog after ${Math.round(watchdog / 60000)} min`
-      void $.ui.toast(`Unity: ${job.name} stopped by the watchdog`)
+      patch.error = `nach ${Math.round(watchdog / 60000)} min vom Wächter gestoppt`
+      void $.ui.toast(`Unity: ${job.name} vom Wächter gestoppt`)
     }
     if (Object.keys(patch).length)
       await patchModel($, mm => ({ jobs: mm.jobs.map(j => (j.key === job.key ? { ...j, ...patch } : j)) }))
@@ -892,10 +892,10 @@ export async function pollJobs($: EngineInterface): Promise<void> {
 
 /** Unity's -runTests exit codes: 0 ok, 2 tests failed, 3 the run broke. */
 export function describeExit(job: Pick<ModelJob, 'kind'>, code: number): string {
-  if (code === 0) return 'done'
-  if (job.kind === 'tests' && code === 2) return 'finished: tests failed'
-  if (job.kind === 'tests' && code === 3) return 'broke (exit 3: run failed, see log)'
-  return `failed (exit ${code})`
+  if (code === 0) return 'fertig'
+  if (job.kind === 'tests' && code === 2) return 'fertig: Tests rot'
+  if (job.kind === 'tests' && code === 3) return 'abgebrochen (Exit 3: Lauf kaputt, siehe Log)'
+  return `fehlgeschlagen (Exit ${code})`
 }
 
 async function finishBatchTests($: EngineInterface, host: Host, job: ModelJob, code: number): Promise<void> {
@@ -912,7 +912,7 @@ async function finishBatchTests($: EngineInterface, host: Host, job: ModelJob, c
     results,
     finishedAt: await host.now(),
     ...(code === 3 || (!results.length && code !== 0)
-      ? { error: `exit ${code}; last log lines in the unity pane` }
+      ? { error: `Exit ${code}; letzte Log-Zeilen im Unity-Panel` }
       : {}),
   }
   await patchModel($, { tests: run })
@@ -921,7 +921,7 @@ async function finishBatchTests($: EngineInterface, host: Host, job: ModelJob, c
 
 export async function stopJob($: EngineInterface, key: string): Promise<string | undefined> {
   const job = (await readModel($)).jobs.find(j => j.key === key)
-  if (!job || job.status !== 'running' || !job.taskId) return 'not running'
+  if (!job || job.status !== 'running' || !job.taskId) return 'läuft nicht'
   try {
     const res = await $.tool.call({ tool: 'TaskStop', task_id: job.taskId })
     if (res.deny !== undefined) return res.deny
@@ -942,7 +942,7 @@ export async function markStopped($: EngineInterface, taskId: string): Promise<v
 // --- screenshot ---
 
 export const BATCHMODE_SHOT =
-  'Play-mode screenshots need a visible editor window (not batchmode). Stop Play mode for an Edit-mode camera shot, or open the project in the Unity editor.'
+  'Screenshots im Play-Modus brauchen ein sichtbares Editor-Fenster (kein Hintergrund-Lauf). Play stoppen für ein Bild aus der Szenen-Kamera, oder das Projekt im Unity-Editor öffnen.'
 
 export async function screenshot(
   $: EngineInterface,
@@ -950,7 +950,7 @@ export async function screenshot(
   size?: { width?: number; height?: number },
 ): Promise<{ path: string; base64: string } | { error: string }> {
   const m = await refreshModel($, options)
-  if (!m.project) return { error: 'No Unity project here.' }
+  if (!m.project) return { error: 'Hier ist kein Unity-Projekt.' }
   const host = await createHost($)
   const path = join(m.project.root, 'Temp', 'ClaudeBridge', 'shots', `shot-${await host.now()}.png`)
   if (m.bridge.up && m.bridge.batchmode && m.bridge.isPlaying) return { error: BATCHMODE_SHOT }
@@ -963,7 +963,7 @@ export async function screenshot(
     await patchModel($, { lastShot: written })
     return { path: written, base64 }
   } catch (e) {
-    return { error: `screenshot written but not readable (${written}): ${e instanceof Error ? e.message : String(e)}` }
+    return { error: `Screenshot geschrieben, aber nicht lesbar (${written}): ${e instanceof Error ? e.message : String(e)}` }
   }
 }
 
@@ -981,7 +981,7 @@ export async function capture(
   size?: { width?: number; height?: number },
 ): Promise<(play.CaptureResult & { base64: string }) | play.PlayError> {
   const m = await refreshModel($, options)
-  if (!m.project) return { code: 'no-project', error: 'No Unity project here.' }
+  if (!m.project) return { code: 'no-project', error: 'Hier ist kein Unity-Projekt.' }
   if (m.bridge.up && m.bridge.batchmode && m.bridge.isPlaying) return { code: 'batchmode', error: BATCHMODE_SHOT }
   const host = await createHost($)
   const path = join(m.project.root, 'Temp', 'ClaudeBridge', 'shots', `capture-${await host.now()}.png`)
@@ -992,7 +992,7 @@ export async function capture(
     await patchModel($, { lastShot: res.path })
     return { ...res, base64 }
   } catch (e) {
-    return { error: `capture written but not readable (${res.path}): ${e instanceof Error ? e.message : String(e)}` }
+    return { error: `Aufnahme geschrieben, aber nicht lesbar (${res.path}): ${e instanceof Error ? e.message : String(e)}` }
   }
 }
 

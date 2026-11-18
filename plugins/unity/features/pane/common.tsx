@@ -23,9 +23,21 @@ export const BRIDGE_GIT_URL_TAGGED = `${BRIDGE_GIT_URL}#${BRIDGE_TAG}`
 export const BRIDGE_README =
   'https://github.com/denny99/claude-plugins/tree/main/plugins/unity/bridge/com.denny99.claude-bridge'
 
+/** What a "Claude reparieren lassen" prompt asks for, in the pane's language. */
+export const FIX_ASK = {
+  compile: 'Behebe diesen Unity-Kompilierfehler',
+  test: 'Repariere diesen fehlschlagenden Unity-Test',
+  console: 'Kläre diese Meldung aus der Unity-Konsole und behebe die Ursache',
+} as const
+
+/** The prompt text: `<ask>:\n\n<detail>`. */
+export function fixPrompt(ask: string, detail: string): string {
+  return `${ask}:\n\n${detail}`
+}
+
 /** Hands a problem to Claude as a prompt. */
-export async function fixWithClaude($: EngineInterface, what: string, detail: string): Promise<void> {
-  await $.prompt.submit({ text: `Fix this Unity ${what}:\n\n${detail}` })
+export async function fixWithClaude($: EngineInterface, ask: string, detail: string): Promise<void> {
+  await $.prompt.submit({ text: fixPrompt(ask, detail) })
 }
 
 /** A button handler: marks the pane busy, toasts the first line of the result, keeps a thrown error in the model. */
@@ -73,10 +85,29 @@ export function ago(now: number, at: number | undefined): string {
   return `vor ${d} ${d === 1 ? 'Tag' : 'Tagen'}`
 }
 
+const two = (n: number) => String(n).padStart(2, '0')
+
 /** "14:32" in local time. */
 export function clockTime(at: number): string {
   const d = new Date(at)
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  return `${two(d.getHours())}:${two(d.getMinutes())}`
+}
+
+/** "18.11.2026" in local time. */
+export function localDay(at: number): string {
+  const d = new Date(at)
+  return `${two(d.getDate())}.${two(d.getMonth() + 1)}.${d.getFullYear()}`
+}
+
+/** "18.11.2026 14:32" in local time. */
+export function localDateTime(at: number): string {
+  return `${localDay(at)} ${clockTime(at)}`
+}
+
+/** "202611181432" in local time, for names a human reads (worktrees). */
+export function localStamp(at: number): string {
+  const d = new Date(at)
+  return `${d.getFullYear()}${two(d.getMonth() + 1)}${two(d.getDate())}${two(d.getHours())}${two(d.getMinutes())}`
 }
 
 /** Where batch runs go and whether they may, as one sentence. */
@@ -85,9 +116,9 @@ export function targetSentence(m: UnityModel): { text: string; ok: boolean } {
   const allowed = batchAllowed({ lock: target.lock, bridgeUp: target.bridgeUp })
   const where = target.worktree ? `Worktree ${target.worktree}` : 'Hauptprojekt'
   const editor = m.bridge.up
-    ? 'Editor hält das Projekt'
+    ? 'Editor offen — Hintergrund-Läufe gehen nur im Worktree'
     : m.lock === 'held'
-      ? 'Editor offen ohne Bridge'
+      ? 'Editor offen, aber nicht verbunden — Hintergrund-Läufe nur im Worktree'
       : m.lock === 'stale'
         ? 'alte Sperrdatei'
         : 'kein Editor offen'

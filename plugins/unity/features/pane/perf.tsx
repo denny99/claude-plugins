@@ -116,7 +116,7 @@ function runCard($: EngineInterface, k: Kit, options: Options, at: number, p: Mo
       costs.length ? Sentence(k, 'Was kostet in den Rucklern', { faint: true }) : null,
       ...costs.map((c, i) => costRow(k, `cost-${i}`, c.name, p.hitches ? c.hitchAvgMs : c.avgMs)),
       !costs.length
-        ? Sentence(k, 'Das Projekt meldet keine Kosten (kein IClaudePerfSource registriert).', { faint: true })
+        ? Sentence(k, noCostsText(p), { faint: true })
         : null,
       Actions(k, 'perf-run-acts', [
         {
@@ -145,20 +145,28 @@ function runCard($: EngineInterface, k: Kit, options: Options, at: number, p: Mo
   })
 }
 
-function perfPrompt(at: number, p: ModelPerf): string {
+/** Why a recording has no named costs: no source registered, the source gave nothing, or the bridge does not say. */
+export function noCostsText(p: Pick<ModelPerf, 'sources'>): string {
+  if (p.sources === 0) return 'Das Projekt hat keine Kostenquelle registriert.'
+  if (p.sources !== undefined) return 'Die Kostenquelle lieferte keine Werte.'
+  return 'Keine Kosten gemeldet (diese Version des Unity-Pakets sagt nicht, ob eine Kostenquelle registriert ist).'
+}
+
+/** The prompt behind "Claude analysieren lassen". */
+export function perfPrompt(at: number, p: ModelPerf): string {
   return [
-    `Analyse this Unity frame-time recording (${clockTime(at)}, ${dec(p.seconds, 0)} s, ${p.frames} frames, budget ${p.budgetMs} ms):`,
-    `avg ${dec(p.avgMs)} ms, p50 ${dec(p.p50)}, p95 ${dec(p.p95)}, p99 ${dec(p.p99)}, worst ${dec(p.worst)}, ${p.hitches} hitches.`,
+    `Analysiere diese Frame-Zeit-Messung aus Unity (${clockTime(at)}, ${dec(p.seconds, 0)} s, ${p.frames} Frames, Budget ${p.budgetMs} ms):`,
+    `Schnitt ${dec(p.avgMs)} ms, p50 ${dec(p.p50)}, p95 ${dec(p.p95)}, p99 ${dec(p.p99)}, schlimmster ${dec(p.worst)}, ${p.hitches} Ruckler.`,
     p.costs.length
-      ? `Costs (avg / max / avg in hitches / share of hitch time):\n${p.costs
+      ? `Kosten (Schnitt / Max / Schnitt in Rucklern / Anteil an der Ruckelzeit):\n${p.costs
           .map(
             c =>
               `- ${c.name}: ${dec(c.avgMs, 2)} / ${dec(c.maxMs)} / ${dec(c.hitchAvgMs)} ms / ${Math.round(c.hitchShare * 100)} %`,
           )
           .join('\n')}`
-      : 'No named costs (no IClaudePerfSource).',
-    p.spot ? `Spot: ${JSON.stringify(p.spot)}` : '',
-    'Find the likely cause in the code and propose a fix.',
+      : noCostsText(p),
+    p.spot ? `Stelle: ${JSON.stringify(p.spot)}` : '',
+    'Finde die wahrscheinliche Ursache im Code und schlag eine Lösung vor.',
   ]
     .filter(Boolean)
     .join('\n')

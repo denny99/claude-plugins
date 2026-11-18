@@ -84,12 +84,12 @@ export function affectedAreas(files: string[], presets: TestFilterPreset[], proj
 /** The text for the model / the pane. */
 export function affectedText(a: Affected, landings?: { count: number; every: number }): string {
   const lines: string[] = []
-  if (!a.areas.length && !a.uncovered.length) lines.push('No changed files in the Unity project: nothing to test.')
+  if (!a.areas.length && !a.uncovered.length) lines.push('Keine geänderten Dateien im Unity-Projekt: nichts zu testen.')
   for (const x of a.areas)
-    lines.push(`${x.name} (${x.files.length} file${x.files.length > 1 ? 's' : ''}): ${x.files.slice(0, 5).join(', ')}`)
+    lines.push(`${x.name} (${x.files.length} Datei${x.files.length > 1 ? 'en' : ''}): ${x.files.slice(0, 5).join(', ')}`)
   if (a.uncovered.length)
     lines.push(
-      `No area covers ${a.uncovered.length} changed file(s): ${a.uncovered.slice(0, 5).join(', ')}${a.uncovered.length > 5 ? ', …' : ''} — run the full suite to be sure.`,
+      `${a.uncovered.length === 1 ? '1 geänderte Datei gehört' : `${a.uncovered.length} geänderte Dateien gehören`} zu keinem Test-Bereich: ${a.uncovered.slice(0, 5).join(', ')}${a.uncovered.length > 5 ? ', …' : ''} — zur Sicherheit alle Tests laufen lassen.`,
     )
   const reminder = landingsReminder(landings)
   if (reminder) lines.push(reminder)
@@ -99,5 +99,5 @@ export function affectedText(a: Affected, landings?: { count: number; every: num
 /** The reminder once `count` landings passed since the last full run. */
 export function landingsReminder(l: { count: number; every: number } | undefined): string | undefined {
   if (!l || l.count < l.every) return undefined
-  return `${l.count} commits landed since the last full test suite (reminder every ${l.every}): run the full suite (unity_run_tests without a filter) before the next landing.`
+  return `${l.count} Commits seit dem letzten vollen Testlauf (Erinnerung alle ${l.every}): vor dem nächsten Commit alle Tests laufen lassen (unity_run_tests ohne Filter).`
 }

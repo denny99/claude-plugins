@@ -220,7 +220,7 @@ export async function sendCommand(
       return { ok: false, error: String(raw.error ?? 'the bridge reported a failure'), ...code }
     }
     if ((await host.now()) >= deadline)
-      return { ok: false, error: `no answer from the bridge within ${Math.round(timeoutMs / 1000)} s` }
+      return { ok: false, code: 'timeout', error: `Der Editor hat nicht innerhalb von ${Math.round(timeoutMs / 1000)} s geantwortet` }
     await sleep(host, 200)
   }
 }
