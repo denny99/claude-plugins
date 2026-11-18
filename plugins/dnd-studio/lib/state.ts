@@ -175,6 +175,34 @@ export async function campaignName($: EngineInterface): Promise<string> {
     return "";
   }
 }
+/**
+ * The open Studio profile's name: the one studio_status last said, else asked once now (small) and kept. "" when the
+ * Studio cannot say. The build's runs carry it, so a campaign of the same name in another profile starts empty.
+ */
+export async function profileName($: EngineInterface): Promise<string> {
+  const known = (await read($, liveAtom)).profile;
+  if (known) return known;
+  try {
+    return await noteProfile($, await studioCall($, "studio_status", {}));
+  } catch {
+    return "";
+  }
+}
+/** Keeps the profile a studio_status answer names (`profile: {name, folder}` or a bare name); returns it. */
+export async function noteProfile(
+  $: EngineInterface,
+  status: Record<string, unknown>,
+): Promise<string> {
+  const p = status?.profile;
+  const name =
+    typeof p === "string"
+      ? p
+      : p && typeof p === "object"
+        ? String((p as Record<string, unknown>).name ?? "")
+        : "";
+  if (name) await update($, liveAtom, (l) => ({ ...l, profile: name }));
+  return name;
+}
 export async function setCampaign(
   $: EngineInterface,
   c: CampaignInfo | null,

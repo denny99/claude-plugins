@@ -18,6 +18,7 @@ import {
 import { autoOpen, Fold, noteTableEnded } from "./dnd-ui";
 import { noteMadeResults } from "./review";
 import { applyLook } from "./look";
+import { forgetBuild } from "./build";
 import { jsonOf, studioCall, textOf } from "../lib/studio";
 import {
   advance,
@@ -40,6 +41,7 @@ import {
   readTable,
   setTable,
   setCampaign,
+  profileName,
 } from "../lib/state";
 import {
   Actions,
@@ -461,10 +463,24 @@ export async function observe(
           prepared: `${String(json.made ?? json.done ?? "?")}/${String(json.total)}${json.failed ? `, ${Array.isArray(json.failed) ? json.failed.length : String(json.failed)} failed` : ""}`,
         }));
       break;
-    case "profile":
+    case "profile": {
       // another profile, another campaign: the header and the build forget the old one's name
-      if (input.action === "use") await setCampaign($, null);
+      if (input.action === "use") {
+        await setCampaign($, null);
+        await patchLive($, () => ({ profile: "" }));
+        $.clock.after(0, () => void profileName($));
+      }
+      // a profile made anew or deleted takes the kept build of a profile with that name along
+      const name =
+        input.action === "new"
+          ? input.name
+          : input.action === "delete"
+            ? input.profile
+            : undefined;
+      if (typeof name === "string" && name.trim() && !/error|not found|refus/i.test(text.slice(0, 200)))
+        await forgetBuild($, { profile: name.trim() });
       break;
+    }
     case "table_state":
       if (Object.keys(json).length) {
         await setTable($, toTableView(json, campaignCache ?? {}, now));

@@ -40,6 +40,7 @@ import {
   readReview,
   readRules,
   readRuns,
+  profileName,
   readTab,
   readTable,
   setClash,
@@ -154,7 +155,9 @@ async function probeQuietly(
   options: PluginOptions,
 ): Promise<void> {
   try {
-    await probe($, options);
+    const h = await probe($, options);
+    // the open profile, so the build pane shows only this profile's build (studio_status, small)
+    if (h.connected) await profileName($);
   } catch {
     // no chip is all a failed probe costs
   }

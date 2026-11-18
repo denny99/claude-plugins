@@ -28,6 +28,9 @@ import {
 } from "../lib/model";
 import {
   campaignName,
+  noteProfile,
+  profileName,
+  readCheck,
   patchCheck,
   patchRuns,
   readCampaign,
@@ -103,13 +106,90 @@ export function latestPlanRun(runs: AgentRun[]): AgentRun | undefined {
   return [...runs].reverse().find((r) => r.agent === "pnp-architekt");
 }
 
-/** Is this plan run signed off? */
+/**
+ * Do two records name the same build: the same campaign in the same Studio profile? A side that does not know its
+ * profile (a record from before 0.6.2, or the Studio could not say) matches any profile.
+ */
+export function sameBuild(
+  a: { campaign?: string; profile?: string },
+  profile: string,
+  campaign: string,
+): boolean {
+  return (
+    (a.campaign ?? "") === campaign &&
+    (!a.profile || !profile || a.profile === profile)
+  );
+}
+
+/** The runs of the build on this profile and campaign (all runs while no campaign is known). */
+export function runsOf(
+  runs: AgentRun[],
+  profile: string,
+  campaign: string,
+): AgentRun[] {
+  return campaign
+    ? runs.filter((r) => !r.campaign || sameBuild(r, profile, campaign))
+    : runs;
+}
+
+/** Is this plan run signed off (the same plan file, after the run, in the run's campaign and profile)? */
 export function isApproved(run: AgentRun, plan: PlanApproval | null): boolean {
   return (
     !!plan &&
     plan.file === (run.planFile ?? "") &&
-    plan.at >= (run.endedAt ?? run.startedAt)
+    plan.at >= (run.endedAt ?? run.startedAt) &&
+    (!run.campaign ||
+      !plan.campaign ||
+      sameBuild(plan, run.profile ?? "", run.campaign))
   );
+}
+
+/**
+ * Forgets the kept build of one campaign (in a profile) or of a whole profile: a campaign made anew, removed or a
+ * profile made anew or deleted starts at 0 instead of inheriting the build of an older one with the same name.
+ * Records without a profile (before 0.6.2) go with their campaign's name. Returns how many runs went.
+ */
+export async function forgetBuild(
+  $: EngineInterface,
+  which: { profile: string; campaign?: string },
+): Promise<number> {
+  const hit = (a: { campaign?: string; profile?: string }) =>
+    which.campaign !== undefined
+      ? sameBuild(a, which.profile, which.campaign)
+      : !!which.profile && a.profile === which.profile;
+  const before = await readRuns($);
+  const kept = before.filter((r) => !hit(r));
+  if (kept.length !== before.length) {
+    await patchRuns($, () => kept);
+    await saveRuns($, kept);
+  }
+  const plan = (await readCheck($)).plan;
+  if (plan && hit(plan)) {
+    await patchCheck($, () => ({ plan: null }));
+    await $.store.delete(PLAN_KEY);
+  }
+  if (kept.length !== before.length) await applyLook($);
+  return before.length - kept.length;
+}
+
+/** A campaign renamed in its profile keeps its build under the new name. */
+export async function renameBuild(
+  $: EngineInterface,
+  profile: string,
+  from: string,
+  to: string,
+): Promise<void> {
+  if (!from || !to || from === to) return;
+  const moved = (await readRuns($)).map((r) =>
+    sameBuild(r, profile, from) ? { ...r, campaign: to } : r,
+  );
+  await saveRuns($, await patchRuns($, () => moved));
+  const plan = (await readCheck($)).plan;
+  if (plan && sameBuild(plan, profile, from)) {
+    const next = { ...plan, campaign: to };
+    await patchCheck($, () => ({ plan: next }));
+    await $.store.set(PLAN_KEY, next);
+  }
 }
 
 /** The prompt the plan's sign-off sends: German, names the campaign, and asks Claude to confirm it before writing. */
@@ -135,6 +215,7 @@ export async function approvePlan(
   const plan: PlanApproval = {
     file: run.planFile ?? "",
     campaign: run.campaign || campaign,
+    profile: run.profile || (await profileName($)),
     at: await $.clock.now(),
   };
   await patchCheck($, () => ({ plan }));
@@ -182,10 +263,12 @@ export async function recordSpawn(
   const agent = pnpAgentOf(subagentType);
   if (!agent) return;
   const campaign = await campaignName($);
+  const profile = await profileName($);
   const run: AgentRun = {
     id: agentId || `${agent}-${await $.clock.now()}`,
     agent,
     campaign,
+    profile,
     state: "running",
     startedAt: await $.clock.now(),
     findingsFile: /review|nachbesserer/.test(agent)
@@ -472,7 +555,9 @@ export async function refreshCampaign($: EngineInterface): Promise<void> {
     errors.push(`Kartenliste: ${errText(err)}`);
   }
   try {
-    await noteStudioStatus($, await studioCall($, "studio_status", {}));
+    const status = await studioCall($, "studio_status", {});
+    await noteStudioStatus($, status);
+    await noteProfile($, status);
   } catch (err) {
     errors.push(`Studio-Zustand: ${errText(err)}`);
   }
@@ -593,9 +678,7 @@ export async function renderBuild(
   const { runs, campaign, live, rules, check } = d;
   const preview = await readPreview($);
   const campName = campaign?.name || (await campaignName($));
-  const mine = campaign?.name
-    ? runs.filter((r) => !r.campaign || r.campaign === campaign.name)
-    : runs;
+  const mine = runsOf(runs, live.profile, campaign?.name ?? "");
   const out: RenderElement[] = [];
   // GPU: the Studio paints, speaks and makes sounds one job after another.
   const gpu = check.gpu;

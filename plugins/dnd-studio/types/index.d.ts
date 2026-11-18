@@ -110,6 +110,8 @@ export type AgentRun = {
   id: string;
   agent: string;
   campaign: string;
+  /** The Studio profile the campaign lives in ("" when the Studio could not say; older runs have none). */
+  profile?: string;
   state: "running" | "done" | "failed";
   startedAt: number;
   endedAt?: number;
@@ -246,7 +248,13 @@ export type GpuState = {
   checkedAt: number;
 };
 
-export type PlanApproval = { file: string; campaign: string; at: number };
+export type PlanApproval = {
+  file: string;
+  campaign: string;
+  /** The Studio profile of the campaign (older sign-offs have none). */
+  profile?: string;
+  at: number;
+};
 
 export type BuildCheck = {
   items: AcceptItem[];
