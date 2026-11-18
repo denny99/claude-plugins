@@ -22,6 +22,7 @@ import {
   registerProgress,
 } from "../features/progress";
 import { bandProgress } from "../lib/progress";
+import { STATUS_TOOL, STATUS_TOOL_DESCRIPTION, statusTool } from "../features/status";
 import { registerLanguage } from "../features/language";
 import { clashText, healthText, probe, renderHealth } from "../features/health";
 import { pluginVersion } from "../lib/brand";
@@ -363,6 +364,15 @@ export const register: Register = (on, options) => {
       $.ui.log(`dnd-studio: build_progress tool not registered: ${String(err)}`, { to: "debug" });
     }
     try {
+      await $.tool.register({
+        name: STATUS_TOOL,
+        description: STATUS_TOOL_DESCRIPTION,
+        inputSchema: { type: "object", properties: {} },
+      });
+    } catch (err) {
+      $.ui.log(`dnd-studio: build_status tool not registered: ${String(err)}`, { to: "debug" });
+    }
+    try {
       await setClash($, clash);
       await loadRuns($);
       await loadPlanApproval($);
@@ -402,6 +412,10 @@ export const register: Register = (on, options) => {
       result: await reviewTool($, e as unknown as Record<string, unknown>),
     };
   }).catch(denyReview);
+
+  on("tool.call", { tool: `mcp__dnd-studio__${STATUS_TOOL}` }, async ($) => {
+    return { result: await statusTool($) };
+  }).catch((_$: unknown, e: unknown, next: (e: never) => unknown) => next(e as never));
 
   on("tool.call", { tool: `mcp__dnd-studio__${PROGRESS_TOOL}` }, async ($, e) => {
     return {
