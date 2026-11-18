@@ -300,3 +300,23 @@ test('Problem melden: capture + spot, kind and note, "Nur merken" lists it, send
   expect(JSON.parse((world.files[`${ROOT}/.claude/unity-review/reports.jsonl`] ?? '').trim()).sent).toBe(true)
   await ui.unmount()
 })
+
+test('Problem melden from Übersicht switches to Review; measuring runs detached, the card shows it, then sends', async ($, on) => {
+  const world = reviewWorld(on)
+  world.bridge.isPlaying = true
+  await openReview($, world)
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await settle(world, ui.press({ key: 'report' }))
+  expect((await ui.find({ type: 'Button', key: 'tab-review' }))?.props.variant).toBe('primary')
+  expect((await ui.find({ type: 'Text', text: /Problem melden/ }))?.text).toBeDefined()
+  await settle(world, ui.press({ key: 'rv-kind-ruckelt' }))
+  // The button's hook returns before the 10 s recording ends.
+  await ui.press({ key: 'rv-report-send' })
+  expect((await ui.find({ type: 'Text', text: /Messe 10 s Leistung/ }))?.text).toBeDefined()
+  expect(await ui.find({ type: 'Button', key: 'rv-report-send' })).toBeUndefined()
+  const before = world.prompts.length
+  for (let i = 0; i < 120 && world.prompts.length === before; i++) await world.clock.advance(250)
+  expect(world.prompts.at(-1)).toContain('Problem gemeldet im Unity-Spiel: Ruckelt.')
+  expect(world.prompts.at(-1)).toContain('Leistung: 10 s, 3 Bilder')
+  await ui.unmount()
+})

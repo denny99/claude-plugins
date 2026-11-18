@@ -1,6 +1,8 @@
 import { expect, test } from 'claude-code/testing'
 
 import { bashVerdictReason } from '../features/bash'
+import { launcherStatus } from '../features/launcher'
+import type { UnityModel } from '../types'
 import { BRIDGE, fakeWorld, PANE, PROJECT, ROOT, settle, type World } from './world'
 
 const start = { cwd: ROOT, surface: 'terminal', isInteractive: false } as const
@@ -257,4 +259,56 @@ test('render check: every pane section on every surface at 40x15 and 120x40 stay
       await settle(world, ui.press({ key: 'tab-overview' }))
       await ui.unmount()
     }
+})
+
+const BAND = {
+  hasSurvey: false,
+  isCollapsed: false,
+  isWorking: false,
+  maxRows: 10,
+  bodyColumns: 100,
+  scroll: { offset: 0, bodyRows: 10, totalRows: 0 },
+  view: {},
+} as never
+
+const EMPTY_STATUS: UnityModel = {
+  phase: 'ok',
+  editorTried: [],
+  configFound: false,
+  config: {},
+  presets: [],
+  lock: 'free',
+  bridge: { up: true },
+  console: [],
+  previous: {},
+  filterInput: '',
+  jobs: [],
+}
+
+test('starter strip: chip "Unity" in a Unity project with the editor state; opens the pane', async ($, on) => {
+  const world = fakeWorld(on)
+  await $.session.start(start)
+  for (const surface of ['desktop', 'terminal'] as const) {
+    const band = await $.ui.mount({ plugin: 'unity', surface, component: 'AbovePrompt', props: BAND })
+    expect(((await band.drawn()) as { props?: { key?: string } }).props?.key).toBe('launch:unity')
+    expect(await band.find({ type: 'Button', key: 'launch-unity' })).toBeDefined()
+    await band.unmount()
+  }
+  expect(launcherStatus({ ...EMPTY_STATUS, bridge: { up: true, isPlaying: true } })).toEqual({
+    status: 'Play-Modus',
+    tone: 'info',
+  })
+  expect(
+    launcherStatus({ ...EMPTY_STATUS, tests: { state: 'running', results: [] }, bridge: { up: true, isPlaying: true } })
+      .status,
+  ).toBe('Tests laufen')
+  expect(
+    launcherStatus({
+      ...EMPTY_STATUS,
+      compile: { seq: 1, at: 0, source: 'bridge', messages: [{ severity: 'error', message: 'x' }] },
+    }),
+  ).toEqual({ status: '1 Kompilierfehler', tone: 'bad' })
+  const band = await $.ui.mount({ plugin: 'unity', surface: 'desktop', component: 'AbovePrompt', props: BAND })
+  await settle(world, band.press({ key: 'launch-unity' }))
+  await band.unmount()
 })

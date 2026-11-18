@@ -20,6 +20,7 @@ import {
   batchTarget,
   bridgeCommand,
   configOf,
+  patchModel,
   runTests,
   screenshot,
   startBatchJob,
@@ -49,6 +50,12 @@ export function overviewTab($: EngineInterface, k: Kit, m: UnityModel, options: 
       </Box>
     </Box>
   )
+}
+
+/** "Problem melden" from the overview: switch to the Review tab, where the report card shows, and capture. */
+async function reportFromOverview($: EngineInterface, options: Options): Promise<void> {
+  await patchModel($, { tab: 'review' })
+  await openReport($, options)
 }
 
 /** Editor actions: Play/Stop (the one primary), report a problem, measure 10 s, screenshot. */
@@ -90,7 +97,7 @@ export function playActions($: EngineInterface, m: UnityModel, options: Options)
       label: 'Problem melden',
       icon: 'flag',
       variant: 'secondary',
-      onPress: () => void openReport($, options),
+      onPress: () => void reportFromOverview($, options),
     },
     {
       key: 'perf-quick',

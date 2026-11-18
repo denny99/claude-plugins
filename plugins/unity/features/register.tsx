@@ -8,6 +8,7 @@ import { formatMessage, isScriptFile, splitFilter, type ProjectConfig } from '..
 import { bashVerdictReason } from './bash'
 import { editNotes, metaCandidates } from './guards'
 import { draftConfig, draftJson } from './init'
+import { registerLauncher } from './launcher'
 import { REVIEW_TOOLS, registerReview } from './review/register'
 import { BRIDGE_GIT_URL, BRIDGE_README, openPane, PANE_ID, renderPane } from './pane'
 import {
@@ -19,6 +20,7 @@ import {
   configOf,
   ensureModel,
   markStopped,
+  patchModel,
   readModel,
   refreshModel,
   runTests,
@@ -114,13 +116,17 @@ export async function unitySessionStart($: EngineInterface): Promise<void> {
   for (const c of COMMANDS) await $.command.register(c)
 }
 
-/** Opens the pane at session start when this folder is a Unity project and no higher-ranked mod claims it. */
+/**
+ * Notes whether this folder is a Unity project (starter chip) and opens the pane at session start when it is one and
+ * no higher-ranked mod claims it.
+ */
 async function autoOpen($: EngineInterface, cwd: string, options: Options): Promise<void> {
-  if (options.autoOpen === false) return
   const host = await createHost($)
   const root = cwd || (await $.session.root())
-  if (decideAutoOpen('unity', await autoOpenFacts(host.fs, root), { autoOpen: options.autoOpen }))
-    await openPane($, options)
+  const facts = await autoOpenFacts(host.fs, root)
+  await patchModel($, { unityHere: facts.unityProject })
+  if (options.autoOpen === false) return
+  if (decideAutoOpen('unity', facts, { autoOpen: options.autoOpen })) await openPane($, options)
 }
 
 /** Resolves an area name to its filter; anything else is the filter itself. */
@@ -211,6 +217,7 @@ function statusText(m: Awaited<ReturnType<typeof readModel>>): string {
 
 export function registerUnity(on: On, options: Options): void {
   registerReview(on, options)
+  registerLauncher(on, options)
   on('session.start', async ($, e, next) => {
     try {
       await unitySessionStart($)

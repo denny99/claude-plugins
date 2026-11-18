@@ -94,6 +94,8 @@ export type UnityTab = 'overview' | 'tests' | 'review' | 'perf' | 'console' | 't
 
 export type UnityModel = {
   phase: 'unknown' | 'none' | 'ok'
+  /** Set at session start: this folder is a Unity project (the starter chip shows). */
+  unityHere?: boolean
   sessionRoot?: string
   project?: { root: string; sessionRoot: string; version: string; revision?: string; name: string }
   editorPath?: string
@@ -179,6 +181,8 @@ export type ReviewReportState = {
   note: string
   measure: boolean
   busy?: string
+  /** What happens once the detached measurement ends. */
+  pending?: 'send' | 'keep'
   error?: string
 }
 export type ReviewUiState = {

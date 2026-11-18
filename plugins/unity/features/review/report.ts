@@ -104,19 +104,42 @@ function perfLine(p: play.PerfResult): string {
   )
 }
 
-/** Finishes the open report: measure if asked, then send to Claude or keep it in the list. */
+/**
+ * Finishes the open report. With a measurement the 10 s recording runs as a detached job (`$.clock.after(0)`), so the
+ * button's hook returns at once and the card shows "Messe 10 s Leistung …" until the report is sent or kept.
+ */
 export async function finishReport($: EngineInterface, options: Options, send: boolean): Promise<void> {
+  const r = (await readReview($)).report
+  if (!r || r.busy) return
+  if (!(r.measure || r.kind === 'Ruckelt')) return completeReport($, options, send, undefined)
+  await patchReport($, () => ({
+    busy: `Messe ${MEASURE_SECONDS} s Leistung …`,
+    pending: send ? 'send' : 'keep',
+  }))
+  $.clock.after(0, () => void measureThenComplete($, options, send))
+}
+
+async function measureThenComplete($: EngineInterface, options: Options, send: boolean): Promise<void> {
+  let perf: string
+  try {
+    const p = await perfRecord($, options, MEASURE_SECONDS)
+    perf = play.isPlayError(p) ? `nicht gemessen (${p.error})` : perfLine(p)
+  } catch (e) {
+    perf = `nicht gemessen (${e instanceof Error ? e.message : String(e)})`
+  }
+  await completeReport($, options, send, perf)
+}
+
+async function completeReport(
+  $: EngineInterface,
+  _options: Options,
+  send: boolean,
+  perf: string | undefined,
+): Promise<void> {
   const s = await readReview($)
   const r = s.report
   if (!r) return
   const v = s.view?.source === 'report' ? s.view : undefined
-  const measure = r.measure || r.kind === 'Ruckelt'
-  let perf: string | undefined
-  if (measure) {
-    await patchReport($, () => ({ busy: `Messe ${MEASURE_SECONDS} s Leistung …` }))
-    const p = await perfRecord($, options, MEASURE_SECONDS)
-    perf = play.isPlayError(p) ? `nicht gemessen (${p.error})` : perfLine(p)
-  }
   const saved = v
     ? await saveMarks($, { ...v, groups: [{ label: 'Screenshot', frames: [r.shot ?? r.preview ?? ''] }] })
     : {}
@@ -211,47 +234,58 @@ export async function reportCard(
             onSubmit: (t: string) => void patchReport($, () => ({ note: t })),
           })
         : null,
-      Actions(
-        k,
-        'rv-measure',
-        [
-          {
-            key: 'rv-measure-toggle',
-            label: `${MEASURE_SECONDS} s Leistung mitmessen${forced ? ' (bei „Ruckelt“ immer)' : ''}`,
-            icon: r.measure || forced ? 'check' : 'gauge',
-            variant: 'secondary',
-            onPress: () => void patchReport($, x => ({ measure: !x.measure })),
-          },
-        ],
-        1,
-      ),
-      Actions(
-        k,
-        'rv-report-acts',
-        [
-          {
-            key: 'rv-report-send',
-            label: 'An Claude schicken',
-            icon: 'claude',
-            variant: 'primary',
-            onPress: () => void finishReport($, options, true),
-          },
-          {
-            key: 'rv-report-keep',
-            label: 'Nur merken',
-            icon: 'bookmark',
-            variant: 'secondary',
-            onPress: () => void finishReport($, options, false),
-          },
-          {
-            key: 'rv-report-drop',
-            label: 'Verwerfen',
-            variant: 'link',
-            onPress: () => void patchReview($, { report: undefined, view: undefined }),
-          },
-        ],
-        3,
-      ),
+      r.busy
+        ? Sentence(
+            k,
+            `${r.busy} Danach wird der Bericht ${r.pending === 'keep' ? 'gemerkt' : 'an Claude geschickt'}.`,
+            { faint: true },
+          )
+        : null,
+      r.busy
+        ? null
+        : Actions(
+            k,
+            'rv-measure',
+            [
+              {
+                key: 'rv-measure-toggle',
+                label: `${MEASURE_SECONDS} s Leistung mitmessen${forced ? ' (bei „Ruckelt“ immer)' : ''}`,
+                icon: r.measure || forced ? 'check' : 'gauge',
+                variant: 'secondary',
+                onPress: () => void patchReport($, x => ({ measure: !x.measure })),
+              },
+            ],
+            1,
+          ),
+      r.busy
+        ? null
+        : Actions(
+            k,
+            'rv-report-acts',
+            [
+              {
+                key: 'rv-report-send',
+                label: 'An Claude schicken',
+                icon: 'claude',
+                variant: 'primary',
+                onPress: () => void finishReport($, options, true),
+              },
+              {
+                key: 'rv-report-keep',
+                label: 'Nur merken',
+                icon: 'bookmark',
+                variant: 'secondary',
+                onPress: () => void finishReport($, options, false),
+              },
+              {
+                key: 'rv-report-drop',
+                label: 'Verwerfen',
+                variant: 'link',
+                onPress: () => void patchReview($, { report: undefined, view: undefined }),
+              },
+            ],
+            3,
+          ),
     ],
   })
 }
