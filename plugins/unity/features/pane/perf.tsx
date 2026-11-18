@@ -67,7 +67,7 @@ function costRow(k: Kit, key: string, name: string, ms: number): RenderElement {
   if (!k.graphical) return Sentence(k, truncate(`${name} · ${value}`, k.cols))
   return (
     <Box key={key} flexDirection="row" gap={1}>
-      <Box flexGrow={1} flexShrink={1}>
+      <Box flexGrow={1} flexShrink={1} minWidth={0}>
         <Text size="footnote" color={k.t.text} wrap="truncate-end">
           {sanitize(name)}
         </Text>
