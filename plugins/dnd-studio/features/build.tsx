@@ -2,6 +2,7 @@
  * Build mode (pnp-kampagne): which pnp-* agents ran for the campaign (agent.spawn / turn.complete), the reviewers'
  * findings counts from their Mängel files, and a live acceptance checklist from the campaign overview.
  */
+import { readBuildProgress, renderProgress } from "./progress";
 import type { EngineInterface, On, RenderElement } from "claude-code";
 
 import {
@@ -680,6 +681,9 @@ export async function renderBuild(
   const campName = campaign?.name || (await campaignName($));
   const mine = runsOf(runs, live.profile, campaign?.name ?? "");
   const out: RenderElement[] = [];
+  // Progress with an estimate on top: the whole build and each GPU step (x von N, bar, time left, local clock).
+  const progress = renderProgress(k, await readBuildProgress($), await $.clock.now());
+  if (progress) out.push(progress);
   // GPU: the Studio paints, speaks and makes sounds one job after another.
   const gpu = check.gpu;
   const gpuRunning = mine.filter(

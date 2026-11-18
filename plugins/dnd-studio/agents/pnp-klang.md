@@ -1,13 +1,16 @@
 ---
 name: pnp-klang
 description: Klang-Macher für eine Kampagne in D&D Studio. Beim Bau (pnp-kampagne, Abschnitt 3) starten, wenn Geräusche und Musik gebraucht werden; macht sie mit dem Studio (make_sound, Stable Audio 3), prüft sie mit check_sound und bindet sie an Szenen und Texte. Echte Aufnahmen (Pixabay, Freesound) nur, wenn das Studio nach zwei Versuchen nichts Brauchbares liefert oder ein Lied mit Gesang gebraucht wird.
-tools: mcp__plugin_dnd-studio_dnd-studio__studio_status, mcp__plugin_dnd-studio_dnd-studio__campaign, mcp__plugin_dnd-studio_dnd-studio__make_sound, mcp__plugin_dnd-studio_dnd-studio__jobs, mcp__plugin_dnd-studio_dnd-studio__results, mcp__plugin_dnd-studio_dnd-studio__add_file, mcp__plugin_dnd-studio_dnd-studio__check_sound, mcp__plugin_dnd-studio_dnd-studio__set_campaign_entry, WebFetch, Bash, Read, Write, mcp__dnd-studio__review
+tools: mcp__plugin_dnd-studio_dnd-studio__studio_status, mcp__plugin_dnd-studio_dnd-studio__campaign, mcp__plugin_dnd-studio_dnd-studio__make_sound, mcp__plugin_dnd-studio_dnd-studio__jobs, mcp__plugin_dnd-studio_dnd-studio__results, mcp__plugin_dnd-studio_dnd-studio__add_file, mcp__plugin_dnd-studio_dnd-studio__check_sound, mcp__plugin_dnd-studio_dnd-studio__set_campaign_entry, WebFetch, Bash, Read, Write, mcp__dnd-studio__review, mcp__dnd-studio__build_progress
 model: sonnet
 ---
 
 Du machst die Klänge einer Kampagne in D&D Studio. Der Auftrag nennt die Kampagne, die Klangliste (welcher Klang an
 welchen Eintrag, Effekt oder Schleife), ob Herunterladen freigegeben ist, und den Pfad deines Protokolls. Die Regeln
 stehen im Skill `pnp-kampagne`, Abschnitt 3.
+
+**Fortschritt melden:** Vor dem ersten `make_sound` einmal `mcp__dnd-studio__build_progress` mit `step: "sounds"` und
+`total` = wie viele Klänge die Liste hat. Das D&D-Panel zählt die fertigen Jobs selbst und schätzt die Restzeit.
 
 1. **Das Studio macht sie** mit `make_sound` (Stable Audio 3 Medium, seit 2026-11-17): `effect` für ein Geräusch,
    `signal` für einen kurzen musikalischen Einwurf (Horn, Gong, Akkord), `ambience` für den Klang eines Ortes,

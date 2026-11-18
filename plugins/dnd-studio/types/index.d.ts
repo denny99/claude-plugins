@@ -121,6 +121,47 @@ export type AgentRun = {
   planFile?: string;
 };
 
+/** Build progress (lib/progress.ts): the GPU kinds a build step makes. */
+export type GpuKind =
+  | "picture"
+  | "map"
+  | "refine"
+  | "sound"
+  | "voice"
+  | "clip"
+  | "3d"
+  | "text";
+
+export type TrackedJob = {
+  id: string;
+  kind: GpuKind;
+  startedAt: number;
+  endedAt?: number;
+  failed?: boolean;
+};
+
+export type ProgressState = {
+  jobs: TrackedJob[];
+  /** Finished jobs' times (ms) per kind, newest last, at most `MEAN_OF`. */
+  durations: Partial<Record<GpuKind, number[]>>;
+  /** When the GPU last finished a job (ms), 0 = none yet: the start of the next job's share. */
+  lastEndAt: number;
+  /** prepare_table's last answer. */
+  voices: {
+    made: number;
+    total: number;
+    failed: number;
+    at: number;
+    since: number;
+  } | null;
+  /** What an agent said it will make in all, per kind (build_progress), with when. */
+  planned: Partial<Record<GpuKind, { total: number; at: number }>>;
+  /** The texter's entries (Claude, no GPU): `total` from the plan (build_progress), `done` counted. */
+  entries: { done: number; total: number; at: number } | null;
+  /** Studio queue jobs the mod did not start (studio_status), with their kind when the Studio says it. */
+  foreign: { kinds: (GpuKind | null)[]; at: number } | null;
+};
+
 export type CampaignInfo = {
   name: string;
   scenes: number;
@@ -337,6 +378,7 @@ declare module "claude-code" {
       check: ShapedState<BuildCheck>;
       review: ShapedState<ReviewState>;
       asked: ShapedState<AskedState>;
+      progress: ShapedState<ProgressState>;
     };
   }
 }

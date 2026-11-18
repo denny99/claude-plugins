@@ -14,6 +14,14 @@ import {
   renderBuild,
 } from "../features/build";
 import { refreshDiscord, registerEvening } from "../features/evening";
+import {
+  PROGRESS_TOOL,
+  PROGRESS_TOOL_DESCRIPTION,
+  progressTool,
+  readBuildProgress,
+  registerProgress,
+} from "../features/progress";
+import { bandProgress } from "../lib/progress";
 import { registerLanguage } from "../features/language";
 import { clashText, healthText, probe, renderHealth } from "../features/health";
 import { pluginVersion } from "../lib/brand";
@@ -180,8 +188,15 @@ async function drawLauncher(
 ): Promise<RenderElement | null> {
   const table = await bandStatus($);
   const health = await readHealth($);
-  if (!table && health?.app !== "up") return null;
   const k = await kit($, e, { brand: "dnd", lang: "de" });
+  // Band v4: while the build makes something (and no table runs), the step first on the GPU: „Stimmen 140/320 · ~18 min“
+  const building = table
+    ? null
+    : bandProgress(
+        await readBuildProgress($),
+        k.graphical ? BAND_STATUS_MAX : Math.max(12, Math.floor(k.cols * 0.4)),
+      );
+  if (!table && !building && health?.app !== "up") return null;
   const { Text } = k;
   const chips: RenderElement[] = [
     LauncherChip(k, {
@@ -195,12 +210,14 @@ async function drawLauncher(
               ? BAND_STATUS_MAX
               : Math.max(12, Math.floor(k.cols * 0.4)),
           )
-        : undefined,
-      // Band v4: a calm Studio shows the bare name; text only while the table runs (problems come as the hint)
-      tone: table ? "ok" : undefined,
+        : (building ?? undefined),
+      // Band v4: a calm Studio shows the bare name; text only while the table or a build step runs (problems come as the hint)
+      tone: table || building ? "ok" : undefined,
       onPress: table
         ? () => void openTable($, options)
-        : () => void openPane($),
+        : building
+          ? () => void openBuild($, options)
+          : () => void openPane($),
     }),
   ];
   const hint = table ? bandHint(table.hints) : undefined;
@@ -227,6 +244,14 @@ async function drawLauncher(
   return LauncherRow(k, { plugin: "dnd-studio", chips });
 }
 
+async function openBuild(
+  $: EngineInterface,
+  options: PluginOptions,
+): Promise<void> {
+  await openPane($);
+  await selectTab($, "build", options);
+}
+
 async function openTable(
   $: EngineInterface,
   options: PluginOptions,
@@ -239,6 +264,7 @@ export const register: Register = (on, options) => {
   configureAutoOpen(options.autoOpen);
   registerTable(on);
   registerBuild(on);
+  registerProgress(on);
   registerLook(on);
   registerEvening(on);
   registerLanguage(on);
@@ -317,6 +343,26 @@ export const register: Register = (on, options) => {
       $.ui.log(`dnd-studio: review tool not registered: ${String(err)}`);
     }
     try {
+      await $.tool.register({
+        name: PROGRESS_TOOL,
+        description: PROGRESS_TOOL_DESCRIPTION,
+        inputSchema: {
+          type: "object",
+          properties: {
+            step: {
+              type: "string",
+              enum: ["pictures", "maps", "sounds", "voices", "clips", "3d", "refine", "write_text", "texts"],
+            },
+            total: { type: "number", description: "how many in all" },
+            done: { type: "number", description: "optional: how many are done (texts)" },
+          },
+          required: ["step", "total"],
+        },
+      });
+    } catch (err) {
+      $.ui.log(`dnd-studio: build_progress tool not registered: ${String(err)}`, { to: "debug" });
+    }
+    try {
       await setClash($, clash);
       await loadRuns($);
       await loadPlanApproval($);
@@ -356,6 +402,12 @@ export const register: Register = (on, options) => {
       result: await reviewTool($, e as unknown as Record<string, unknown>),
     };
   }).catch(denyReview);
+
+  on("tool.call", { tool: `mcp__dnd-studio__${PROGRESS_TOOL}` }, async ($, e) => {
+    return {
+      result: await progressTool($, e as unknown as Record<string, unknown>),
+    };
+  }).catch((_$: unknown, e: unknown, next: (e: never) => unknown) => next(e as never));
 
   on("ui.render", { component: "AbovePrompt" }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e);

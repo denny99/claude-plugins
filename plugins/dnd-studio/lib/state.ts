@@ -19,6 +19,7 @@ import type {
   LookState,
   BuildCheck,
   EveningState,
+  ProgressState,
 } from "../types";
 import {
   EMPTY_CHECK,
@@ -26,6 +27,7 @@ import {
   EMPTY_INITIATIVE,
   EMPTY_LIVE,
 } from "./model";
+import { EMPTY_PROGRESS } from "./progress";
 
 export const DEFAULT_RULES: Rules = {
   annotate: true,
@@ -329,4 +331,20 @@ export async function patchReview(
     (r) => (out = { ...EMPTY_REVIEW, ...r, ...fn({ ...EMPTY_REVIEW, ...r }) }),
   );
   return out;
+}
+
+const progressAtom = atom(
+  { plugin: "dnd-studio", key: "progress" } as const,
+  EMPTY_PROGRESS,
+  { shape: "progress-1" },
+);
+/** Build progress (lib/progress.ts): the GPU jobs seen, their times, voices, plans and entries. */
+export async function readProgress($: EngineInterface): Promise<ProgressState> {
+  return read($, progressAtom);
+}
+export async function patchProgress(
+  $: EngineInterface,
+  fn: (p: ProgressState) => ProgressState,
+): Promise<void> {
+  await update($, progressAtom, fn);
 }

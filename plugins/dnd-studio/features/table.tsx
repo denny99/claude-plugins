@@ -3,6 +3,7 @@
  * and the two hard guards (handout/secret leaks, talk_npc at a live table). The table must never stall: everything
  * else only annotates.
  */
+import { noteProgressCall } from "./progress";
 import type { EngineInterface, On, RenderElement } from "claude-code";
 
 import {
@@ -522,7 +523,10 @@ export async function watch(
   next: (e: never) => Promise<unknown>,
   tool: string,
 ): Promise<never> {
+  const start = await $.clock.now();
   const r = (await next(e as never)) as Obj;
+  // build progress (jobs, voices, the GPU queue, the texter's entries): its own try, never in the way
+  await noteProgressCall($, tool, e, r, start);
   try {
     if (r.deny) return r as never;
     // The listener's own take (pnp-zuhoerer, a subagent, quiet): its turn reaches the GM with the listener's return.
