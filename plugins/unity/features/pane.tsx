@@ -20,7 +20,7 @@ import {
   testsRunning,
   type Options,
 } from './state'
-import { BRIDGE_GIT_URL, BRIDGE_README, fixWithClaude, run, selectTab, type Extra } from './pane/common'
+import { BRIDGE_GIT_URL, BRIDGE_README, fixWithClaude, run, type Extra } from './pane/common'
 import { consoleTab } from './pane/console'
 import { overviewTab } from './pane/overview'
 import { perfTab } from './pane/perf'
@@ -63,6 +63,8 @@ export async function renderPane($: EngineInterface, e: RenderInput<'Pane'>, opt
   const { Box } = k
   const x = $.ui.resolve(e) as unknown as Extra
   const m = await readModel($)
+  // after a hot reload the pane may draw before anything restarted the watch (timer only, no state write)
+  if (m.project) ensureLive($, options)
   const refresh = run($, 'refresh', async () => {
     await refreshModel($, options)
     // The sound board is loaded on demand; once loaded, Aktualisieren fetches it again (also out of an error).
@@ -77,10 +79,8 @@ export async function renderPane($: EngineInterface, e: RenderInput<'Pane'>, opt
     title: m.project?.name ?? 'Unity',
     pill: statusPill(m),
     actions: [
+      // "Ziel" is a main tab only (no header knob): in a narrow pane the tab sits behind "Mehr", still one press away.
       { key: 'refresh', icon: 'refresh', label: 'Aktualisieren', onPress: refresh },
-      ...(m.phase === 'ok'
-        ? [{ key: 'settings', icon: 'gear' as const, label: 'Ziel', onPress: selectTab($, 'target') }]
-        : []),
     ],
   })
   if (m.phase === 'unknown')

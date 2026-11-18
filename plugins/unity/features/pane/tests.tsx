@@ -12,6 +12,8 @@ import {
   exactFilter,
   fixWithClaude,
   run,
+  runLength,
+  runSeconds,
   stopTestsAction,
   testsProgress,
   type Extra,
@@ -196,13 +198,13 @@ function resultCard($: EngineInterface, k: Kit, m: UnityModel, options: Options,
   const skippedOpen = k.isMore('tests-skipped')
   const done = t.state !== 'running' && t.state !== 'error'
   const total = c.passed + c.failed + c.skipped
-  const secs = t.results.reduce((s, r) => s + (r.duration ?? 0), 0)
+  const secs = runSeconds(t)
   const head =
     t.state === 'running'
       ? `${t.mode ?? ''} läuft${testsProgress(t, now) ? ` · ${testsProgress(t, now)}` : ' …'}`
       : t.state === 'error'
         ? testErrorLine(t)
-        : `Letzter Lauf${t.finishedAt ? ` ${ago(now, t.finishedAt)}` : ''} · ${total} Tests${secs ? ` · ${dec(secs, 0)} s` : ''}`
+        : `Letzter Lauf${t.finishedAt ? ` ${ago(now, t.finishedAt)}` : ''} · ${total} Tests${secs !== undefined ? ` · ${runLength(secs)}` : ''}`
   const row = (r: (typeof ranked)[number], i: number, group: string): RenderElement =>
     ListRow(k, {
       key: `tf-${group}-${i}`,

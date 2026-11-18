@@ -10,7 +10,7 @@ import type { UnityModel } from '../types'
 import type { Tone } from '../lib/theme'
 import { kit, LauncherChip, LauncherRow, mergeLauncherRows } from '../lib/ui'
 import { openPane } from './pane'
-import { bridgeOutdated, editorActivity, editorBusyWithTests, readModel, type Options } from './state'
+import { bridgeOutdated, editorActivity, editorBusyWithTests, ensureLive, readModel, type Options } from './state'
 
 /**
  * The chip's state in a few words: compile errors (bad) first, then {@link editorActivity} — the same answer the
@@ -49,6 +49,9 @@ async function drawLauncher(
 ): Promise<RenderElement | null> {
   const m = await readModel($)
   if (!m.unityHere && !m.project) return null
+  // A hot reload / `/reload-plugins` stops the old copy's watch; the band draws right after, so it starts here at the
+  // latest (a timer, no state write — allowed while drawing). Once per loaded copy: ensureLive keeps a module flag.
+  if (m.phase !== 'none') ensureLive($, options)
   const k = await kit($, e, { brand: 'neutral', lang: 'de' })
   const s = launcherStatus(m)
   return LauncherRow(k, {

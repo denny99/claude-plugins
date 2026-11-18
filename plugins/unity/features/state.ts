@@ -500,7 +500,18 @@ let liveTicks = 0
  */
 export function ensureLive($: EngineInterface, options: Options): void {
   if (live) return
-  live = $.clock.every(LIVE_MS, () => void liveTick($, options))
+  // Also called while the band or the pane draws (after a hot reload the new copy has no watch until something
+  // starts it): starting a timer writes no state, but should the engine refuse it there, the next caller retries.
+  try {
+    live = $.clock.every(LIVE_MS, () => void liveTick($, options))
+  } catch {
+    live = undefined
+  }
+}
+
+/** Whether the live watch of this loaded copy runs (tests). */
+export function liveOn(): boolean {
+  return !!live
 }
 
 /** Stops the live watch (tests). */

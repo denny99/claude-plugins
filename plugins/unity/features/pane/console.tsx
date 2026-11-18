@@ -4,12 +4,10 @@ import type { EngineInterface, RenderElement } from 'claude-code'
 import type { ModelConsoleEntry, UnityModel } from '../../types'
 import { ActionButton, Actions, Card, EmptyState, ListRow, Sentence, type Action, type Kit } from '../../lib/ui'
 import { bridgeCommand, patchModel, type Options } from '../state'
-import { FIX_ASK, ago, collapseConsole, consoleOrigin, fixWithClaude, msg, run } from './common'
+import { ago, collapseConsole, consoleOrigin, consolePrompt, msg, run } from './common'
 import { playActions } from './overview'
 
 const isError = (c: ModelConsoleEntry): boolean => c.type === 'Error' || c.type === 'Exception' || c.type === 'Assert'
-
-const entryText = (c: ModelConsoleEntry): string => `${c.message}\n${c.stack ?? ''}`.trim()
 
 export function consoleTab($: EngineInterface, k: Kit, m: UnityModel, options: Options, now: number): RenderElement {
   const { Box } = k
@@ -51,14 +49,7 @@ export function consoleTab($: EngineInterface, k: Kit, m: UnityModel, options: O
       icon: 'claude',
       variant: 'secondary',
       onPress: () =>
-        void fixWithClaude(
-          $,
-          `${FIX_ASK.console} (${handable.length} ${kind})`,
-          handable
-            .slice(-20)
-            .map(g => `${g.count > 1 ? `[×${g.count}] ` : ''}${entryText(g.entry)}`)
-            .join('\n\n'),
-        ),
+        void $.prompt.submit({ text: consolePrompt(handable.slice(-20)) }),
     })
   return (
     <Box flexDirection="column" gap={1}>
@@ -126,7 +117,7 @@ export function consoleTab($: EngineInterface, k: Kit, m: UnityModel, options: O
                         label: 'An Claude geben',
                         icon: 'claude',
                         variant: 'secondary',
-                        onPress: () => void fixWithClaude($, `${FIX_ASK.console} (${c.type})`, entryText(c)),
+                        onPress: () => void $.prompt.submit({ text: consolePrompt([{ entry: c, count }]) }),
                       },
                     ])
                   : null,

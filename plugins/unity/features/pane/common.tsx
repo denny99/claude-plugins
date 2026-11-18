@@ -69,6 +69,29 @@ export function dec(n: number, digits = 1): string {
   return (Number.isFinite(n) ? n : 0).toFixed(digits).replace('.', ',')
 }
 
+/**
+ * Wall-clock length of a test run in seconds: finishedAt − startedAt (ms) when both are known, else the sum of the
+ * test durations (which leaves out setup, domain reloads and Play-mode entry, so it can say "0 s" for a 12 s run).
+ */
+export function runSeconds(t: {
+  startedAt?: number
+  finishedAt?: number
+  results: { duration?: number }[]
+}): number | undefined {
+  if (t.startedAt && t.finishedAt && t.finishedAt >= t.startedAt) return (t.finishedAt - t.startedAt) / 1000
+  const sum = t.results.reduce((s, r) => s + (r.duration ?? 0), 0)
+  return sum > 0 ? sum : undefined
+}
+
+/** "12 s", "1,4 s", "0,2 s", "2 min 5 s". */
+export function runLength(secs: number): string {
+  if (secs >= 60) {
+    const s = Math.round(secs)
+    return `${Math.floor(s / 60)} min${s % 60 ? ` ${s % 60} s` : ''}`
+  }
+  return secs >= 10 ? `${Math.round(secs)} s` : `${dec(secs, secs < 0.05 ? 2 : 1)} s`
+}
+
 /** German thousands: 1204 → "1.204". */
 export function thousands(n: number): string {
   return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
@@ -208,6 +231,61 @@ export function consoleOrigin(
   const pkg = /PackageCache\/([^@/]+)/.exec(path)?.[1] ?? /^(?:\.\/)?Packages\/([^/]+)/.exec(path)?.[1]
   const file = `${path.split('/').pop() ?? path}${line ? `:${line}` : ''}`
   return pkg ? { file, pkg } : { file }
+}
+
+/**
+ * The prompt of "An Claude geben" for console entries. Entries from our own code ask for a fix; entries from a package
+ * (HDRP, Input System …) say where they come from (package, file:line) and ask to judge whether our code triggers
+ * them, without changing the package — the panel itself says "nicht aus deinem Spiel-Code". A mixed choice gets two
+ * clearly separated parts.
+ */
+export function consolePrompt(groups: { entry: Pick<ModelConsoleEntry, 'type' | 'message' | 'stack'>; count: number }[]): string {
+  const text = (g: (typeof groups)[number]): string =>
+    `${g.count > 1 ? `[×${g.count}] ` : ''}${`${g.entry.message}\n${g.entry.stack ?? ''}`.trim()}`
+  const word = (gs: typeof groups): string =>
+    gs.every(g => g.entry.type === 'Warning')
+      ? gs.length === 1
+        ? 'Warnung'
+        : 'Warnungen'
+      : gs.some(g => g.entry.type === 'Warning')
+        ? 'Meldungen'
+        : 'Fehler'
+  const own = groups.filter(g => !consoleOrigin(g.entry)?.pkg)
+  const pkg = groups.filter(g => !!consoleOrigin(g.entry)?.pkg)
+  const parts: string[] = []
+  if (own.length)
+    parts.push(
+      fixPrompt(
+        own.length === 1 && !pkg.length
+          ? `${FIX_ASK.console} (${own[0]!.entry.type})`
+          : `${FIX_ASK.console} (${own.length} ${word(own)} aus unserem Code)`,
+        own
+          .map(g => {
+            const o = consoleOrigin(g.entry)
+            return `${o ? `Herkunft: ${o.file}\n` : ''}${text(g)}`
+          })
+          .join('\n\n'),
+      ),
+    )
+  if (pkg.length) {
+    const names = [...new Set(pkg.map(g => consoleOrigin(g.entry)!.pkg!))]
+    const w = word(pkg)
+    const one = pkg.length === 1
+    parts.push(
+      fixPrompt(
+        `${one ? w : `${pkg.length} ${w}`} aus ${names.length === 1 ? `Paket ${names[0]}` : `den Paketen ${names.join(', ')}`} ` +
+          `(nicht aus unserem Spiel-Code): ordne ein, ob unser Code ${one ? (w === 'Warnung' ? 'sie' : 'ihn') : 'sie'} auslöst. ` +
+          'Das Paket selbst nicht ändern – liegt die Ursache dort, sag mir das und was wir auf unserer Seite tun können',
+        pkg
+          .map(g => {
+            const o = consoleOrigin(g.entry)!
+            return `Herkunft: Paket ${o.pkg} · ${o.file}\n${text(g)}`
+          })
+          .join('\n\n'),
+      ),
+    )
+  }
+  return parts.join('\n\n---\n\n')
 }
 
 /** Same type and message collapsed into one entry (the latest), counted — like Unity's Collapse. */

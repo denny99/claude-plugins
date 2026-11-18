@@ -98,7 +98,7 @@ test('feste Tab-Leiste: breit alle sechs Tabs ohne „Mehr“, Reihenfolge bleib
   await settle(world, ui.press({ key: 'refresh' }))
   const all = ['tab-overview', 'tab-tests', 'tab-review', 'tab-perf', 'tab-console', 'tab-target']
   expect(await tabKeys(ui)).toEqual(all)
-  await settle(world, ui.press({ key: 'settings' }))
+  await settle(world, ui.press({ key: 'tab-target' }))
   expect(await tabKeys(ui)).toEqual(all)
   await settle(world, ui.press({ key: 'tab-console' }))
   expect(await tabKeys(ui)).toEqual(all)

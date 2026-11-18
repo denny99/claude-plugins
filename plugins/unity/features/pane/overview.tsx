@@ -169,7 +169,7 @@ function editorCard($: EngineInterface, k: Kit, m: UnityModel, options: Options,
     : errors.length
       ? `${errors.length} ${errors.length === 1 ? 'Kompilierfehler' : 'Kompilierfehler'}`
       : warnings
-        ? `Kompiliert mit ${warnings} ${warnings === 1 ? 'Warnung' : 'Warnungen'}`
+        ? `Kompiliert mit ${warnings} ${warnings === 1 ? 'Compiler-Warnung' : 'Compiler-Warnungen'}`
         : 'Kompiliert ohne Fehler'
   // While compiling, the last compile's age would contradict "gerade".
   const when = m.compile && !compiling ? `${ago(now, m.compile.at)} · ` : ''
@@ -299,9 +299,27 @@ export function testsCard($: EngineInterface, k: Kit, m: UnityModel, options: Op
   })
 }
 
+/**
+ * What the console's warning count is made of. The compile card counts each compiler warning once (parsed and
+ * deduplicated from the compile); Unity's console can hold the same compiler warning several times (seen live: 72
+ * lines for 36 compiler warnings). Said in words instead of two unexplained numbers.
+ */
+export function consoleWarningsLine(entries: { type: string; message: string }[]): string | undefined {
+  const warnings = entries.filter(c => c.type === 'Warning')
+  if (!warnings.length) return undefined
+  const compiler = warnings.filter(c => /\(\d+,\d+\)\s*:\s*warning\s+[A-Z]+\d+\s*:/.test(c.message))
+  const distinct = new Set(compiler.map(c => c.message.split('\n')[0]!.trim())).size
+  const head = `${warnings.length} ${warnings.length === 1 ? 'Warnung' : 'Warnungen'} in der Konsole`
+  if (!compiler.length) return `${head}.`
+  if (distinct < compiler.length)
+    return `${head}, davon ${compiler.length} vom Compiler (${distinct} verschiedene, Unity meldet sie mehrfach).`
+  return `${head}, davon ${compiler.length} vom Compiler.`
+}
+
 function consoleCard($: EngineInterface, k: Kit, m: UnityModel): RenderElement {
   const errors = m.console.filter(c => c.type === 'Error' || c.type === 'Exception' || c.type === 'Assert')
   const warnings = m.console.filter(c => c.type === 'Warning').length
+  const warnLine = consoleWarningsLine(m.console)
   const last = errors[errors.length - 1]
   const origin = last ? consoleOrigin(last) : undefined
   return Card(k, {
@@ -329,6 +347,7 @@ function consoleCard($: EngineInterface, k: Kit, m: UnityModel): RenderElement {
             },
           )
         : null,
+      warnLine ? Sentence(k, warnLine, { faint: true }) : null,
       ActionButton(k, {
         key: 'console-open',
         label: 'Konsole öffnen',

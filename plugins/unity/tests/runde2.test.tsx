@@ -10,7 +10,9 @@ import { normalizeFilter, testReport, unmatchedParts } from '../lib/unity'
 import { BRIDGE_GIT_URL_TAGGED, testsProgress } from '../features/pane/common'
 import type { UnityModel } from '../types'
 import type { Kit } from '../lib/ui'
-import { bridgeOutdated, editorActivity, liveSignature, stopLive } from '../features/state'
+import { bridgeOutdated, editorActivity, ensureLive, liveOn, liveSignature, stopLive } from '../features/state'
+import { consolePrompt, runLength, runSeconds } from '../features/pane/common'
+import { consoleWarningsLine } from '../features/pane/overview'
 import { perfLength } from '../features/pane/perf'
 import { launcherStatus } from '../features/launcher'
 import { statusPill } from '../features/pane'
@@ -415,8 +417,9 @@ test('(5) "Mehr" closes after a choice, also when the tab changes from the heade
   await settle(world, ui.press({ key: 'tab-overview' }))
   await settle(world, ui.press({ key: 'tab-more' }))
   expect(await btn('tab-console')).toBeDefined()
-  await settle(world, ui.press({ key: 'settings' })) // header "Ziel" changes the tab outside the strip
+  await settle(world, ui.press({ key: 'tab-target' })) // Ziel from the open menu (no header knob any more)
   expect(await btn('tab-console')).toBeUndefined()
+  expect(await ui.find({ type: 'Button', key: 'settings' })).toBeUndefined()
   await settle(world, ui.press({ key: 'tab-overview' })) // the menu left open on Übersicht does not come back
   expect(await btn('tab-console')).toBeUndefined()
   await ui.unmount()
@@ -445,4 +448,121 @@ test('(6) project tasks without label/description: German names for known ones, 
   expect((await ui.find({ type: 'Button', key: 'custom-bake' }))?.props.label).toBe('Bake')
   expect((await findShown(ui, 'Bake: führt „node bake.mjs“ aus.'))?.text).toBeDefined()
   await ui.unmount()
+})
+
+// --- Runde 2, Paket „Zahlen und Herkunft“: Warnungen (1), Ziel einmal (2), Wanduhr (3), Paket-Prompt (4),
+// Ziel-Tab schmal (5), Live-Watch nach Neuladen (6).
+
+test('(r1) console warnings say what they count: compiler warnings Unity logged twice are named as such', () => {
+  const cw = (n: number) => ({ type: 'Warning', message: `Assets/A${n}.cs(${n},1): warning CS0414: unused field` })
+  const twice = [...[1, 2, 3].map(cw), ...[1, 2, 3].map(cw), { type: 'Warning', message: 'Shader warning' }]
+  expect(consoleWarningsLine(twice)).toBe(
+    '7 Warnungen in der Konsole, davon 6 vom Compiler (3 verschiedene, Unity meldet sie mehrfach).',
+  )
+  expect(consoleWarningsLine([cw(1)])).toBe('1 Warnung in der Konsole, davon 1 vom Compiler.')
+  expect(consoleWarningsLine([{ type: 'Warning', message: 'x' }])).toBe('1 Warnung in der Konsole.')
+  expect(consoleWarningsLine([{ type: 'Log', message: 'x' }])).toBeUndefined()
+})
+
+test('(r2) "Ziel" only as a tab: no header knob, the narrow pane reaches it through "Mehr"', async ($, on) => {
+  const world = fakeWorld(on)
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
+  await settle(world, $.command.run({ command: 'unity', args: '' } as never))
+  const ui = await $.ui.mount({
+    ...PANE,
+    surface: 'desktop',
+    viewport: { columns: 29, rows: 30 },
+    props: { ...PANE.props, bodyColumns: 29, scroll: { offset: 0, bodyRows: 30 } },
+  })
+  expect(await ui.find({ type: 'Button', key: 'settings' })).toBeUndefined()
+  await settle(world, ui.press({ key: 'tab-more' }))
+  await settle(world, ui.press({ key: 'tab-target' }))
+  expect((await findShown(ui, /Worauf Claude arbeitet/))?.text).toBeDefined()
+  await ui.unmount()
+  stopLive()
+})
+
+test('(r3) the result card shows the run wall clock, not the sum of test durations', () => {
+  const results = [{ duration: 0.1 }, { duration: 0.2 }]
+  expect(runSeconds({ startedAt: 1_000, finishedAt: 13_000, results })).toBe(12)
+  expect(runLength(12)).toBe('12 s')
+  expect(runLength(runSeconds({ results })!)).toBe('0,3 s') // fallback: the sum, never "0 s"
+  expect(runSeconds({ results: [] })).toBeUndefined()
+  expect(runLength(125)).toBe('2 min 5 s')
+  expect(runLength(0.02)).toBe('0,02 s')
+})
+
+test('(r4) "An Claude geben": package messages carry their origin and ask to judge, not to patch the package', () => {
+  const hdrp = {
+    type: 'Error' as const,
+    message: 'Shader error in HDRP/Lit: undeclared identifier',
+    stack: 'X () (at ./Library/PackageCache/com.unity.render-pipelines.high-definition@17.0.3/Runtime/Lit.cs:42)',
+  }
+  const ours = { type: 'Exception' as const, message: 'NullReferenceException', stack: 'Player.Update () (at Assets/Scripts/Player.cs:12)' }
+  const one = consolePrompt([{ entry: hdrp, count: 1 }])
+  expect(one).toContain('Fehler aus Paket com.unity.render-pipelines.high-definition')
+  expect(one).toContain('ordne ein, ob unser Code ihn auslöst')
+  expect(one).toContain('Das Paket selbst nicht ändern')
+  expect(one).toContain('Herkunft: Paket com.unity.render-pipelines.high-definition · Lit.cs:42')
+  expect(one).not.toContain('behebe die Ursache')
+  expect(consolePrompt([{ entry: ours, count: 1 }])).toMatch(/^Kläre diese Meldung .* behebe die Ursache \(Exception\):\n\nHerkunft: Player\.cs:12/)
+  const mixed = consolePrompt([
+    { entry: ours, count: 2 },
+    { entry: hdrp, count: 1 },
+  ])
+  const [mine, theirs] = mixed.split('\n\n---\n\n')
+  expect(mine).toContain('(1 Fehler aus unserem Code)')
+  expect(mine).toContain('[×2] NullReferenceException')
+  expect(mine).not.toContain('HDRP')
+  expect(theirs).toContain('Shader error in HDRP/Lit')
+  expect(theirs).not.toContain('NullReferenceException')
+})
+
+test('(r5) Ziel tab narrow: the pill goes below a one-word title, the restore list wraps instead of being cut', async ($, on) => {
+  const restore = ['unity/Packages/manifest.json', 'unity/Packages/packages-lock.json', 'unity/ProjectSettings/x.asset']
+  const world = fakeWorld(on, { config: { restoreBeforeCommit: restore } })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
+  await settle(world, $.command.run({ command: 'unity', args: '' } as never))
+  for (const cols of [29, 60]) {
+    const ui = await $.ui.mount({
+      ...PANE,
+      surface: 'desktop',
+      viewport: { columns: cols, rows: 40 },
+      props: { ...PANE.props, bodyColumns: cols, scroll: { offset: 0, bodyRows: 40 } },
+    })
+    if (!(await ui.find({ type: 'Button', key: 'tab-target' }))) await settle(world, ui.press({ key: 'tab-more' }))
+    await settle(world, ui.press({ key: 'tab-target' }))
+    const value = (await ui.findAll({ type: 'Text' })).find(t => t.text === restore.join(', '))
+    expect(value).toBeDefined()
+    expect(value!.props.wrap).toBe('wrap') // a list this long wraps at any width; before, it was cut in the middle
+    // the title row: narrow → title and pill are not siblings in one row
+    const nodes = (await (ui as unknown as { findAll: (q: object) => Promise<Node[]> }).findAll({})) as Node[]
+    expect(nodes.some(n => n.text === 'Projekt-Einstellungen')).toBe(true)
+    await ui.unmount()
+  }
+  stopLive()
+})
+
+test('(r6) live watch: the band/pane call start it once per loaded copy and retry after a refusal', () => {
+  // session start alone: tests/live-start.test.tsx (own file = own process, no watch left over from other tests)
+  stopLive()
+  let started = 0
+  let refuse = true
+  const fake = {
+    clock: {
+      every: () => {
+        if (refuse) throw new Error('refused while drawing')
+        started++
+        return { cancel() {} }
+      },
+    },
+  } as never
+  ensureLive(fake, {} as never)
+  expect(liveOn()).toBe(false) // refused: no flag set, the next draw retries
+  refuse = false
+  ensureLive(fake, {} as never)
+  ensureLive(fake, {} as never)
+  expect(started).toBe(1)
+  expect(liveOn()).toBe(true)
+  stopLive()
 })

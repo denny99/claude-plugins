@@ -526,6 +526,30 @@ export function CardTitle(
       </Box>
     )
   }
+  // A one-word title ("Projekt-Einstellungen") cannot wrap, and a desktop glyph is wider than a body column: in a
+  // narrow body it ran under the pill. When title, icon and pill do not fit one row, the pill goes below the title.
+  const need =
+    Math.ceil([...c.title].length * 1.2) + (c.icon ? 3 : 0) + (count ? [...count].length + 1 : 0) +
+    (c.pill ? [...c.pill.text].length + 6 : 0)
+  if (c.pill && need > k.cols)
+    return (
+      <Box flexDirection="column" gap={0}>
+        <Box flexDirection="row" alignItems="center" gap={1}>
+          {c.icon ? Icon(k, c.icon, { tone: c.tone, color: c.tone ? undefined : k.t.faint }) : null}
+          <Box flexGrow={1} flexShrink={1} minWidth={0}>
+            <Text weight="bold" color={c.tone ? k.t.tones[c.tone].fg : k.t.text} wrap="wrap">
+              {sanitize(c.title)}
+            </Text>
+          </Box>
+          {count ? (
+            <Text size="caption" color={k.t.faint}>
+              {sanitize(count)}
+            </Text>
+          ) : null}
+        </Box>
+        <Box flexDirection="row">{Pill(k, c.pill)}</Box>
+      </Box>
+    )
   return (
     <Box flexDirection="row" alignItems="center" gap={1}>
       {c.icon ? Icon(k, c.icon, { tone: c.tone, color: c.tone ? undefined : k.t.faint }) : null}
@@ -914,7 +938,8 @@ export function KeyValue(
   kv: {
     key?: string
     bare?: boolean
-    rows: { key?: string; label: string; value: string; copy?: boolean; tone?: Tone }[]
+    /** `wrap`: a long value (a list of paths) goes below its label and wraps instead of being cut in the middle. */
+    rows: { key?: string; label: string; value: string; copy?: boolean; tone?: Tone; wrap?: boolean }[]
   },
 ): RenderElement {
   const { Box, Text } = k
@@ -922,6 +947,32 @@ export function KeyValue(
   const rows = kv.rows.map((r, i) => {
     const id = r.key ?? `${kv.key ?? 'kv'}-${i}`
     const copy = r.copy ? CopyButton(k, { key: `${id}-copy`, text: r.value, iconOnly: true }) : null
+    if (r.wrap && Math.ceil(([...sanitize(r.label)].length + [...sanitize(r.value)].length) * 1.2) + 2 > k.cols) {
+      const lines = k.graphical ? [sanitize(r.value)] : wrapWords(sanitize(r.value), Math.max(8, k.cols))
+      return (
+        <Box key={id} flexDirection="column">
+          {k.graphical ? (
+            <Text size="footnote" color={k.t.muted}>
+              {sanitize(r.label)}
+            </Text>
+          ) : (
+            <Text dimColor>{truncate(sanitize(r.label), k.cols)}</Text>
+          )}
+          {lines.map((line, j) =>
+            k.graphical ? (
+              <Text key={`${id}-v${j}`} size="footnote" color={r.tone ? k.t.tones[r.tone].fg : k.t.text} wrap="wrap">
+                {line}
+              </Text>
+            ) : (
+              <Text key={`${id}-v${j}`} color={r.tone ? terminalColor(k.brand, r.tone) : undefined}>
+                {line}
+              </Text>
+            ),
+          )}
+          {copy}
+        </Box>
+      )
+    }
     if (!k.graphical) {
       const label = truncate(sanitize(r.label).padEnd(width), width)
       const room = Math.max(4, k.cols - width - 2 - (copy ? 4 : 0))
@@ -955,6 +1006,22 @@ export function KeyValue(
       {rows}
     </Box>
   )
+}
+
+/** Splits text at spaces into lines of at most `cols` characters (a longer word is cut). Terminal only. */
+function wrapWords(text: string, cols: number): string[] {
+  const out: string[] = []
+  let line = ''
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const next = line ? `${line} ${word}` : word
+    if ([...next].length <= cols) line = next
+    else {
+      if (line) out.push(line)
+      line = truncate(word, cols)
+    }
+  }
+  if (line) out.push(line)
+  return out.length ? out : ['']
 }
 
 /**

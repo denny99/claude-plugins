@@ -125,9 +125,10 @@ async function autoOpen($: EngineInterface, cwd: string, options: Options): Prom
   const host = await createHost($)
   const root = cwd || (await $.session.root())
   const facts = await autoOpenFacts(host.fs, root)
-  await patchModel($, { unityHere: facts.unityProject })
-  // panel and band follow the heartbeat from here on (also with the panel closed: the band shows the state)
+  // panel and band follow the heartbeat from here on (also with the panel closed: the band shows the state); at a
+  // reload session.start fires again for this module, so the new copy starts its own watch here
   if (facts.unityProject) ensureLive($, options)
+  await patchModel($, { unityHere: facts.unityProject })
   if (options.autoOpen === false) return
   if (decideAutoOpen('unity', facts, { autoOpen: options.autoOpen })) await openPane($, options)
 }

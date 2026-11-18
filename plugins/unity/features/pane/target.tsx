@@ -123,7 +123,7 @@ export function targetTab($: EngineInterface, k: Kit, m: UnityModel, options: Op
                   { label: 'Test-Bereiche', value: String(m.presets.length) },
                   { label: 'Aufgaben', value: String(cfg.customJobs?.length ?? 0) },
                   ...(cfg.restoreBeforeCommit?.length
-                    ? [{ label: 'Vor Commit zurück', value: cfg.restoreBeforeCommit.join(', ') }]
+                    ? [{ label: 'Vor Commit zurück', value: cfg.restoreBeforeCommit.join(', '), wrap: true }]
                     : []),
                 ],
               }),
