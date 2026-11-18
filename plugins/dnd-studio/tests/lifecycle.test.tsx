@@ -1,4 +1,4 @@
-/** State and lifecycle: local times, when a table is live, looks that follow it, stranded turns, build reset, pause. */
+/** State and lifecycle: local times, when a table is live, the table backdrop, stranded turns, build reset, pause. */
 import { expect, test } from "claude-code/testing";
 
 import {
@@ -48,7 +48,7 @@ test("pure: turns that wait with nobody listening are stranded", () => {
   expect(strandedTurns(view({ discord: true }), IDLE, false)).toBe(0);
 });
 
-test("the scene look needs a picture and goes when the table ends", async ($, on) => {
+test("a live table gets the game table backdrop, with or without a picture, and it goes when the table ends", async ($, on) => {
   const w = world(on, {
     table_state: {
       ...TABLE,
@@ -57,15 +57,16 @@ test("the scene look needs a picture and goes when the table ends", async ($, on
   });
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd-scene", args: "" } as never);
-  expect(w.themes).toEqual(["dnd-tavern"]);
+  // a picture: scenePictureLook makes nothing yet, so the game table stands
+  expect(w.themes).toEqual(["dnd-table"]);
   // the window is cleared: no evening on it, the person's theme comes back
   w.answers.table_state = { ...TABLE, discord: false, scene: { kind: "clear" } };
   await $.command.run({ command: "dnd-scene", args: "" } as never);
-  expect(w.themes).toEqual(["dnd-tavern", "clear"]);
-  // a scene without a picture: no look of its own
+  expect(w.themes).toEqual(["dnd-table", "clear"]);
+  // a scene without a picture: the game table again, no guessing from the title (no tavern)
   w.answers.table_state = { ...TABLE, scene: { kind: "show", title: "Im Tänzelnden Pony" } };
   await $.command.run({ command: "dnd-scene", args: "" } as never);
-  expect(w.themes).toEqual(["dnd-tavern", "clear"]);
+  expect(w.themes).toEqual(["dnd-table", "clear", "dnd-table"]);
 });
 
 test("stranded turns show with a button that takes them through wait_for_players", async ($, on) => {

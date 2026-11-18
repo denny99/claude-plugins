@@ -16,11 +16,7 @@ import {
 import { refreshDiscord, registerEvening } from "../features/evening";
 import { clashText, healthText, probe, renderHealth } from "../features/health";
 import { pluginVersion } from "../lib/brand";
-import {
-  loadLookOverrides,
-  registerLook,
-  renderLookPicker,
-} from "../features/look";
+import { registerLook } from "../features/look";
 import {
   bandHint,
   bandStatus,
@@ -40,7 +36,6 @@ import {
   readHealth,
   readInitiative,
   readLive,
-  readLook,
   readReview,
   readRules,
   readRuns,
@@ -318,7 +313,6 @@ export const register: Register = (on, options) => {
       await setClash($, clash);
       await loadRuns($);
       await loadPlanApproval($);
-      await loadLookOverrides($);
       startReviewSession(await $.clock.now());
     } catch (err) {
       $.ui.log(`dnd-studio: loading kept state failed: ${String(err)}`);
@@ -375,7 +369,6 @@ export const register: Register = (on, options) => {
     const live = await readLive($);
     const now = await $.clock.now();
     const view = await readTable($);
-    const look = await readLook($);
     const ini = await readInitiative($);
     const evening = await readEvening($);
     const review = await readReview($);
@@ -392,11 +385,6 @@ export const register: Register = (on, options) => {
               rules,
               now,
               evening,
-            }),
-            renderLookPicker($, k, {
-              sceneTitle: view?.scene?.title ?? "",
-              applied: look.applied,
-              enabled: rules.looks,
             }),
           ]
         : tab === "build"

@@ -142,7 +142,7 @@ export type World = {
   opened: string[];
   writes: { path: string; text: string }[];
   toasts: string[];
-  /** Theme calls: the backdrop scene of each set ("dnd-tavern"), "clear" for each clear. */
+  /** Theme calls: the backdrop scene of each set ("dnd-table"), "clear" for each clear. */
   themes: string[];
   submitted: string[];
   store: Map<string, unknown>;

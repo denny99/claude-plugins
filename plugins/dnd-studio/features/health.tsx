@@ -281,8 +281,8 @@ export function renderHealth(
         CardTitle(k, { icon: "moon", title: "Looks" }),
         Switch(k, {
           key: "rule-looks",
-          title: "Szenen-Looks",
-          text: "Hintergrund und Farben der App folgen der Szene am Tisch.",
+          title: "Tisch-Hintergrund",
+          text: "Am laufenden Tisch zeigt die App das Szenenbild oder den Spieltisch als Hintergrund.",
           on: rules.looks,
           bare: true,
           onPress: () => void toggleRule($, "looks").then(() => applyLook($)),

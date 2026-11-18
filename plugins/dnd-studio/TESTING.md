@@ -17,7 +17,7 @@ Grundregel: **nichts im Studio ändern**, außer der Schritt sagt es. Profil vor
 2. Karte Zustand: Studio-App ✓ mit Version und Port 37641, Verbindung zu Claude ✓ „Token gesetzt“, Plugin `dnd-studio 0.4.5`, Discord-Bot, Alter Studio-Server „keiner im Weg“.
 3. **Neu prüfen** aktualisiert die Uhrzeit oben rechts.
 4. **Token eintragen** zeigt nur einen Hinweis (Toast), wo der Token hingehört.
-5. Schalter Zuhörer, Szenen-Looks: Name + Satz darunter verständlich? Schalten **nicht** nötig.
+5. Schalter Zuhörer, Tisch-Hintergrund: Name + Satz darunter verständlich? Schalten **nicht** nötig.
 6. **Regeln** aufklappen: fünf Schalter, jeder mit Erklärungssatz. Wortlaut verständlich?
 
 ## 2. Bau
@@ -39,7 +39,7 @@ Grundregel: **nichts im Studio ändern**, außer der Schritt sagt es. Profil vor
 1. Tab **Tisch** ohne laufenden Tisch: ruhiger Leer-Zustand, keine Fehler.
 2. Optional mit Testkampagne: Denny sagt „starte einen kurzen Testtisch“ → Panel öffnet von selbst auf Tisch, Szenenkarte, Klänge als Chips (spielen nur auf Druck), Startreihenfolge via `initiative`.
 3. Launcher-Zeile zeigt Tischzustand („… · Runde 1 · X ist dran“), Klick öffnet Tisch.
-4. Szenen-Looks: Hintergrund/Farben folgen der Szene; nach Ende kommt das normale Theme zurück.
+4. Tisch-Hintergrund: am laufenden Tisch steht der Pixel-Spieltisch (Kerze flackert, ab und zu rollt ein Würfel), hell und dunkel; nach Ende kommt das normale Theme zurück.
 
 ## 5. Optik
 

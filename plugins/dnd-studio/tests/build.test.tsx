@@ -3,7 +3,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import { findShown } from './shown'
 
 import { checkColors } from '../lib/make-colors.js'
-import { LOOKS, moodFor, phaseLook } from '../lib/looks'
+import { LOOKS, phaseLook } from '../lib/looks'
 import type { LookId } from '../lib/looks'
 import { buildPhase, countFindings, findingsPathOf, pnpAgentOf } from '../lib/model'
 import { augmentedPath, startArgv } from '../lib/host'
@@ -119,16 +119,6 @@ test('agent names, findings paths and counts', () => {
   expect(countFindings('Keine Mängel gefunden.')).toBe(0)
   expect(countFindings('## Szene 1\ntext\n## Szene 2\n')).toBe(2)
   expect(countFindings('- a\n  - detail\n- b\n- c')).toBe(3)
-})
-
-test('mood rules: pick, tag, keywords, neutral', () => {
-  const s = (title: string, notes = '', place = '') => ({ title, notes, place })
-  expect(moodFor(s('Im Tänzelnden Pony'), {})).toBe('tavern')
-  expect(moodFor(s('Der Hinterhalt', '', 'Wald'), {})).toBe('battle')
-  expect(moodFor(s('Ankunft', 'look: sea'), {})).toBe('sea')
-  expect(moodFor(s('Ankunft', 'look: sea'), { Ankunft: 'swamp' })).toBe('swamp')
-  expect(moodFor(s('Der Brief'), {})).toBe('table')
-  expect(moodFor(undefined, {})).toBe('table')
 })
 
 test('build phases map to their looks', () => {

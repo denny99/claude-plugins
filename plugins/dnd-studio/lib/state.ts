@@ -217,7 +217,7 @@ export async function setHealth(
 
 const lookAtom = atom(
   { plugin: "dnd-studio", key: "look" } as const,
-  { applied: "", overrides: {} } as LookState,
+  { applied: "" } as LookState,
   {
     shape: "look-1",
   },
@@ -229,7 +229,7 @@ export async function patchLook(
   $: EngineInterface,
   fn: (l: LookState) => Partial<LookState>,
 ): Promise<LookState> {
-  let out: LookState = { applied: "", overrides: {} };
+  let out: LookState = { applied: "" };
   await update($, lookAtom, (l) => (out = { ...l, ...fn(l) }));
   return out;
 }

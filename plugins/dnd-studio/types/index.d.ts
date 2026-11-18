@@ -38,7 +38,7 @@ export type SceneSound = {
 export type TableView = {
   fetchedAt: number;
   error?: string;
-  /** The scene on the players' window; `pictured`: it has a picture or a clip (the scene look needs one). */
+  /** The scene on the players' window; `pictured`: it has a picture or a clip (then scenePictureLook may make it the backdrop). */
   scene?: { title: string; place: string; notes: string; pictured?: boolean };
   /** Something stands on the players' window (a show, not the bare felt after clear). */
   shown?: boolean;
@@ -93,8 +93,9 @@ export type Rules = {
   denyTalkNpc: boolean;
   denyFamily: boolean;
   spoilerSafe: boolean;
+  /** Table backdrop: a live table shows its scene's picture or the pixel game table. */
   looks: boolean;
-  /** Build looks: the backdrop follows the build phase (scene looks are `looks`). */
+  /** Build looks: the backdrop follows the build phase (the table's backdrop is `looks`). */
   buildLooks: boolean;
 };
 
@@ -249,8 +250,8 @@ export type BuildCheck = {
 };
 
 export type LookState = {
+  /** The look the plugin set: a look id, `pic-<key>` for a scene picture, '' none. */
   applied: string;
-  overrides: Record<string, string>;
   /** Another plugin set (or cleared) the theme after ours: ours no longer stands, so we never clear. */
   foreign?: boolean;
 };
