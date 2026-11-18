@@ -9,6 +9,23 @@ export type UiKitState = {
   logMore: string[]
 }
 
+/** One task sent to Claude (kit section „ask Claude“): queued until a turn carrying its probe starts, then running, then done. */
+export type AskedEntry = {
+  at: number
+  phase: 'queued' | 'running' | 'done'
+  /** Folded start of the prompt that finds it in a turn's text. */
+  probe?: string
+  /** The main-loop turn that carries it. */
+  turnId?: string
+}
+
+/** Prompts sent by kit buttons whose answer has not ended yet (lock against double presses). */
+export type AskedState = {
+  /** A main-loop turn is running (a new prompt waits in the queue). */
+  busy: boolean
+  sent: Record<string, AskedEntry>
+}
+
 export type ModelCompilerMessage = {
   severity: 'error' | 'warning'
   message: string
@@ -250,6 +267,7 @@ declare module 'claude-code' {
       ui: ShapedState<UiKitState>
       model: ShapedState<UnityModel>
       review: ShapedState<ReviewUiState>
+      asked: ShapedState<AskedState>
     }
   }
 }

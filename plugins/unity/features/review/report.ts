@@ -6,7 +6,7 @@
 import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
 import type { ReviewReportState, ReviewUiState } from '../../types'
-import { Actions, Card, CardTitle, ProblemCard, Sentence, type Action, type Kit } from '../../lib/ui'
+import { Actions, askClaude, Card, CardTitle, ProblemCard, Sentence, type Action, type Kit } from '../../lib/ui'
 import type { IconName } from '../../lib/icons'
 import { join } from '../../lib/path'
 import * as play from '../../lib/play'
@@ -196,9 +196,25 @@ async function completeReport(
   send: boolean,
   perf: string | undefined,
 ): Promise<void> {
+  const stamp = (await readReview($)).report?.stamp
+  if (!send) {
+    await buildReport($, false, perf)
+    return
+  }
+  // Kit „ask Claude“: one lock per report (its stamp), taken before the report is written, so a second press of
+  // „An Claude schicken“ only toasts and the report is neither logged nor sent twice.
+  await askClaude($, {
+    key: `rv-report:${stamp ?? ''}`,
+    toast: 'Bericht an Claude geschickt.',
+    text: () => buildReport($, true, perf),
+  })
+}
+
+/** Writes the open report to the log and closes the card; the prompt text when it is sent. */
+async function buildReport($: EngineInterface, send: boolean, perf: string | undefined): Promise<string | undefined> {
   const s = await readReview($)
   const r = s.report
-  if (!r) return
+  if (!r) return undefined
   const v = s.view?.source === 'report' ? s.view : undefined
   const saved = v
     ? await saveMarks($, { ...v, groups: [{ label: 'Screenshot', frames: [r.shot ?? r.preview ?? ''] }] })
@@ -225,11 +241,11 @@ async function completeReport(
     ...(send ? { feedback: { text, image: r.shot, svg: saved.svg, at: Date.now() } } : {}),
     notice: send ? 'An Claude geschickt.' : 'Gemerkt: steht unter Anschauen.',
   })
-  if (send) await $.prompt.submit({ text })
+  return send ? text : undefined
 }
 
-/** A kept report sent later from the list. */
-export async function sendStoredReport($: EngineInterface, _options: Options, r: Report): Promise<void> {
+/** A kept report sent later from the list: marks it sent and returns the prompt (run inside the ask lock). */
+export async function storedReportPrompt($: EngineInterface, r: Report): Promise<string> {
   const marks = Array.isArray(r.marks) ? describeMarks(r.marks as never) : []
   const text = reportText(r, marks, undefined)
   await markReportSent($, r.id)
@@ -237,7 +253,7 @@ export async function sendStoredReport($: EngineInterface, _options: Options, r:
     feedback: { text, image: r.screenshot ?? undefined, at: Date.now() },
     notice: 'An Claude geschickt.',
   })
-  await $.prompt.submit({ text })
+  return text
 }
 
 /** The error text of lib/play.ts playError for code `outdated`. */

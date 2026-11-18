@@ -8,7 +8,7 @@ import type { ModelPerf, UnityModel } from '../../types'
 import { versionOlder } from '../../lib/bridge'
 import { isPlayError } from '../../lib/play'
 import { schemeSvg } from '../../lib/theme'
-import { Actions, Card, CardTitle, ProblemCard, Sentence, sanitize, truncate, type Kit } from '../../lib/ui'
+import { Actions, askAction, Card, CardTitle, ProblemCard, Sentence, sanitize, truncate, type Kit } from '../../lib/ui'
 import { gotoSpot, patchModel, type Options } from '../state'
 import { bridgeUpdateAction, clockTime, dec, thousands } from './common'
 import { measure, measuringSeconds } from './measure'
@@ -163,13 +163,7 @@ function runCard(
       ...costs.map((c, i) => costRow(k, `cost-${i}`, c.name, p.hitches ? c.hitchAvgMs : c.avgMs)),
       !costs.length ? Sentence(k, noCostsText(p), { faint: true }) : null,
       Actions(k, 'perf-run-acts', [
-        {
-          key: 'perf-ask',
-          label: 'Claude analysieren lassen',
-          icon: 'claude',
-          variant: 'secondary',
-          onPress: () => void $.prompt.submit({ text: perfPrompt(at, p) }),
-        },
+        askAction($, k, { key: 'perf-ask', label: 'Claude analysieren lassen', text: perfPrompt(at, p) }),
         ...(p.spot
           ? [
               {
@@ -290,7 +284,7 @@ export function perfTab($: EngineInterface, k: Kit, m: UnityModel, options: Opti
               err.code === 'outdated'
                 ? bridgeUpdateAction($, options)
                 : err.code === 'not-playing' && m.bridge.up && !m.bridge.isPlaying
-                  ? playActions($, m, options).find(a => a.key === 'play')
+                  ? playActions($, k, m, options).find(a => a.key === 'play')
                   : undefined,
             more: [
               {
@@ -336,7 +330,7 @@ export function perfTab($: EngineInterface, k: Kit, m: UnityModel, options: Opti
                       { key: 'perf-30', label: '30 s', variant: 'link', onPress: () => void measure($, options, 30) },
                     ]
                   : m.bridge.up
-                    ? playActions($, m, options).filter(a => a.key === 'play')
+                    ? playActions($, k, m, options).filter(a => a.key === 'play')
                     : [],
               ),
         ],

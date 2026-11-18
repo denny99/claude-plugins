@@ -9,6 +9,8 @@ import type { ReviewMark, ReviewUiState, ReviewViewState } from '../../types'
 import {
   ActionButton,
   Actions,
+  askAction,
+  askClaude,
   Card,
   CardTitle,
   CopyButton,
@@ -40,7 +42,7 @@ import {
   type ReviewData,
 } from './store'
 import { describeMarks, markedSvg, marksLine, SVG_IMAGE_LIMIT } from './viewer'
-import { openReport, reportCard, sendStoredReport } from './report'
+import { openReport, reportCard, storedReportPrompt } from './report'
 
 type El = (props: Record<string, unknown>) => RenderElement
 
@@ -180,22 +182,30 @@ export async function sendView($: EngineInterface, options: Options, fits: boole
     await patchReview($, { view: undefined })
     return
   }
-  const saved = await saveMarks($, v)
-  const text = [
-    `Antwort im Unity-Review zu „${v.title}“: ${fits ? 'passt so' : 'passt nicht, siehe Markierung'}.`,
-    `Ansicht: ${where}`,
-    v.note ? `Notiz: ${v.note}` : '',
-    ...marks,
-    saved.frame ? `Bild: ${saved.frame}` : '',
-    saved.svg ? `Markierungen (SVG über dem Bild): ${saved.svg}` : '',
-    marksLine(marks.length, true),
-  ].filter(Boolean)
-  await patchReview($, {
-    view: undefined,
-    feedback: { text: text.join('\n'), image: saved.frame, svg: saved.svg, at: Date.now() },
-    ...say('An Claude geschickt.'),
+  // Kit „ask Claude“: one lock per view, taken before the marks are saved, so a second press only toasts.
+  await askClaude($, {
+    key: `rv-view:${v.id}`,
+    text: async () => {
+      const cur = (await readReview($)).view
+      if (!cur || cur.id !== v.id) return undefined
+      const saved = await saveMarks($, v)
+      const text = [
+        `Antwort im Unity-Review zu „${v.title}“: ${fits ? 'passt so' : 'passt nicht, siehe Markierung'}.`,
+        `Ansicht: ${where}`,
+        v.note ? `Notiz: ${v.note}` : '',
+        ...marks,
+        saved.frame ? `Bild: ${saved.frame}` : '',
+        saved.svg ? `Markierungen (SVG über dem Bild): ${saved.svg}` : '',
+        marksLine(marks.length, true),
+      ].filter(Boolean)
+      await patchReview($, {
+        view: undefined,
+        feedback: { text: text.join('\n'), image: saved.frame, svg: saved.svg, at: Date.now() },
+        ...say('An Claude geschickt.'),
+      })
+      return text.join('\n')
+    },
   })
-  await $.prompt.submit({ text: text.join('\n') })
 }
 
 /** Pending automatic re-fetch after a failed load (one chain at a time). */
@@ -392,13 +402,7 @@ function storedReportRow(
   r: ReviewData['reports'][number],
 ): RenderElement {
   const acts: Action[] = [
-    {
-      key: `rv-rep-send-${r.id}`,
-      label: 'An Claude schicken',
-      icon: 'claude',
-      variant: 'secondary',
-      onPress: () => void sendStoredReport($, options, r),
-    },
+    askAction($, k, { key: `rv-rep-send-${r.id}`, label: 'An Claude schicken', text: () => storedReportPrompt($, r) }),
   ]
   if (r.spot)
     acts.push({

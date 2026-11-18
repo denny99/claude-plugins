@@ -4,7 +4,7 @@ import type { EngineInterface, RenderElement } from 'claude-code'
 import type { ModelConsoleEntry, UnityModel, UnityTab } from '../../types'
 import { BRIDGE_VERSION } from '../../lib/bridge'
 import { batchAllowed } from '../../lib/unity'
-import { Card, CardTitle, CopyButton, Actions, Sentence, type Action, type Kit } from '../../lib/ui'
+import { askAction, askClaude, Card, CardTitle, CopyButton, Actions, Sentence, type Action, type Kit } from '../../lib/ui'
 import { batchTarget, bridgeOutdatedTitle, cancelTests, patchModel, unlockBridgePackage, type Options } from '../state'
 
 /** Elements the kit does not wrap. */
@@ -35,9 +35,14 @@ export function fixPrompt(ask: string, detail: string): string {
   return `${ask}:\n\n${detail}`
 }
 
-/** Hands a problem to Claude as a prompt. */
-export async function fixWithClaude($: EngineInterface, ask: string, detail: string): Promise<void> {
-  await $.prompt.submit({ text: fixPrompt(ask, detail) })
+/** Hands a problem to Claude as a prompt (once per `key` until Claude answered it; kit „ask Claude“). */
+export async function fixWithClaude($: EngineInterface, ask: string, detail: string, key?: string): Promise<void> {
+  await askClaude($, { text: fixPrompt(ask, detail), key })
+}
+
+/** A „Claude reparieren lassen“ button: locked („✓ An Claude geschickt“) until Claude answered this prompt. */
+export function fixAction($: EngineInterface, k: Kit, key: string, ask: string, detail: string): Action {
+  return askAction($, k, { key, label: 'Claude reparieren lassen', icon: 'claude', text: fixPrompt(ask, detail) })
 }
 
 /** A button handler: marks the pane busy, toasts the first line of the result, keeps a thrown error in the model. */

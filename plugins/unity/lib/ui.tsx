@@ -23,7 +23,7 @@
 import { atom, read, update } from 'claude-code'
 import type { RenderInput, EngineInterface, RenderElement } from 'claude-code'
 
-import type { UiKitState } from '../types'
+import type { AskedState, UiKitState } from '../types'
 import { glyphLabel, ICON_GLYPHS, ICONS, iconSvg, svgDocument, TERM_GLYPHS, type IconName } from './icons'
 import {
   boxPaint,
@@ -222,6 +222,8 @@ export type Kit = Els & {
   /** Kit texts. */
   s: KitStrings
   state: UiKitState
+  /** Prompts sent to Claude whose answer has not ended yet (section „ask Claude“); read here so a render redraws. */
+  asked: AskedState
   isOpen: (key: string, defaultOpen?: boolean) => boolean
   toggle: (key: string) => void
   isMore: (key: string) => boolean
@@ -319,6 +321,7 @@ export async function kit(
     isLogMore: key => state.logMore.includes(key),
     toggleLogMore: key => void patchUi($, s => ({ logMore: flip(s.logMore, key) })),
     copy: (text, at) => void copyText($, text, at),
+    asked: await read($, askedAtom),
   }
 }
 
@@ -1733,6 +1736,279 @@ export function Tabs<T extends string>(
       {menu}
     </Box>
   )
+}
+
+// --- ask Claude: buttons that hand a prompt to Claude ---
+//
+// Every button that sends Claude a prompt goes through `askClaude` / `askAction`: it toasts at once (Claude may be
+// busy, then the prompt only waits in the queue and is not visible in the chat), sends the same task (`key`) only
+// once until Claude answered *that* prompt, and the button reads „✓ An Claude geschickt“ meanwhile (an engine Button
+// has no `disabled`; a press then only toasts „Schon an Claude geschickt“). `failurePrompt` builds the prompt for a
+// failed run: what failed, the last output lines, the full output's path, and the ask for a cause and a proposal.
+//
+// Lock (v2, 2026-11-18): a sent task stays locked until the turn whose prompt carries it has ended — the main loop's
+// `turn.start` text is searched for the task's `probe` (start of its prompt); that turn's id binds the task, and
+// only that turn's `turn.complete` answers it. A turn that started for something else (a typed prompt, a running
+// turn ending while the task still waits in the queue, several plugin prompts the engine merges) releases nothing.
+// An answered task turns its button into „Nochmal schicken“ (sending again is a choice, never silent) for
+// `ASK_DONE_MS`. Without a matching turn the lock ends after `ASK_TIMEOUT_MS` (fixed time from the press).
+// v3 (ds-flutter Runde 2): an aborted main-loop turn drops the queued tasks and the one it carried (the engine
+// discards queued plugin prompts on an interrupt) and toasts that; a task that only waits behind a running answer
+// reads „◷ Wartet auf Claude“ instead of „✓ An Claude geschickt“.
+//
+// Copy into another kit copy (one block, no other kit change except the two `asked` lines in `kit()`/`Kit`):
+// - this section; change the plugin name of `askedAtom` (string literal);
+// - types/index.d.ts: `AskedEntry` (with `probe`, `turnId`, phase `done`), `AskedState` and
+//   `asked: ShapedState<AskedState>` in PluginState;
+// - Kit: field `asked: AskedState`, read in `kit()` (`asked: await read($, askedAtom)`) so a render redraws;
+// - hooks: `on('turn.start')` → `askTurnStart($, e)`, `on('turn.complete')` → `askTurnComplete($, e)`, each after
+//   `await next(e)` (see features/register.tsx). Without them the lock ends after `ASK_TIMEOUT_MS` only.
+
+const EMPTY_ASKED: AskedState = { busy: false, sent: {} }
+// On copy into another plugin: change the plugin name (it must stay a string literal).
+const askedAtom = atom({ plugin: 'unity', key: 'asked' } as const, EMPTY_ASKED, { shape: 'asked-2' })
+
+/** Fallback end of the lock when no turn carrying the prompt comes (a reload, a host without turn events). */
+export const ASK_TIMEOUT_MS = 15 * 60_000
+/** How long an answered task offers „Nochmal schicken“ before the button is back to normal. */
+export const ASK_DONE_MS = 30 * 60_000
+/** Characters of a prompt's start that find it in a turn's text (whitespace folded). */
+const PROBE_CHARS = 160
+
+/** German texts of the ask-Claude buttons and toasts. */
+export const ASK_TEXT = {
+  sent: 'An Claude geschickt.',
+  queued: ' – kommt nach der laufenden Antwort.',
+  again: 'Schon an Claude geschickt – kommt mit der Antwort darauf.',
+  label: 'An Claude geschickt',
+  resend: 'Nochmal schicken',
+  waiting: 'Wartet auf Claude',
+  dropped: 'Abgebrochen – nicht bei Claude angekommen. Der Knopf ist wieder frei.',
+  failed: 'Konnte nicht an Claude schicken.',
+  ask: 'Finde die Ursache und schlag eine Lösung vor; ändere noch nichts ohne Rückfrage.',
+} as const
+
+/** Ends `text` with exactly one sentence mark: a `.` unless it already ends with `.`, `!`, `?`, `:` or `…`. */
+export function sentence(text: string): string {
+  const t = text.trim()
+  return !t || /[.!?:…]$/.test(t) ? t : `${t}.`
+}
+
+/** The lock key of a task: the button key, else the prompt text itself. */
+export function askKey(text: string, key?: string): string {
+  return key ?? `text:${text}`
+}
+
+/** Folds whitespace so a prompt is found in a turn's text however the engine wrapped it. */
+function fold(text: string): string {
+  return text.replace(/\s+/g, ' ').trim()
+}
+
+/** The probe that finds a prompt in a turn's text: its folded start. */
+export function askProbe(text: string): string {
+  return fold(text).slice(0, PROBE_CHARS)
+}
+
+/** The toast of a sent prompt; `busy` adds that it comes after the running answer. */
+export function askToast(base: string, busy: boolean): string {
+  return busy ? `${base.trim().replace(/[.!]+$/, '')}${ASK_TEXT.queued}` : base
+}
+
+/** Whether a task is locked (sent, Claude's answer to it not ended yet). For render: pass `k.asked`. */
+export function isAsked(asked: AskedState, key: string): boolean {
+  const e = asked.sent[key]
+  return e !== undefined && e.phase !== 'done'
+}
+
+/** Whether Claude already answered this task (its button then offers „Nochmal schicken“). */
+export function isAnswered(asked: AskedState, key: string): boolean {
+  return asked.sent[key]?.phase === 'done'
+}
+
+export type AskOptions = {
+  /** The prompt, or a producer run after the lock is taken (e.g. take a screenshot first); `undefined` sends nothing. */
+  text: string | (() => Promise<string | undefined>)
+  /** Lock key (the button key); default: the text. */
+  key?: string
+  /** Toast when sent (default „An Claude geschickt.“); „ – kommt nach der laufenden Antwort.“ is added when busy. */
+  toast?: string
+}
+
+export type AskResult = 'sent' | 'queued' | 'again' | 'skipped' | 'failed'
+
+/** Drops answered tasks older than `ASK_DONE_MS`. */
+function pruneAsked(sent: AskedState['sent'], now: number): AskedState['sent'] {
+  const out: AskedState['sent'] = {}
+  for (const [k, v] of Object.entries(sent)) if (v.phase !== 'done' || now - v.at < ASK_DONE_MS) out[k] = v
+  return out
+}
+
+/**
+ * Sends a prompt to Claude once: toasts, takes the lock in the `asked` atom (never from a render hook: call it from
+ * `onPress`, a command or a tool), and keeps it until the turn carrying this prompt ended (or `ASK_TIMEOUT_MS`).
+ * An answered task is sent again on a new press (its button says „Nochmal schicken“).
+ */
+export async function askClaude($: EngineInterface, opts: AskOptions): Promise<AskResult> {
+  const key = askKey(typeof opts.text === 'string' ? opts.text : '', opts.key)
+  const at = await $.clock.now()
+  let dup = false
+  let busy = false
+  await update($, askedAtom, s => {
+    const sent = pruneAsked(s.sent, at)
+    dup = sent[key] !== undefined && sent[key]?.phase !== 'done'
+    busy = s.busy
+    return dup ? { ...s, sent } : { ...s, sent: { ...sent, [key]: { at, phase: 'queued' as const } } }
+  })
+  if (dup) {
+    $.ui.toast(ASK_TEXT.again)
+    return 'again'
+  }
+  const text = typeof opts.text === 'string' ? opts.text : await opts.text().catch(() => undefined)
+  if (!text) {
+    await releaseAsk($, key, at)
+    return 'skipped'
+  }
+  const probe = askProbe(text)
+  await update($, askedAtom, s =>
+    s.sent[key]?.at === at ? { ...s, sent: { ...s.sent, [key]: { ...s.sent[key]!, probe } } } : s,
+  )
+  $.ui.toast(askToast(opts.toast ?? ASK_TEXT.sent, busy))
+  $.clock.after(ASK_TIMEOUT_MS, () => void releaseAsk($, key, at))
+  try {
+    await $.prompt.submit({ text })
+  } catch {
+    await releaseAsk($, key, at)
+    $.ui.toast(ASK_TEXT.failed)
+    return 'failed'
+  }
+  return busy ? 'queued' : 'sent'
+}
+
+/** Drops the lock of `key` when it is still the one taken at `at` and not answered yet. */
+async function releaseAsk($: EngineInterface, key: string, at: number): Promise<void> {
+  await update($, askedAtom, s => {
+    const e = s.sent[key]
+    if (e?.at !== at || e.phase === 'done') return s
+    const sent = { ...s.sent }
+    delete sent[key]
+    return { ...s, sent }
+  })
+}
+
+/**
+ * `turn.start` of the main loop (call after `await next(e)`): Claude is busy; each waiting task whose probe is in
+ * this turn's text is now being answered, bound to this turn. Tasks not in the text keep waiting.
+ */
+export async function askTurnStart($: EngineInterface, e: { agentId?: string; text?: string; turnId?: string }): Promise<void> {
+  if (e.agentId !== undefined) return
+  const now = await $.clock.now()
+  const text = fold(e.text ?? '')
+  const bound: string[] = []
+  await update($, askedAtom, s => {
+    const sent = pruneAsked(s.sent, now)
+    for (const [k, v] of Object.entries(sent))
+      if (v.phase === 'queued' && v.probe && text && text.includes(v.probe)) {
+        sent[k] = { ...v, phase: 'running', turnId: e.turnId }
+        bound.push(k)
+      }
+    return { busy: true, sent }
+  })
+  if (bound.length) $.ui.log(`ask: turn ${e.turnId ?? '?'} carries ${bound.join(', ')}`, { to: 'debug' })
+}
+
+/** Whether a `turn.complete` is an interrupt (the person stopped the turn). */
+export function isAbortedTurn(e: { isAborted?: boolean; reason?: string }): boolean {
+  return e.isAborted === true || e.reason === 'aborted'
+}
+
+/**
+ * `turn.complete` of the main loop (call after `await next(e)`): the tasks this turn carried are answered. An aborted
+ * turn answers nothing: the queued tasks and the one it carried are dropped (never arrived), their buttons are free.
+ */
+export async function askTurnComplete(
+  $: EngineInterface,
+  e: { agentId?: string; turnId?: string; isAborted?: boolean; reason?: string },
+): Promise<void> {
+  if (e.agentId !== undefined) return
+  const now = await $.clock.now()
+  const aborted = isAbortedTurn(e)
+  let dropped: string[] = []
+  await update($, askedAtom, (s: AskedState): AskedState => {
+    dropped = []
+    const sent: AskedState['sent'] = {}
+    for (const [k, v] of Object.entries(s.sent)) {
+      const carried = v.phase === 'running' && v.turnId === e.turnId
+      if (aborted && (carried || v.phase === 'queued')) dropped.push(k)
+      else sent[k] = carried ? { at: now, phase: 'done' } : v
+    }
+    return { busy: false, sent }
+  })
+  if (dropped.length) {
+    $.ui.log(`ask: turn ${e.turnId ?? '?'} aborted, released ${dropped.join(', ')}`, { to: 'debug' })
+    $.ui.toast(ASK_TEXT.dropped)
+  }
+}
+
+/**
+ * An `Action` that asks Claude: „◷ Wartet auf Claude“ while it waits behind a running answer, „✓ An Claude geschickt“
+ * while locked (a press then only toasts), „Nochmal schicken“
+ * once Claude answered it (a press sends it again), else as given.
+ */
+export function askAction(
+  $: EngineInterface,
+  k: Kit,
+  a: { key: string; label: string; icon?: IconName; variant?: Action['variant'] } & Omit<AskOptions, 'key'>,
+): Action {
+  const press = (): void => void askClaude($, { text: a.text, key: a.key, toast: a.toast })
+  if (isAsked(k.asked, a.key) && k.asked.busy && k.asked.sent[a.key]?.phase === 'queued')
+    return {
+      key: a.key,
+      label: ASK_TEXT.waiting,
+      icon: 'clock',
+      variant: a.variant === 'primary' ? 'secondary' : (a.variant ?? 'secondary'),
+      onPress: press,
+    }
+  if (isAsked(k.asked, a.key))
+    return {
+      key: a.key,
+      label: ASK_TEXT.label,
+      icon: 'check',
+      variant: a.variant === 'primary' ? 'secondary' : (a.variant ?? 'secondary'),
+      onPress: press,
+    }
+  if (isAnswered(k.asked, a.key))
+    return { key: a.key, label: ASK_TEXT.resend, icon: a.icon ?? 'claude', variant: 'secondary', onPress: press }
+  return { key: a.key, label: a.label, icon: a.icon ?? 'claude', variant: a.variant ?? 'secondary', onPress: press }
+}
+
+/**
+ * The prompt for a failed run: what failed (one sentence), the last `lines` (20) output lines without control
+ * characters, the path of the full output, an optional hint (a tool to read more), then the ask for the cause and a
+ * proposal — not a fix. No doubled sentence marks („. .“).
+ */
+export function failurePrompt(f: {
+  what: string
+  tail?: readonly string[]
+  outputPath?: string
+  hint?: string
+  ask?: string
+  lines?: number
+}): string {
+  const tail = (f.tail ?? [])
+    .map(l => sanitize(l).trimEnd())
+    .filter(l => l.trim() !== '')
+    .slice(-(f.lines ?? 20))
+    .map(l => (l.length > 300 ? `${l.slice(0, 299)}…` : l))
+  return [
+    sentence(f.what),
+    ...(tail.length
+      ? ['', `Letzte ${tail.length === 1 ? 'Ausgabezeile' : `${tail.length} Ausgabezeilen`}:`, '```', ...tail, '```']
+      : []),
+    ...(f.outputPath ? [`Volle Ausgabe: ${f.outputPath}`] : []),
+    ...(f.hint ? [sentence(f.hint)] : []),
+    '',
+    f.ask ?? ASK_TEXT.ask,
+  ].join('\n')
 }
 
 // --- launcher strip above the prompt (Band v4: two fixed lines, both left-aligned) ---

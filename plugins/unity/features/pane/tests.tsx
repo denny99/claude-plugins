@@ -10,7 +10,7 @@ import {
   ago,
   dec,
   exactFilter,
-  fixWithClaude,
+  fixAction,
   run,
   runLength,
   runSeconds,
@@ -212,13 +212,13 @@ function resultCard($: EngineInterface, k: Kit, m: UnityModel, options: Options,
       title: r.fullName,
       meta: r.duration !== undefined ? `${dec(r.duration)} s` : undefined,
       actions: [
-        {
-          key: group === 'new' ? `tfix-${i}` : `tfix-old-${i}`,
-          label: 'Claude reparieren lassen',
-          icon: 'claude',
-          variant: 'secondary',
-          onPress: () => void fixWithClaude($, FIX_ASK.test, `${r.fullName}\n${r.message ?? ''}\n${r.stack ?? ''}`),
-        },
+        fixAction(
+          $,
+          k,
+          group === 'new' ? `tfix-${i}` : `tfix-old-${i}`,
+          FIX_ASK.test,
+          `${r.fullName}\n${r.message ?? ''}\n${r.stack ?? ''}`,
+        ),
       ],
     })
   const msgLine = (r: (typeof ranked)[number]): RenderElement | null =>

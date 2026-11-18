@@ -3,7 +3,7 @@ import type { EngineInterface, RenderElement } from 'claude-code'
 
 import type { UnityModel } from '../../types'
 import { batchAllowed } from '../../lib/unity'
-import { Actions, Card, CardTitle, KeyValue, ListRow, ProblemCard, Sentence, type Action, type Kit } from '../../lib/ui'
+import { Actions, askAction, Card, CardTitle, KeyValue, ListRow, ProblemCard, Sentence, type Action, type Kit } from '../../lib/ui'
 import { batchTarget, configOf, createWorktree, useCheckout, useMainTarget, type Options } from '../state'
 import { localStamp, run } from './common'
 
@@ -139,16 +139,13 @@ export function targetTab($: EngineInterface, k: Kit, m: UnityModel, options: Op
                 { faint: true },
               ),
               Actions(k, 'config-acts', [
-                {
+                askAction($, k, {
                   key: 'config-draft',
                   label: 'Entwurf erstellen',
                   icon: 'wand',
                   variant: 'primary',
-                  onPress: () =>
-                    void $.prompt.submit({
-                      text: 'Führe /unity-init aus, zeig mir den Entwurf der .claude/unity.json und schreib ihn erst, wenn ich zustimme.',
-                    }),
-                },
+                  text: 'Führe /unity-init aus, zeig mir den Entwurf der .claude/unity.json und schreib ihn erst, wenn ich zustimme.',
+                }),
               ]),
             ],
           })}

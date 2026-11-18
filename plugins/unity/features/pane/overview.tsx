@@ -6,6 +6,7 @@ import { batchAllowed, countResults, formatMessage, rankResults, testErrorLine }
 import {
   Actions,
   ActionButton,
+  askAction,
   Card,
   CardTitle,
   ListRow,
@@ -34,7 +35,7 @@ import {
   consoleOrigin,
   exactFilter,
   FIX_ASK,
-  fixWithClaude,
+  fixAction,
   msg,
   run,
   selectTab,
@@ -67,7 +68,7 @@ async function reportFromOverview($: EngineInterface, options: Options): Promise
 }
 
 /** Editor actions: Play/Stop (the one primary), report a problem, measure 10 s, screenshot. */
-export function playActions($: EngineInterface, m: UnityModel, options: Options): Action[] {
+export function playActions($: EngineInterface, k: Kit, m: UnityModel, options: Options): Action[] {
   const b = m.bridge
   const acts: Action[] = b.isPlaying
     ? [
@@ -114,18 +115,29 @@ export function playActions($: EngineInterface, m: UnityModel, options: Options)
       variant: 'secondary',
       onPress: () => void measure($, options, 10, true),
     },
-    {
+    // The prompt exists only after the capture: the lock is taken first, a failed capture frees it again.
+    askAction($, k, {
       key: 'shot',
       label: 'Screenshot',
       icon: 'camera',
-      variant: 'secondary',
-      onPress: run($, 'screenshot', async () => {
-        const r = await screenshot($, options)
-        if ('error' in r) return `Screenshot fehlgeschlagen: ${r.error}`
-        await $.prompt.submit({ text: shotPrompt(m, r.path) })
-        return 'Screenshot an Claude geschickt'
-      }),
-    },
+      toast: 'Screenshot an Claude geschickt.',
+      text: async () => {
+        await patchModel($, { busy: 'screenshot' })
+        try {
+          const r = await screenshot($, options)
+          if ('error' in r) {
+            void $.ui.toast(`Screenshot fehlgeschlagen: ${r.error}`)
+            return undefined
+          }
+          return shotPrompt(m, r.path)
+        } catch (e) {
+          await patchModel($, { error: e instanceof Error ? e.message : String(e) })
+          return undefined
+        } finally {
+          await patchModel($, { busy: undefined })
+        }
+      },
+    }),
   )
   return acts
 }
@@ -215,17 +227,11 @@ function editorCard($: EngineInterface, k: Kit, m: UnityModel, options: Options,
           status: 'failed',
           title: formatMessage(x),
           actions: [
-            {
-              key: `cfix-${i}`,
-              label: 'Claude reparieren lassen',
-              icon: 'claude',
-              variant: 'secondary',
-              onPress: () => void fixWithClaude($, FIX_ASK.compile, formatMessage(x)),
-            },
+            fixAction($, k, `cfix-${i}`, FIX_ASK.compile, formatMessage(x)),
           ],
         }),
       ),
-      Actions(k, 'editor-acts', playActions($, m, options), 4),
+      Actions(k, 'editor-acts', playActions($, k, m, options), 4),
       m.lastShot ? Sentence(k, `Letzter Screenshot: ${m.lastShot.split('/').pop() ?? ''}`, { faint: true }) : null,
     ],
   })

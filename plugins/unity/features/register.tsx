@@ -3,6 +3,7 @@ import type { EngineInterface, On } from 'claude-code'
 
 import { autoOpenFacts, decideAutoOpen } from '../lib/autoopen'
 import { createHost } from '../lib/host'
+import { askTurnComplete, askTurnStart } from '../lib/ui'
 import { isAbsolute, join, relative } from '../lib/path'
 import { formatMessage, isScriptFile, splitFilter, type ProjectConfig } from '../lib/unity'
 import { bashVerdictReason } from './bash'
@@ -234,6 +235,18 @@ export function registerUnity(on: On, options: Options): void {
       $.ui.log(`unity: auto-open failed: ${String(err)}`)
     }
     return next(e)
+  })
+
+  // Kit „ask Claude“: a button's lock ends with the main loop's answer to *that* prompt (subagents skipped inside).
+  on('turn.start', async ($, e, next) => {
+    const r = await next(e)
+    await askTurnStart($, e).catch(() => undefined)
+    return r
+  })
+  on('turn.complete', async ($, e, next) => {
+    const r = await next(e)
+    await askTurnComplete($, e).catch(() => undefined)
+    return r
   })
 
   // --- Bash guards: verdicts only (tool.check), never tool.call/tool.run on Bash ---

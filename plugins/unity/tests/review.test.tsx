@@ -329,7 +329,11 @@ test('Problem melden: capture + spot, kind and note, "Nur merken" lists it, send
   expect(JSON.parse(saved.trim())).toMatchObject({ kind: 'Sieht falsch aus', note: 'Baum schwebt', sent: false })
   expect((await findShown(ui, /Sieht falsch aus: Baum schwebt/))?.text).toBeDefined()
   const id = (JSON.parse(saved.trim()) as { id: string }).id
-  await settle(world, ui.press({ key: `rv-rep-send-${id}` }))
+  // kit „ask Claude“: an impatient double press sends once (the second only toasts); a sent report loses its button
+  const before = world.prompts.length
+  await settle(world, Promise.all([ui.press({ key: `rv-rep-send-${id}` }), ui.press({ key: `rv-rep-send-${id}` })]))
+  expect(world.prompts).toHaveLength(before + 1)
+  expect(world.toasts).toContain('Schon an Claude geschickt – kommt mit der Antwort darauf.')
   expect(world.prompts.at(-1)).toContain('Problem gemeldet im Unity-Spiel: Sieht falsch aus.')
   expect(world.prompts.at(-1)).toContain('Notiz: Baum schwebt')
   expect(JSON.parse((world.files[`${ROOT}/.claude/unity-review/reports.jsonl`] ?? '').trim()).sent).toBe(true)
