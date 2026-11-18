@@ -10,21 +10,30 @@ import type { UnityModel } from '../types'
 import type { Tone } from '../lib/theme'
 import { kit, LauncherChip, LauncherRow, mergeLauncherRows } from '../lib/ui'
 import { openPane } from './pane'
-import { readModel, type Options } from './state'
+import { editorActivity, readModel, type Options } from './state'
 
 /**
- * The chip's state in a few words, most urgent first: compile errors (bad), no editor (warn), tests running (also in
- * the background), compiling, Play mode; "Editor bereit" otherwise. Only warn/bad are drawn in colour.
+ * The chip's state in a few words: compile errors (bad) first, then {@link editorActivity} — the same answer the
+ * panel's pill reads, so band and panel never disagree (Play wins over the domain reload's isCompiling). Only
+ * warn/bad are drawn in colour; the tone decides that in `LauncherChip` (lib/ui.tsx, launcher strip).
  */
 export function launcherStatus(m: UnityModel): { status?: string; tone?: Tone } {
   const errors = (m.compile?.messages ?? []).filter(x => x.severity === 'error').length
   if (errors) return { status: errors === 1 ? '1 Fehler' : `${errors} Fehler`, tone: 'bad' }
-  if (!m.bridge.up) return { status: 'nicht verbunden', tone: 'warn' }
-  const testsRunning = m.tests?.state === 'running' || m.jobs.some(j => j.kind === 'tests' && j.status === 'running')
-  if (testsRunning) return { status: 'Tests laufen', tone: 'info' }
-  if (m.bridge.isCompiling) return { status: 'kompiliert …', tone: 'info' }
-  if (m.bridge.isPlaying) return { status: m.bridge.isPaused ? 'Play pausiert' : 'Play läuft', tone: 'info' }
-  return { status: 'Editor bereit', tone: 'ok' }
+  switch (editorActivity(m)) {
+    case 'down':
+      return { status: 'nicht verbunden', tone: 'warn' }
+    case 'tests':
+      return { status: 'Tests laufen', tone: 'info' }
+    case 'compiling':
+      return { status: 'kompiliert …', tone: 'info' }
+    case 'paused':
+      return { status: 'Play pausiert', tone: 'info' }
+    case 'playing':
+      return { status: 'Play läuft', tone: 'info' }
+    default:
+      return { status: 'Editor bereit', tone: 'ok' }
+  }
 }
 
 async function drawLauncher(

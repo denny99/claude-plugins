@@ -226,6 +226,8 @@ export type Kit = Els & {
   toggle: (key: string) => void
   isMore: (key: string) => boolean
   toggleMore: (key: string) => void
+  /** Drops every "more" entry starting with `prefix`, then adds `key` when given (one write). */
+  setMore: (prefix: string, key?: string) => void
   isConfirming: (key: string) => boolean
   askConfirm: (key: string) => void
   clearConfirm: () => void
@@ -307,6 +309,8 @@ export async function kit(
     toggle: key => void patchUi($, s => ({ toggled: flip(s.toggled, key) })),
     isMore: key => state.more.includes(key),
     toggleMore: key => void patchUi($, s => ({ more: flip(s.more, key) })),
+    setMore: (prefix, key) =>
+      void patchUi($, s => ({ more: [...s.more.filter(x => !x.startsWith(prefix)), ...(key ? [key] : [])] })),
     isConfirming: key => state.confirm === key,
     askConfirm: key => void patchUi($, { confirm: key }),
     clearConfirm: () => void patchUi($, { confirm: undefined }),
@@ -1556,8 +1560,10 @@ export function Tabs<T extends string>(
       </Box>
     )
   // The strip keeps its order whatever is active (no tab jumps in or out); only what does not fit goes behind "More".
-  // Width estimate in body columns: label + 3 for the button's padding, 1 gap; `maxVisible` is an upper bound only.
-  const width = (label: string) => [...label].length + 3
+  // Width estimate in body columns: label + the button's padding (2 on the desktop, whose plain buttons are slim; 3 in
+  // the terminal), 1 gap; `maxVisible` is an upper bound only. 3 on the desktop left "Tests" behind "Mehr" at ~300 px.
+  const pad = k.graphical ? 2 : 3
+  const width = (label: string) => [...label].length + pad
   const moreName = t.moreLabel ?? k.s.more
   const activeTab = t.tabs.find(tab => tab.id === t.active)
   const max = Math.max(1, Math.min(t.maxVisible ?? t.tabs.length, t.tabs.length))
@@ -1577,15 +1583,20 @@ export function Tabs<T extends string>(
     strip = t.tabs.slice(0, Math.max(1, n))
     rest = t.tabs.slice(strip.length)
   }
-  const menuKey = `${prefix}menu`
+  // The open menu belongs to the tab it was opened on (`…menu@<active>`): any change of the active tab closes it,
+  // also one from outside the strip (the header's "Ziel" button), which never touched the kit state before.
+  const menuBase = `${prefix}menu`
+  const menuKey = `${menuBase}@${t.active}`
   const menuOpen = rest.length > 0 && k.isMore(menuKey)
+  const stale = k.state.more.some(x => x.startsWith(menuBase) && x !== menuKey)
   const activeInRest = !!activeTab && rest.includes(activeTab)
+  const toggleMenu = () => (menuOpen ? k.setMore(menuBase) : k.setMore(menuBase, menuKey))
   const one = (tab: TabItem<T>) => {
     const on = tab.id === t.active
     const press = () => {
-      // a choice closes the menu (also one from the strip while it is open)
-      if (menuOpen) k.toggleMore(menuKey)
-      t.onSelect(tab.id)
+      // a choice closes the menu (also one from the strip while it is open) and clears one left from another tab
+      if (menuOpen || stale) k.setMore(menuBase)
+      if (!on) t.onSelect(tab.id)
     }
     if (k.graphical)
       return (
@@ -1618,13 +1629,13 @@ export function Tabs<T extends string>(
       label={moreText}
       plain={activeInRest ? undefined : true}
       variant={activeInRest ? 'primary' : undefined}
-      onPress={() => k.toggleMore(menuKey)}
+      onPress={toggleMenu}
     >
       {moreText}
     </Button>
   ) : (
     <Box flexDirection="row" alignItems="center" gap={1} flexShrink={0}>
-      <Button key={`${prefix}more`} plain onPress={() => k.toggleMore(menuKey)}>
+      <Button key={`${prefix}more`} plain onPress={toggleMenu}>
         {moreText}
       </Button>
     </Box>

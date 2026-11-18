@@ -22,6 +22,7 @@ import {
   markStopped,
   patchModel,
   readModel,
+  ensureLive,
   refreshModel,
   runTests,
   screenshot,
@@ -125,6 +126,8 @@ async function autoOpen($: EngineInterface, cwd: string, options: Options): Prom
   const root = cwd || (await $.session.root())
   const facts = await autoOpenFacts(host.fs, root)
   await patchModel($, { unityHere: facts.unityProject })
+  // panel and band follow the heartbeat from here on (also with the panel closed: the band shows the state)
+  if (facts.unityProject) ensureLive($, options)
   if (options.autoOpen === false) return
   if (decideAutoOpen('unity', facts, { autoOpen: options.autoOpen })) await openPane($, options)
 }

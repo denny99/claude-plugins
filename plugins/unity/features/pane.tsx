@@ -10,7 +10,9 @@ import { readReview } from './review/store'
 import {
   bridgeOutdated,
   bridgeOutdatedPill,
+  editorActivity,
   editorBusyWithTests,
+  ensureLive,
   patchModel,
   readModel,
   refreshLandings,
@@ -34,6 +36,7 @@ export const PANE_TITLE = 'UNITY'
 export async function openPane($: EngineInterface, options: Options): Promise<void> {
   await $.ui.open({ id: PANE_ID, title: PANE_TITLE })
   $.clock.after(0, () => void refreshModel($, options).then(() => refreshLandings($, options)))
+  ensureLive($, options)
 }
 
 /** The one status pill of the header (exported for tests). */
@@ -45,10 +48,12 @@ export function statusPill(m: UnityModel): PillProps {
   if (!b.up && m.editorElsewhere)
     return { text: `Editor in ${m.editorElsewhere.main ? 'Haupt-Checkout' : m.editorElsewhere.name}`, tone: 'warn' }
   if (!b.up) return { text: b.why === 'stale' ? 'antwortet nicht' : 'nicht verbunden', tone: 'bad' }
-  // Entering Play reloads the domain (isCompiling for a moment); the heartbeat's isPlaying wins.
-  if (b.isCompiling && !b.isPlaying) return { text: 'kompiliert', tone: 'warn', glyph: '◷' }
-  if (testsRunning(m)) return { text: 'Tests laufen', tone: 'warn', glyph: '◷' }
-  if (b.isPlaying) return { text: b.isPaused ? 'pausiert' : 'Play-Modus', tone: 'info', icon: 'play' }
+  // the same activity the band chip reads (features/launcher.tsx), so the two never disagree
+  const act = editorActivity(m)
+  if (act === 'tests') return { text: 'Tests laufen', tone: 'warn', glyph: '◷' }
+  if (act === 'compiling') return { text: 'kompiliert', tone: 'warn', glyph: '◷' }
+  if (act === 'playing' || act === 'paused')
+    return { text: act === 'paused' ? 'pausiert' : 'Play-Modus', tone: 'info', icon: 'play' }
   if (bridgeOutdated(m)) return { text: bridgeOutdatedPill(m), tone: 'warn' }
   return { text: 'Editor bereit', tone: 'ok' }
 }

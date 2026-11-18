@@ -179,6 +179,8 @@ export type UnityModel = {
   perfRuns?: { at: number; perf: ModelPerf }[]
   /** Why the last recording failed (code from lib/play.ts PlayError). */
   perfError?: { code?: string; error: string }
+  /** A perf recording queued at the bridge: its result file, polled by the live watch until it lands or `deadline`. */
+  perfPending?: { resultFile: string; seconds: number; deadline: number }
   /** Console tab filter. */
   consoleFilter?: 'error' | 'warning' | 'all'
 }

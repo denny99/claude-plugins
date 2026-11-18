@@ -215,8 +215,9 @@ namespace Denny99.ClaudeBridge
             public bool skippedFirst;
             public bool done;
             public float recordedMs;
-            /// <summary>Wall clock at the first recorded frame; the recording ends after `seconds` of it (not of summed frame times).</summary>
-            public double startWall = -1;
+            /// <summary>Real time since the first recorded frame began (a Stopwatch, not Unity's time or summed frame
+            /// times); the recording ends after `seconds` of it.</summary>
+            public System.Diagnostics.Stopwatch wall;
             public double wallSeconds;
             /// <summary>Seconds since Play mode started when the recording began (Time.unscaledTime).</summary>
             public float sincePlay;
@@ -279,12 +280,12 @@ namespace Denny99.ClaudeBridge
             if (!run.skippedFirst)
             {
                 run.skippedFirst = true;
+                // Real time starts here, at the end of the frame before the first recorded one.
+                run.wall = System.Diagnostics.Stopwatch.StartNew();
                 return;
             }
             var ms = Time.unscaledDeltaTime * 1000f;
-            var now = Time.realtimeSinceStartupAsDouble;
-            if (run.startWall < 0) run.startWall = now - ms / 1000.0;
-            run.wallSeconds = now - run.startWall;
+            run.wallSeconds = run.wall.Elapsed.TotalSeconds;
             run.frames.Add(ms);
             run.recordedMs += ms;
             var hitch = ms > BudgetMs;
@@ -320,8 +321,9 @@ namespace Denny99.ClaudeBridge
                     }
                 }
             }
-            // Real time, not the sum of deltas: the editor's deltas can add up to less than the time that passed.
-            if (run.wallSeconds >= run.seconds || run.recordedMs >= run.seconds * 1000f) run.done = true;
+            // Real time only, never the sum of deltas: the editor's deltas do not add up to the time that passed
+            // (0.2.x ended on summed deltas and stopped at about 9 of 10 s).
+            if (run.wallSeconds >= run.seconds) run.done = true;
         }
 
         static void FinishPerf(string abortReason)

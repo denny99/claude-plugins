@@ -1134,20 +1134,25 @@ export async function reviewTab(
  * so a long option is read in full before it is chosen (a native Button cuts its label). The button's accessible
  * label carries the whole option.
  */
-function decisionChoices(k: Kit, id: string, choices: string[], choose: (c: string) => () => void): RenderElement {
+/**
+ * The options of a decision, one per block: the option as wrapping text ("A: warmes Orange"), below it a short button
+ * "A wählen". The button carries no option text: a long label did not wrap but kept its width, which tore the card
+ * apart at ~300 px and drew the option twice (button plus text).
+ */
+export function decisionChoices(k: Kit, id: string, choices: string[], choose: (c: string) => () => void): RenderElement {
   const { Box, Button } = k
   return (
-    <Box key={`rv-choices-${id}`} flexDirection="column" gap={k.graphical ? 'xs' : 0}>
+    <Box key={`rv-choices-${id}`} flexDirection="column" gap={k.graphical ? 'sm' : 0}>
       {choices.map((c, i) => {
         const letter = String.fromCharCode(65 + i)
         return (
-          <Box key={`rv-choice-row-${id}-${i}`} flexDirection="row" alignItems="center" gap={1}>
-            <Box flexShrink={0}>
-              <Button key={`rv-choice-${id}-${i}`} label={`${letter} · ${c}`} variant="secondary" onPress={choose(c)}>
-                {letter}
-              </Button>
+          <Box key={`rv-choice-row-${id}-${i}`} flexDirection="column" gap={k.graphical ? 'xs' : 0} minWidth={0}>
+            {Sentence(k, `${letter}: ${c}`)}
+            <Box flexDirection="row">
+              <Box flexShrink={0}>
+                <Button key={`rv-choice-${id}-${i}`} label={`${letter} wählen`} variant="secondary" onPress={choose(c)} />
+              </Box>
             </Box>
-            {Sentence(k, c)}
           </Box>
         )
       })}

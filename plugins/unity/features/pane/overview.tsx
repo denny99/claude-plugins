@@ -352,12 +352,69 @@ const JOB_STATUS: Record<string, string> = {
   timeout: 'Zeit überschritten',
 }
 
+/** Known project task names (tools/unity.mjs and friends) in the panel's words: label and what the task does. */
+const KNOWN_JOBS: Record<string, { label: string; description: string }> = {
+  setup: { label: 'Einrichten', description: 'richtet das Projekt ein (Render-Pipeline, Projektdaten, Eingabesystem).' },
+  compile: { label: 'Kompilieren', description: 'öffnet und schließt das Projekt ohne Editor und meldet Kompilierfehler.' },
+  scene: { label: 'Szene anlegen', description: 'legt die Startszene (neu) an und setzt sie an den Anfang der Build-Liste.' },
+  texts: { label: 'Texte übernehmen', description: 'liest die Sprachdateien in die Texttabelle des Spiels.' },
+  sound: { label: 'Klänge einrichten', description: 'setzt die Import-Einstellungen der Klänge und den Mixer.' },
+  smoke: { label: 'Smoke-Test', description: 'startet die Welt und prüft alles, was nicht von Zeit abhängt.' },
+  'smoke-timing': {
+    label: 'Smoke: Zeiten',
+    description: 'misst die Ladezeiten beim Lauf durch die Welt; wird nie wegen der Zeit rot.',
+  },
+  'smoke-all': { label: 'Smoke komplett', description: 'beide Smoke-Läufe in einem Start (letzte Prüfung vor dem Landen).' },
+  editmode: { label: 'Edit-Mode-Tests', description: 'führt die Edit-Mode-Tests aus und listet rote Tests.' },
+  playmode: { label: 'Play-Mode-Tests', description: 'führt die Play-Mode-Tests aus und listet rote Tests.' },
+  test: { label: 'Tests', description: 'führt die Tests des Projekts aus.' },
+  tests: { label: 'Tests', description: 'führt die Tests des Projekts aus.' },
+  build: { label: 'Build', description: 'baut das Spiel als lauffähigen Player.' },
+  probe: { label: 'Replay-Probe', description: 'nimmt die Replay-Probe für die Tests außerhalb von Unity auf.' },
+  warm: {
+    label: 'Warmen Editor starten',
+    description: 'startet einen Editor im Hintergrund, der spätere Aufgaben ohne Kaltstart ausführt.',
+  },
+  'warm-stop': { label: 'Warmen Editor beenden', description: 'beendet den Editor im Hintergrund.' },
+  'warm-status': { label: 'Warmer Editor: Status', description: 'zeigt, ob der Editor im Hintergrund läuft und was er tut.' },
+}
+
+/** "smoke-timing" → "Smoke timing": a raw task name made readable. */
+export function readableName(name: string): string {
+  const words = name.split(/[-_.\s]+/).filter(Boolean)
+  if (!words.length) return name
+  const text = words.join(' ')
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+/**
+ * How a project task is named in the panel: its `label` from .claude/unity.json, else a known name in German
+ * (setup, smoke-timing, warm-stop …), else the name made readable; `build-…`/`test-…` keep their family's word.
+ */
+export function jobLabel(j: { name: string; label?: string }): string {
+  if (j.label) return j.label
+  const known = KNOWN_JOBS[j.name]
+  if (known) return known.label
+  const family = /^(build|test|tests)[-_](.+)$/.exec(j.name)
+  if (family) return `${KNOWN_JOBS[family[1]!]!.label} ${readableName(family[2]!)}`
+  return readableName(j.name)
+}
+
+/** What a project task does: its `description`, else the known one, else which command it runs. */
+export function jobDescription(j: { name: string; description?: string; command?: string }): string {
+  if (j.description) return j.description
+  const known = KNOWN_JOBS[j.name]
+  if (known) return known.description
+  const command = (j.command ?? '').replace(/\s+/g, ' ').trim()
+  return command ? `führt „${command.length > 80 ? `${command.slice(0, 79)}…` : command}“ aus.` : 'Projekt-Aufgabe aus .claude/unity.json.'
+}
+
 /**
  * One line per job button that needs saying: what "Kompilieren prüfen" does next to a project job of the same kind,
  * and each project job's `description` from .claude/unity.json.
  */
 export function jobNotes(
-  jobs: { name: string; label?: string; description?: string; batch?: boolean }[],
+  jobs: { name: string; label?: string; description?: string; command?: string; batch?: boolean }[],
   allowed: boolean,
 ): string[] {
   const shown = jobs.filter(j => !j.batch || allowed)
@@ -366,8 +423,15 @@ export function jobNotes(
     notes.push(
       '„Kompilieren prüfen“ kompiliert das Projekt im Hintergrund ohne Editor (Unity-Batchmodus). Die anderen Knöpfe sind Projekt-Aufgaben aus .claude/unity.json.',
     )
-  for (const j of shown) if (j.description) notes.push(`${j.label ?? j.name}: ${j.description}`)
+  // every task says what it does: its own description, else a known or derived one (raw names alone said nothing)
+  for (const j of shown) notes.push(`${jobLabel(j)}: ${jobDescription(j)}`)
   return notes
+}
+
+/** A run's name in the list: a project task by its label, the built-in jobs by their name. */
+function jobTitle(cfg: { customJobs?: { name: string; label?: string }[] }, j: { kind?: string; name: string }): string {
+  const custom = j.kind === 'custom' ? cfg.customJobs?.find(c => c.name === j.name) : undefined
+  return custom ? jobLabel(custom) : j.name
 }
 
 /** Batch and custom jobs: start buttons, the last five, the latest log collapsed. */
@@ -399,7 +463,7 @@ export function jobsCard($: EngineInterface, k: Kit, m: UnityModel, options: Opt
     if (!j.batch || allowed)
       actions.push({
         key: `custom-${j.name}`,
-        label: j.label ?? j.name,
+        label: jobLabel(j),
         icon: 'terminal',
         variant: 'secondary',
         ...(allowed ? {} : { confirm: 'Editor ist offen — trotzdem starten?' }),
@@ -421,7 +485,7 @@ export function jobsCard($: EngineInterface, k: Kit, m: UnityModel, options: Opt
         ListRow(k, {
           key: `job-${j.key}`,
           status: jobGlyph(j.status),
-          title: `${j.name} · ${JOB_STATUS[j.status] ?? j.status}${j.exitCode !== undefined ? ` (Exit ${j.exitCode})` : ''}`,
+          title: `${jobTitle(cfg, j)} · ${JOB_STATUS[j.status] ?? j.status}${j.exitCode !== undefined ? ` (Exit ${j.exitCode})` : ''}`,
           meta: j.error ?? undefined,
           actions:
             j.status === 'running'

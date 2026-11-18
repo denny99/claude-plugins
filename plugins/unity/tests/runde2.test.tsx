@@ -8,7 +8,14 @@ import { BRIDGE_VERSION, germanBridgeError } from '../lib/bridge'
 import { staleShot } from '../lib/play'
 import { normalizeFilter, testReport, unmatchedParts } from '../lib/unity'
 import { BRIDGE_GIT_URL_TAGGED, testsProgress } from '../features/pane/common'
-import { bridgeOutdated } from '../features/state'
+import type { UnityModel } from '../types'
+import type { Kit } from '../lib/ui'
+import { bridgeOutdated, editorActivity, liveSignature, stopLive } from '../features/state'
+import { perfLength } from '../features/pane/perf'
+import { launcherStatus } from '../features/launcher'
+import { statusPill } from '../features/pane'
+import { jobDescription, jobLabel, jobNotes } from '../features/pane/overview'
+import { decisionChoices } from '../features/review/tab'
 import { findShown } from './shown'
 import { BRIDGE, fakeWorld, PANE, ROOT, settle } from './world'
 
@@ -296,5 +303,146 @@ test('(f) area choice: field stays free, the cleaned filter runs, the run card n
   expect((await findShown(ui, `Bereich ${area}`))?.text).toBeDefined()
   expect(await findShown(ui, /-testFilter "/)).toBeUndefined()
   expect((await findShown(ui, /Bereich trifft Game\.Tests\.Fehlt nicht/))?.text).toBeDefined()
+  await ui.unmount()
+})
+
+// --- Runde 2, Paket „hält nicht“: Messdauer (1), Messergebnis von selbst (2), Band/Panel folgen dem Heartbeat (3),
+// Entscheidungskarte schmal (4), „Mehr“ schließt nach der Wahl (5), Aufgaben mit verständlichen Namen (6).
+
+test('(1) 9 of 10 s: advice to update only for a bridge older than 0.3.0; under 5 % short stays quiet', () => {
+  const p = { seconds: 9, requestedSeconds: 10, wallSeconds: 8.9 }
+  expect(perfLength(p, '0.3.0')).toBe('9 s von 10 s (kürzer als angefragt)')
+  expect(perfLength(p, '0.3.0')).not.toContain('aktualisieren')
+  expect(perfLength(p, '0.2.0')).toContain('Bridge aktualisieren')
+  expect(perfLength(p)).toContain('Bridge aktualisieren') // a bridge that names no version is from before 0.3.0
+  expect(perfLength({ ...p, wallSeconds: 9.6 }, '0.2.0')).toBe('10 s')
+  expect(perfLength({ ...p, wallSeconds: 9.5 }, '0.3.0')).toBe('10 s')
+})
+
+test('(2) the measurement result is drawn by itself, without Aktualisieren or another tool call', async ($, on) => {
+  const world = fakeWorld(on)
+  world.bridge.isPlaying = true
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
+  await settle(world, $.command.run({ command: 'unity', args: '' } as never))
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await settle(world, ui.press({ key: 'tab-perf' }))
+  await ui.press({ key: 'perf-10' })
+  expect((await findShown(ui, /^Messe 10 s Leistung/))?.text).toBeDefined()
+  // only the clock runs: the live watch fetches the result file and patches the model
+  for (let i = 0; i < 12 && !(await findShown(ui, /^Messung \d\d:\d\d$/)); i++) await world.clock.advance(500)
+  expect((await findShown(ui, /^Messung \d\d:\d\d$/))?.text).toBeDefined()
+  expect(await findShown(ui, /^Messe 10 s Leistung/)).toBeUndefined()
+  await ui.unmount()
+  stopLive()
+})
+
+test('(3) band and pill read one activity: Play wins over the domain reload, a heartbeat change is drawn within a second', async ($, on) => {
+  const base = { tests: undefined, jobs: [], compile: undefined } as never as UnityModel
+  const reload = { ...base, bridge: { up: true, isPlaying: true, isCompiling: true, isPaused: false } } as UnityModel
+  expect(editorActivity(reload)).toBe('playing')
+  expect(launcherStatus(reload).status).toBe('Play läuft')
+  expect(statusPill({ ...reload, phase: 'ok' } as UnityModel).text).toBe('Play-Modus')
+  const compiling = { ...base, bridge: { up: true, isPlaying: false, isCompiling: true } } as UnityModel
+  expect(launcherStatus(compiling).status).toBe('kompiliert …')
+  expect(liveSignature(reload.bridge)).not.toBe(liveSignature({ ...reload.bridge, isPlaying: false }))
+
+  const world = fakeWorld(on)
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
+  await settle(world, $.command.run({ command: 'unity', args: '' } as never))
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await world.clock.advance(1100)
+  expect((await findShown(ui, 'Editor bereit'))?.text).toBeDefined()
+  world.bridge.isPlaying = true // Play started in Unity, nobody touches the panel
+  await world.clock.advance(1100)
+  expect((await findShown(ui, 'Play-Modus'))?.text).toBeDefined()
+  world.bridge.isPlaying = false
+  await world.clock.advance(1100)
+  expect((await findShown(ui, 'Editor bereit'))?.text).toBeDefined()
+  await ui.unmount()
+  stopLive()
+})
+
+type El = { type?: unknown; props?: Record<string, unknown>; children?: El[] }
+const walkEl = (n: El | undefined, out: El[] = []): El[] => {
+  if (!n || typeof n !== 'object') return out
+  out.push(n)
+  for (const c of n.children ?? []) walkEl(c as El, out)
+  return out
+}
+const textOf = (n: El): string =>
+  (n.children ?? []).map(c => (typeof c === 'string' || typeof c === 'number' ? String(c) : textOf(c))).join('')
+
+test('(4) decision at ~300 px: each option a wrapping text with a short "A wählen" button, no option text twice', () => {
+  const k = {
+    Box: 'Box',
+    Text: 'Text',
+    Button: 'Button',
+    graphical: true,
+    cols: 38,
+    t: { text: 't', muted: 'm', faint: 'f', tones: {} },
+  } as never as Kit
+  const choices = ['Fackel an der Wand lassen, aber wärmer und etwas heller machen', 'warmes Orange', 'so lassen']
+  const tree = decisionChoices(k, 'fackel', choices, () => () => {}) as unknown as El
+  const nodes = walkEl(tree)
+  const buttons = nodes.filter(n => n.type === 'Button')
+  expect(buttons.map(b => b.props?.label)).toEqual(['A wählen', 'B wählen', 'C wählen'])
+  const texts = nodes.filter(n => n.type === 'Text').map(textOf)
+  expect(texts).toEqual(['A: Fackel an der Wand lassen, aber wärmer und etwas heller machen', 'B: warmes Orange', 'C: so lassen'])
+  expect(texts.filter(t => t.includes('so lassen')).length).toBe(1)
+  // the text wraps (a Sentence), the button sits in its own row below, never beside a long label
+  for (const t of nodes.filter(n => n.type === 'Text')) expect(t.props?.wrap).toBe('wrap')
+  const rows = nodes.filter(n => String(n.props?.key ?? '').startsWith('rv-choice-row-'))
+  for (const r of rows) expect(r.props?.flexDirection).toBe('column')
+})
+
+test('(5) "Mehr" closes after a choice, also when the tab changes from the header; narrow keeps "Tests" in the strip', async ($, on) => {
+  const world = fakeWorld(on)
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
+  await settle(world, $.command.run({ command: 'unity', args: '' } as never))
+  const ui = await $.ui.mount({
+    ...PANE,
+    surface: 'desktop',
+    viewport: { columns: 29, rows: 30 },
+    props: { ...PANE.props, bodyColumns: 29, scroll: { offset: 0, bodyRows: 30 } },
+  })
+  const btn = (key: string) => ui.find({ type: 'Button', key })
+  expect(await btn('tab-tests')).toBeDefined() // ~300 px: Übersicht, Tests, Mehr
+  expect(await btn('tab-console')).toBeUndefined()
+  await settle(world, ui.press({ key: 'tab-more' }))
+  expect(await btn('tab-console')).toBeDefined()
+  await settle(world, ui.press({ key: 'tab-target' }))
+  expect(await btn('tab-console')).toBeUndefined() // the choice closed the menu
+  await settle(world, ui.press({ key: 'tab-overview' }))
+  await settle(world, ui.press({ key: 'tab-more' }))
+  expect(await btn('tab-console')).toBeDefined()
+  await settle(world, ui.press({ key: 'settings' })) // header "Ziel" changes the tab outside the strip
+  expect(await btn('tab-console')).toBeUndefined()
+  await settle(world, ui.press({ key: 'tab-overview' })) // the menu left open on Übersicht does not come back
+  expect(await btn('tab-console')).toBeUndefined()
+  await ui.unmount()
+})
+
+test('(6) project tasks without label/description: German names for known ones, readable name and command otherwise', async ($, on) => {
+  expect(jobLabel({ name: 'smoke-timing' })).toBe('Smoke: Zeiten')
+  expect(jobLabel({ name: 'warm-stop' })).toBe('Warmen Editor beenden')
+  expect(jobLabel({ name: 'setup' })).toBe('Einrichten')
+  expect(jobLabel({ name: 'build-windows' })).toBe('Build Windows')
+  expect(jobLabel({ name: 'bake_light-maps' })).toBe('Bake light maps')
+  expect(jobLabel({ name: 'smoke', label: 'Eigener Name' })).toBe('Eigener Name')
+  expect(jobDescription({ name: 'smoke' })).toContain('prüft')
+  expect(jobDescription({ name: 'bake', command: 'node tools/unity.mjs bake' })).toBe('führt „node tools/unity.mjs bake“ aus.')
+  expect(jobDescription({ name: 'x', description: 'eigen' })).toBe('eigen')
+  const notes = jobNotes([{ name: 'smoke-timing', command: 'node tools/unity.mjs smoke-timing' }], true)
+  expect(notes[1]).toBe('Smoke: Zeiten: misst die Ladezeiten beim Lauf durch die Welt; wird nie wegen der Zeit rot.')
+
+  const world = fakeWorld(on, {
+    config: { customJobs: [{ name: 'warm-stop', command: 'node tools/unity.mjs warm-stop' }, { name: 'bake', command: 'node bake.mjs' }] },
+  })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
+  await settle(world, $.command.run({ command: 'unity', args: '' } as never))
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect((await ui.find({ type: 'Button', key: 'custom-warm-stop' }))?.props.label).toBe('Warmen Editor beenden')
+  expect((await ui.find({ type: 'Button', key: 'custom-bake' }))?.props.label).toBe('Bake')
+  expect((await findShown(ui, 'Bake: führt „node bake.mjs“ aus.'))?.text).toBeDefined()
   await ui.unmount()
 })

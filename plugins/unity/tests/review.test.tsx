@@ -381,10 +381,10 @@ test('schmales Panel: Entscheidungs-Optionen ganz lesbar, keine „Entscheiden�
     expect(await subs()).toContain(k)
   await settle(world, ui.press({ key: 'rv-tab-decide' }))
   expect((await subs()).includes('rv-tab-look')).toBe(true) // menu closed again, strip keeps its order
-  // the option is a wrapping text beside a short letter button; the button's label is the whole option
-  expect((await findShown(ui, 'warmes Orange'))?.text).toBeDefined()
+  // the option is a wrapping text above a short button; the button carries no option text (runde 2, Befund 4)
+  expect((await findShown(ui, 'A: warmes Orange'))?.text).toBeDefined()
   const a = await ui.find({ type: 'Button', key: 'rv-choice-fackel-0' })
-  expect(a?.props.label).toBe('A · warmes Orange')
+  expect(a?.props.label).toBe('A wählen')
   const alts = (await ui.findAll({ type: 'Svg' })).map(s => String(s.props.alt ?? ''))
   expect(alts.includes('Entscheiden')).toBe(false)
   await ui.unmount()

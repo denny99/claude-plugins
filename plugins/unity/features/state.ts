@@ -6,12 +6,14 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 
-import type { ModelJob, UnityModel } from '../types'
+import type { ModelJob, ModelPerf, UnityModel } from '../types'
 import {
   BRIDGE_VERSION,
   readCompile,
   readConsole,
   readStatus,
+  queueCommand,
+  readResult,
   readTests,
   sendCommand,
   sleep,
@@ -341,6 +343,22 @@ export function testsRunning(m: Pick<UnityModel, 'tests' | 'jobs'>): boolean {
   return m.tests?.state === 'running' || m.jobs.some(j => j.kind === 'tests' && j.status === 'running')
 }
 
+/** What the editor is doing, from the heartbeat in the model; panel pill and band chip both read this one answer. */
+export type EditorActivity = 'down' | 'tests' | 'compiling' | 'paused' | 'playing' | 'ready'
+
+/**
+ * The editor's activity, most telling first: down, a test run (also a batch job), compiling, Play (paused), ready.
+ * Entering Play reloads the domain (isCompiling for a moment); the heartbeat's isPlaying wins over isCompiling.
+ */
+export function editorActivity(m: Pick<UnityModel, 'tests' | 'jobs' | 'bridge'>): EditorActivity {
+  const b = m.bridge
+  if (!b.up) return 'down'
+  if (testsRunning(m)) return 'tests'
+  if (b.isCompiling && !b.isPlaying) return 'compiling'
+  if (b.isPlaying) return b.isPaused ? 'paused' : 'playing'
+  return 'ready'
+}
+
 /** The heartbeat is a little stale because the editor runs tests (its main thread is blocked). */
 export function editorBusyWithTests(m: Pick<UnityModel, 'tests' | 'jobs' | 'bridge'>): boolean {
   const b = m.bridge
@@ -409,6 +427,16 @@ export async function bridgeCommand(
   command: BridgeCommand,
   timeoutMs = 10000,
 ): Promise<BridgeResult> {
+  const ready = await bridgeReady($, options)
+  if ('ok' in ready) return ready
+  const host = await createHost($)
+  const res = await sendCommand(host, ready.root, command, timeoutMs)
+  await refreshModel($, options)
+  return res
+}
+
+/** Refreshes and checks the bridge can take a command: the project root, or the failure in the panel's words. */
+async function bridgeReady($: EngineInterface, options: Options): Promise<{ root: string } | (BridgeResult & { ok: false })> {
   const m = await refreshModel($, options)
   if (!m.project)
     return {
@@ -432,10 +460,128 @@ export async function bridgeCommand(
               ? `Der Editor läuft für ${m.editorElsewhere.name}, nicht für diesen Checkout (${m.editorElsewhere.here}).`
               : 'Claude ist nicht mit dem Unity-Editor verbunden. Öffne das Projekt in Unity mit dem Paket Claude Bridge (/unity zeigt, wie).',
           }
+  return { root: m.project.root }
+}
+
+/**
+ * Queues a perf recording and returns at once; the live watch ({@link ensureLive}) picks up the result file on its
+ * own short ticks and patches the model, so the result is drawn without anyone pressing "Aktualisieren". (One long
+ * wait inside a single timer callback did not redraw on its own live.)
+ */
+export async function queuePerf(
+  $: EngineInterface,
+  options: Options,
+  seconds: number,
+): Promise<BridgeResult | { queued: true }> {
+  const s = Math.min(play.PERF_MAX_SECONDS, Math.max(0.5, Number.isFinite(seconds) ? seconds : 5))
+  const ready = await bridgeReady($, options)
+  if ('ok' in ready) return ready
   const host = await createHost($)
-  const res = await sendCommand(host, m.project.root, command, timeoutMs)
-  await refreshModel($, options)
-  return res
+  const q = await queueCommand(host, ready.root, { cmd: 'perf_record', seconds: s })
+  if ('ok' in q) return q
+  await patchModel($, { perfPending: { resultFile: q.resultFile, seconds: s, deadline: q.at + play.perfTimeoutMs(s) } })
+  ensureLive($, options)
+  return { queued: true }
+}
+
+// --- live watch: the heartbeat on a short clock, so panel and band follow the editor at once ---
+
+/** How often the live watch reads status.json (and a pending perf result). */
+export const LIVE_MS = 1000
+let live: { cancel(): void } | undefined
+let liveRunning = false
+let liveTicks = 0
+
+/**
+ * Starts the live watch once per loaded copy: every {@link LIVE_MS} it reads the heartbeat and, when a state the
+ * panel or band shows changed (up/down, Play, pause, compiling, compile seq), runs one refresh, whose atom patch
+ * redraws both from the same model. With a test run going it refreshes every 2 s (progress); with the editor down it
+ * looks every 3 s. A pending perf result is fetched on the same ticks. Stops in a folder without a Unity project.
+ */
+export function ensureLive($: EngineInterface, options: Options): void {
+  if (live) return
+  live = $.clock.every(LIVE_MS, () => void liveTick($, options))
+}
+
+/** Stops the live watch (tests). */
+export function stopLive(): void {
+  live?.cancel()
+  live = undefined
+}
+
+/** What the panel and band show from a heartbeat, as one comparable string. */
+export function liveSignature(b: UnityModel['bridge']): string {
+  if (!b.up) return `down:${b.why ?? ''}`
+  return `up:${b.isPlaying ? 1 : 0}${b.isPaused ? 1 : 0}${b.isCompiling ? 1 : 0}:${b.compileSeq ?? ''}:${b.version ?? ''}`
+}
+
+export async function liveTick($: EngineInterface, options: Options): Promise<void> {
+  if (liveRunning) return
+  liveRunning = true
+  liveTicks++
+  try {
+    const m = await readModel($)
+    if (m.phase === 'none' || (!m.project && m.unityHere === false)) {
+      stopLive()
+      return
+    }
+    if (!m.project) {
+      await refreshModel($, options)
+      return
+    }
+    if (m.perfPending) await pollPerf($, m.perfPending)
+    if (!m.bridge.up && liveTicks % 3 && !m.perfPending) return
+    const host = await createHost($)
+    const s = await readStatus(host.fs, m.project.root, await host.now())
+    const now: UnityModel['bridge'] = s.up
+      ? {
+          up: true,
+          isPlaying: s.status.isPlaying,
+          isPaused: s.status.isPaused,
+          isCompiling: s.status.isCompiling,
+          compileSeq: s.status.compileSeq,
+          ...(s.status.bridgeVersion ? { version: s.status.bridgeVersion } : {}),
+        }
+      : { up: false, why: s.why }
+    const changed = liveSignature(now) !== liveSignature(m.bridge)
+    if (changed || (testsRunning(m) && liveTicks % 2 === 0)) await refreshModel($, options)
+  } catch {
+    // a missed tick is caught up by the next one
+  } finally {
+    liveRunning = false
+  }
+}
+
+async function pollPerf(
+  $: EngineInterface,
+  pending: NonNullable<UnityModel['perfPending']>,
+): Promise<void> {
+  const host = await createHost($)
+  const res = await readResult(host.fs, pending.resultFile)
+  if (!res) {
+    if ((await host.now()) < pending.deadline) return
+    await patchModel($, {
+      perfPending: undefined,
+      busy: undefined,
+      perfError: {
+        code: 'timeout',
+        error: `Der Editor hat die Messung nicht innerhalb von ${Math.round(play.perfTimeoutMs(pending.seconds) / 1000)} s gemeldet.`,
+      },
+    })
+    return
+  }
+  const parsed = await play.perfRecord(async () => res, pending.seconds)
+  const at = await host.now()
+  await patchModel($, m =>
+    play.isPlayError(parsed)
+      ? { perfPending: undefined, busy: undefined, perfError: { ...(parsed.code ? { code: parsed.code } : {}), error: parsed.error } }
+      : {
+          perfPending: undefined,
+          busy: undefined,
+          perfError: undefined,
+          perfRuns: [{ at, perf: JSON.parse(JSON.stringify(parsed)) as ModelPerf }, ...(m.perfRuns ?? [])].slice(0, 5),
+        },
+  )
 }
 
 // --- compile gate ---
