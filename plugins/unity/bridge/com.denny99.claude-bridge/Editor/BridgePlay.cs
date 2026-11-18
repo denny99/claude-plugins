@@ -215,6 +215,11 @@ namespace Denny99.ClaudeBridge
             public bool skippedFirst;
             public bool done;
             public float recordedMs;
+            /// <summary>Wall clock at the first recorded frame; the recording ends after `seconds` of it (not of summed frame times).</summary>
+            public double startWall = -1;
+            public double wallSeconds;
+            /// <summary>Seconds since Play mode started when the recording began (Time.unscaledTime).</summary>
+            public float sincePlay;
             public readonly List<float> frames = new List<float>();
             public readonly List<IClaudePerfSource> sources = new List<IClaudePerfSource>();
             public readonly Dictionary<string, float> frameCosts = new Dictionary<string, float>();
@@ -244,6 +249,7 @@ namespace Denny99.ClaudeBridge
                 seconds = seconds,
                 wallDeadline = EditorApplication.timeSinceStartup + seconds * 2 + 5,
                 spot = SpotJson(ClaudeProviders.Get<IClaudeSpotProvider>()),
+                sincePlay = Time.unscaledTime,
             };
             perf.sources.AddRange(ClaudeProviders.GetAll<IClaudePerfSource>());
             SetPerfHook(true);
@@ -276,6 +282,9 @@ namespace Denny99.ClaudeBridge
                 return;
             }
             var ms = Time.unscaledDeltaTime * 1000f;
+            var now = Time.realtimeSinceStartupAsDouble;
+            if (run.startWall < 0) run.startWall = now - ms / 1000.0;
+            run.wallSeconds = now - run.startWall;
             run.frames.Add(ms);
             run.recordedMs += ms;
             var hitch = ms > BudgetMs;
@@ -311,7 +320,8 @@ namespace Denny99.ClaudeBridge
                     }
                 }
             }
-            if (run.recordedMs >= run.seconds * 1000f) run.done = true;
+            // Real time, not the sum of deltas: the editor's deltas can add up to less than the time that passed.
+            if (run.wallSeconds >= run.seconds || run.recordedMs >= run.seconds * 1000f) run.done = true;
         }
 
         static void FinishPerf(string abortReason)
@@ -334,6 +344,22 @@ namespace Denny99.ClaudeBridge
                 return;
             }
             AnswerJson(run.id, new JsonOut().Raw("perf", PerfJson(run, abortReason)).Raw("spot", run.spot));
+        }
+
+        /// <summary>Seconds into the recording at which the worst frame ended (summed frame times).</summary>
+        static float WorstAt(PerfRun run)
+        {
+            float t = 0, at = 0, worst = -1;
+            foreach (var f in run.frames)
+            {
+                t += f;
+                if (f > worst)
+                {
+                    worst = f;
+                    at = t;
+                }
+            }
+            return at / 1000f;
         }
 
         static string PerfJson(PerfRun run, string abortReason)
@@ -366,7 +392,9 @@ namespace Denny99.ClaudeBridge
             var o = new JsonOut().Num("seconds", run.recordedMs / 1000f).Num("requestedSeconds", run.seconds).Num("frames", n)
                 .Num("budgetMs", BudgetMs).Num("avgMs", run.recordedMs / n).Num("p50", Pct(0.5)).Num("p95", Pct(0.95))
                 .Num("p99", Pct(0.99)).Num("worst", sorted[n - 1]).Num("hitches", run.hitches)
-                .Num("seriesStep", step).Raw("series", series.ToString()).Raw("costs", costs.ToString());
+                .Num("seriesStep", step).Raw("series", series.ToString()).Raw("costs", costs.ToString())
+                .Num("sources", run.sources.Count)
+                .Num("wallSeconds", run.wallSeconds).Num("sincePlay", run.sincePlay).Num("worstAt", WorstAt(run));
             if (abortReason != null) o.Str("aborted", abortReason);
             return o.ToString();
         }

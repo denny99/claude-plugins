@@ -25,7 +25,17 @@ import type { RenderInput, EngineInterface, RenderElement } from 'claude-code'
 
 import type { UiKitState } from '../types'
 import { glyphLabel, ICON_GLYPHS, ICONS, iconSvg, svgDocument, TERM_GLYPHS, type IconName } from './icons'
-import { modeFromTheme, terminalColor, themeTokens, type Brand, type Mode, type Tokens, type Tone } from './theme'
+import {
+  boxPaint,
+  modeFromTheme,
+  terminalColor,
+  themeTokens,
+  windowTokens,
+  type Brand,
+  type Mode,
+  type Tokens,
+  type Tone,
+} from './theme'
 
 export { glyphLabel, ICON_GLYPHS, ICONS, iconSvg, isIconName, svgDocument, TERM_GLYPHS, type IconName } from './icons'
 export {
@@ -289,7 +299,8 @@ export async function kit(
     graphical,
     brand,
     mode,
-    t: themeTokens(brand, mode),
+    // Graphical surfaces follow the app window (the engine `theme` can stay dark on a light window): theme keys, no fills.
+    t: graphical && opts.mode !== 'dark' && opts.mode !== 'light' ? windowTokens(brand) : themeTokens(brand, mode),
     s: KIT_STRINGS[opts.lang ?? 'en'],
     state,
     isOpen: (key, defaultOpen = true) => (state.toggled.includes(key) ? !defaultOpen : defaultOpen),
@@ -399,7 +410,7 @@ function xmlText(text: string): string {
 }
 
 /** Pill geometry (CSS px): height, font size, side padding, icon size, estimated advance per character. */
-const PILL = { h: 20, font: 12, pad: 7, icon: 12, gap: 4, radius: 4 } as const
+const PILL = { h: 20, font: 12, pad: 8, icon: 12, gap: 4, radius: 4 } as const
 
 /** Estimated advance of one character at 12 px semibold system font (narrow, digits, capitals, rest). */
 function charWidth(c: string): number {
@@ -408,7 +419,7 @@ function charWidth(c: string): number {
   if (/[0-9]/.test(c)) return 6.9
   if (/[mwMW]/.test(c)) return 9.6
   if (/[A-ZÄÖÜ]/.test(c)) return 7.8
-  return 6.6
+  return 7.1
 }
 
 /**
@@ -417,7 +428,8 @@ function charWidth(c: string): number {
  */
 export function pillSvg(text: string, fg: string, bg: string, icon?: IconName): { source: string; width: number } {
   const iconW = icon ? PILL.icon + PILL.gap : 0
-  const width = Math.ceil(PILL.pad * 2 + iconW + [...text].reduce((w, c) => w + charWidth(c), 0))
+  const textW = [...text].reduce((w, c) => w + charWidth(c), 0)
+  const width = Math.ceil(PILL.pad * 2 + iconW + textW)
   const scale = PILL.icon / 24
   const top = (PILL.h - PILL.icon) / 2
   const mark = icon
@@ -426,8 +438,8 @@ export function pillSvg(text: string, fg: string, bg: string, icon?: IconName): 
     : ''
   const source = svgDocument(
     `<svg viewBox="0 0 ${width} ${PILL.h}"><rect width="${width}" height="${PILL.h}" rx="${PILL.radius}" ` +
-      `fill="${bg}"></rect>${mark}<text x="${PILL.pad + iconW}" y="${PILL.h / 2 + PILL.font * 0.35}" ` +
-      `font-family="-apple-system, Segoe UI, sans-serif" font-size="${PILL.font}" font-weight="600" ` +
+      `fill="${bg}"></rect>${mark}<text x="${PILL.pad + iconW + textW / 2}" y="${PILL.h / 2 + PILL.font * 0.35}" ` +
+      `text-anchor="middle" font-family="-apple-system, Segoe UI, sans-serif" font-size="${PILL.font}" font-weight="600" ` +
       `fill="${fg}">${xmlText(text)}</text></svg>`,
   )
   return { source, width }
@@ -480,7 +492,9 @@ export function Card(k: Kit, c: { key?: string; tone?: Tone; gap?: number; child
       flexDirection="column"
       gap={c.gap ?? 1}
       padding={1}
-      backgroundColor={fill}
+      minWidth={0}
+      flexShrink={1}
+      backgroundColor={boxPaint(fill)}
       borderStyle="round"
       borderColor={border}
     >
@@ -512,7 +526,7 @@ export function CardTitle(
     <Box flexDirection="row" alignItems="center" gap={1}>
       {c.icon ? Icon(k, c.icon, { tone: c.tone, color: c.tone ? undefined : k.t.faint }) : null}
       <Box flexGrow={1} flexShrink={1} minWidth={0}>
-        <Text weight="bold" color={c.tone ? k.t.tones[c.tone].fg : k.t.text} wrap="truncate-end">
+        <Text weight="bold" color={c.tone ? k.t.tones[c.tone].fg : k.t.text} wrap="wrap">
           {sanitize(c.title)}
         </Text>
       </Box>
@@ -521,7 +535,11 @@ export function CardTitle(
           {sanitize(count)}
         </Text>
       ) : null}
-      {c.pill ? Pill(k, c.pill) : null}
+      {c.pill ? (
+        <Box paddingRight={1} flexShrink={0} alignSelf="center">
+          {Pill(k, c.pill)}
+        </Box>
+      ) : null}
     </Box>
   )
 }
@@ -539,14 +557,18 @@ export function Sentence(
         {wrapText(text, k.cols).join('\n')}
       </Text>
     )
+  // The Box keeps a long sentence inside the card: without minWidth 0 a flex child may grow past the pane.
+  const { Box } = k
   return (
-    <Text
-      size="footnote"
-      color={opts.tone ? k.t.tones[opts.tone].fg : ink(k, opts.faint ? 'faint' : 'muted')}
-      wrap={opts.wrap ?? 'wrap'}
-    >
-      {sanitize(text)}
-    </Text>
+    <Box flexDirection="column" flexShrink={1} minWidth={0}>
+      <Text
+        size="footnote"
+        color={opts.tone ? k.t.tones[opts.tone].fg : ink(k, opts.faint ? 'faint' : 'muted')}
+        wrap={opts.wrap ?? 'wrap'}
+      >
+        {sanitize(text)}
+      </Text>
+    </Box>
   )
 }
 
@@ -615,7 +637,7 @@ export function PaneHeader(
     typeof hd.logo === 'string' && Svg ? (
       <Svg
         source={svgDocument(hd.logo)}
-        alt={hd.logoAlt ?? hd.label ?? 'logo'}
+        alt={hd.logoAlt ?? hd.label ?? 'Logo'}
         width={hd.logoWidth ?? 18}
         height={hd.logoHeight ?? hd.logoWidth ?? 18}
       />
@@ -635,7 +657,11 @@ export function PaneHeader(
           {sanitize(hd.title)}
         </Text>
       </Box>
-      {hd.pill ? Pill(k, { ...hd.pill, shrink: true }) : null}
+      {hd.pill ? (
+        <Box flexShrink={0} paddingRight={1}>
+          {Pill(k, hd.pill)}
+        </Box>
+      ) : null}
       <Box flexGrow={1} />
       {knobs}
     </Box>
@@ -648,8 +674,10 @@ function Rule(k: Kit): RenderElement | null {
   if (!Svg) return null
   return (
     <Svg
-      source={`<svg xmlns="http://www.w3.org/2000/svg" width="4000" height="1" viewBox="0 0 4000 1" preserveAspectRatio="none"><rect width="4000" height="1" fill="${k.t.line}"/></svg>`}
-      alt="divider"
+      source={svgDocument(
+        `<svg width="4000" height="1" viewBox="0 0 4000 1" preserveAspectRatio="none"><rect width="4000" height="1" fill="${k.t.line}"/></svg>`,
+      )}
+      alt="Trennlinie"
       height={1}
     />
   )
@@ -781,7 +809,7 @@ export function Stepper(k: Kit, s: { key?: string; steps: Step[] }): RenderEleme
               {mark}
             </Text>
           )}
-          {!last ? <Text color={k.t.line}>│</Text> : null}
+          {!last ? <Text color={k.t.faint}>│</Text> : null}
         </Box>
         <Box flexDirection="column" flexGrow={1} flexShrink={1} gap={0} paddingBottom={last ? 0 : 1}>
           <Text
@@ -850,18 +878,22 @@ export function ListRow(
       <Box flexDirection="row" alignItems="center" gap={1}>
         {icon ? Icon(k, icon, { tone, color: tone ? undefined : k.t.faint, size: 14 }) : null}
         <Box flexGrow={1} flexShrink={1} minWidth={0}>
-          <Text size="footnote" color={k.t.text} wrap="truncate-end">
+          <Text size="footnote" color={k.t.text} wrap="wrap">
             {sanitize(r.title)}
           </Text>
         </Box>
         {r.meta && !k.narrow ? (
-          <Box flexShrink={1} minWidth={0}>
-            <Text size="caption" color={k.t.faint} wrap="truncate-end">
+          <Box flexShrink={0}>
+            <Text size="caption" color={k.t.faint} tabular>
               {sanitize(r.meta)}
             </Text>
           </Box>
         ) : null}
-        {r.pill ? Pill(k, r.pill) : null}
+        {r.pill ? (
+          <Box paddingRight={1} flexShrink={0} alignSelf="center">
+            {Pill(k, r.pill)}
+          </Box>
+        ) : null}
         {acts && !k.narrow ? acts : null}
       </Box>
       {acts && k.narrow ? acts : null}
@@ -1036,8 +1068,13 @@ export function ConfirmButton(
   a: { key: string; label: string; confirmLabel?: string; onConfirm: () => void },
 ): RenderElement {
   const { Box, Button } = k
+  // Graphical: a real (secondary) button like its neighbours, not bare text; the terminal keeps the plain one.
   if (!k.isConfirming(a.key))
-    return (
+    return k.graphical ? (
+      <Button key={a.key} label={a.label} variant="secondary" onPress={() => k.askConfirm(a.key)}>
+        {a.label}
+      </Button>
+    ) : (
       <Button key={a.key} plain onPress={() => k.askConfirm(a.key)}>
         {a.label}
       </Button>
@@ -1274,7 +1311,7 @@ export function EmptyState(k: Kit, info: string | EmptyInfo): RenderElement {
   return (
     <Box flexDirection="column" alignItems="center" gap={1} paddingY={2}>
       {Icon(k, info.icon ?? 'circle', { size: 28, color: k.t.faint })}
-      <Text weight="bold" color={k.t.text} wrap="truncate-end">
+      <Text weight="bold" color={k.t.text} wrap="wrap">
         {sanitize(info.title)}
       </Text>
       {info.text ? Sentence(k, info.text) : null}
@@ -1301,7 +1338,7 @@ export function LoadingState(k: Kit, info: string | { text?: string; shape?: num
           key={`sk-${i}-${j}`}
           height={1}
           width={BAR_WIDTHS[(i + j) % BAR_WIDTHS.length]}
-          backgroundColor={k.t.line}
+          backgroundColor={boxPaint(k.t.line)}
         />
       )),
     }),
@@ -1483,8 +1520,9 @@ export type TabItem<T extends string> = {
 /**
  * Tab bar: one Button per tab keyed `${keyPrefix ?? 'tab-'}${id}`, the active one primary; wraps on narrow bodies (v1).
  * v2 (any `icon` or `maxVisible`): one row of native Buttons, the active one `variant: 'primary'`, the rest plain, each
- * "<label> · <count>" (no glyph); past `maxVisible` the rest sit behind a "More" tab (`${prefix}more`) whose menu lists them
- * under the strip (same keys); the active tab always stays in the strip. Narrow bodies keep the strip on one line.
+ * "<label> · <count>" (no glyph), in a fixed order. Only what does not fit the body width (estimated, `maxVisible` an
+ * upper bound) sits behind a "More ▾" tab (`${prefix}more`, primary while the active tab is in it) whose menu lists
+ * the rest as a framed, indented submenu (same keys) and closes after a choice. The strip wraps rather than clips.
  */
 export function Tabs<T extends string>(
   k: Kit,
@@ -1517,21 +1555,36 @@ export function Tabs<T extends string>(
         ))}
       </Box>
     )
-  const max = Math.max(2, t.maxVisible ?? t.tabs.length)
+  // The strip keeps its order whatever is active (no tab jumps in or out); only what does not fit goes behind "More".
+  // Width estimate in body columns: label + 3 for the button's padding, 1 gap; `maxVisible` is an upper bound only.
+  const width = (label: string) => [...label].length + 3
+  const moreName = t.moreLabel ?? k.s.more
+  const activeTab = t.tabs.find(tab => tab.id === t.active)
+  const max = Math.max(1, Math.min(t.maxVisible ?? t.tabs.length, t.tabs.length))
+  const total = t.tabs.reduce((w, tab) => w + width(text(tab)) + 1, -1)
   let strip = t.tabs
   let rest: TabItem<T>[] = []
-  if (t.tabs.length > max) {
-    strip = t.tabs.slice(0, max - 1)
-    const active = t.tabs.find(tab => tab.id === t.active)
-    if (active && !strip.includes(active)) strip = [...strip.slice(0, -1), active]
-    rest = t.tabs.filter(tab => !strip.includes(tab))
+  if (t.tabs.length > max || total > k.cols) {
+    const moreRoom = width(`${moreName} ▾`) + 1
+    let used = 0
+    let n = 0
+    for (const tab of t.tabs) {
+      const w = width(text(tab)) + (n ? 1 : 0)
+      if (n >= max - 1 || (n > 0 && used + w + moreRoom > k.cols)) break
+      used += w
+      n++
+    }
+    strip = t.tabs.slice(0, Math.max(1, n))
+    rest = t.tabs.slice(strip.length)
   }
   const menuKey = `${prefix}menu`
   const menuOpen = rest.length > 0 && k.isMore(menuKey)
-  const one = (tab: TabItem<T>, inMenu = false) => {
+  const activeInRest = !!activeTab && rest.includes(activeTab)
+  const one = (tab: TabItem<T>) => {
     const on = tab.id === t.active
     const press = () => {
-      if (inMenu) k.toggleMore(menuKey)
+      // a choice closes the menu (also one from the strip while it is open)
+      if (menuOpen) k.toggleMore(menuKey)
       t.onSelect(tab.id)
     }
     if (k.graphical)
@@ -1557,9 +1610,16 @@ export function Tabs<T extends string>(
       </Button>
     )
   }
-  const moreText = `${t.moreLabel ?? k.s.more}${menuOpen ? ' ▴' : ' ▾'}`
+  // The arrow sits in the shown label too (the desktop draws `label`); an active tab behind "More" marks it primary.
+  const moreText = `${moreName}${menuOpen ? ' ▴' : ' ▾'}`
   const moreTab = !rest.length ? null : k.graphical ? (
-    <Button key={`${prefix}more`} label={t.moreLabel ?? k.s.more} plain onPress={() => k.toggleMore(menuKey)}>
+    <Button
+      key={`${prefix}more`}
+      label={moreText}
+      plain={activeInRest ? undefined : true}
+      variant={activeInRest ? 'primary' : undefined}
+      onPress={() => k.toggleMore(menuKey)}
+    >
       {moreText}
     </Button>
   ) : (
@@ -1569,52 +1629,76 @@ export function Tabs<T extends string>(
       </Button>
     </Box>
   )
-  const bar = k.graphical ? (
-    <Box
-      flexDirection="row"
-      alignItems="center"
-      gap={1}
-      flexWrap={k.narrow ? 'nowrap' : 'wrap'}
-      overflow={k.narrow ? 'hidden' : undefined}
-    >
-      {strip.map(tab => one(tab))}
-      {moreTab}
-    </Box>
-  ) : (
-    <Box flexDirection="row" gap={1} flexWrap="wrap">
+  // Wraps rather than clips: every tab stays reachable even when the estimate is off.
+  const bar = (
+    <Box flexDirection="row" alignItems="center" gap={1} flexWrap="wrap">
       {strip.map(tab => one(tab))}
       {moreTab}
     </Box>
   )
   if (!menuOpen) return bar
+  // The menu reads as a submenu of "More": its own framed, indented list, one entry per row.
   const menu = k.graphical ? (
-    <Box flexDirection="row" gap={1} flexWrap="wrap">
-      {rest.map(tab => one(tab, true))}
+    <Box key={`${prefix}menu-list`} flexDirection="column" paddingLeft={2}>
+      <Box flexDirection="column" padding={1} borderStyle="round" borderColor={k.t.border}>
+        {rest.map(tab => one(tab))}
+      </Box>
     </Box>
   ) : (
     <Box flexDirection="column" paddingLeft={2}>
-      {rest.map(tab => one(tab, true))}
+      {rest.map(tab => one(tab))}
     </Box>
   )
   return (
-    <Box flexDirection="column" gap={k.graphical ? 1 : 0}>
+    <Box flexDirection="column" gap={k.graphical ? 'xs' : 0}>
       {bar}
       {menu}
     </Box>
   )
 }
 
-// --- launcher strip above the prompt ---
+// --- launcher strip above the prompt (Band v2: one line) ---
+// Keep this section identical in every copy of the kit and in ds-usage-line's hooks/register.tsx (see README "Band").
 
-/** Key prefix that marks a plugin's band row as a launcher row (`launch:<plugin>`), so a merger can find it. */
+/** Key prefix that marks a plugin's band row as a launcher row (`launch:<plugin>@<version>`), so a merger can find it. */
 export const LAUNCH_PREFIX = 'launch:'
+/** The band layout this copy draws. A row keyed `…@<n>` with n above it hands the merge to a newer copy. */
+export const BAND_VERSION = 2
+/** The root key of a plugin's launcher row. */
+export const launchKey = (plugin: string): string => `${LAUNCH_PREFIX}${plugin}@${BAND_VERSION}`
+
+/**
+ * Root props of a starter row (`LauncherRow`): one line that shrinks and clips, its texts cut with "…". The merger
+ * may not set these on its own boxes (the engine refuses `minWidth`/`overflow` on a Box holding another plugin's row),
+ * so every row brings them.
+ */
+export const LAUNCH_ROW = {
+  flexDirection: 'row',
+  flexWrap: 'nowrap',
+  alignItems: 'center',
+  flexShrink: 1,
+  minWidth: 0,
+  overflow: 'hidden',
+} as const
+/** Root props of a trailing row (ds-usage-line's meters): takes the rest of the line, right-aligned, never shrinks. */
+export const LAUNCH_END = {
+  flexDirection: 'row',
+  flexWrap: 'nowrap',
+  alignItems: 'center',
+  justifyContent: 'flex-end',
+  flexGrow: 1,
+  flexShrink: 0,
+} as const
 
 export type LauncherChipProps = {
   key: string
   /** Unused since Kit v3.2 (launcher chips carry no glyph: "Solutions", not "▦ Solutions"); kept for callers. */
   icon?: IconName
   label: string
-  /** A short state next to the chip ("Termin in 8 min", "Tests laufen", "Tisch aktiv"). */
+  /**
+   * A short state next to the chip, **only when something needs the person** ("Tests rot", "Gerät fehlt", "Termin in
+   * 8 min"). Band v2: no steady details (device names, counts) — those belong in the pane. Cut with "…" when tight.
+   */
   status?: string
   /** Colors the status (state only: ok, warn, bad, info). */
   tone?: Tone
@@ -1646,12 +1730,21 @@ export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
       {sanitize(c.status)}
     </Text>
   ) : (
-    <Text color={c.tone ? terminalColor(k.brand, c.tone) : undefined} dimColor={c.tone ? undefined : true}>
+    <Text color={c.tone ? terminalColor(k.brand, c.tone) : undefined} dimColor={c.tone ? undefined : true} wrap="truncate-end">
       {truncate(c.status, Math.max(6, Math.floor(k.cols / 3)))}
     </Text>
   )
   return (
-    <Box key={`${c.key}-chip`} flexDirection="row" alignItems="center" gap={1} flexShrink={1} minWidth={0}>
+    <Box
+      key={`${c.key}-chip`}
+      flexDirection="row"
+      flexWrap="nowrap"
+      alignItems="center"
+      gap={1}
+      flexShrink={1}
+      minWidth={0}
+      overflow="hidden"
+    >
       {btn}
       {status}
     </Box>
@@ -1659,48 +1752,52 @@ export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
 }
 
 /**
- * A plugin's launcher row for its `AbovePrompt` hook: chips in one wrapping row, keyed `launch:<plugin>` so
- * `mergeLauncherRows` (any installed plugin's) puts the rows of every plugin into one strip.
+ * A plugin's launcher row for its `AbovePrompt` hook: chips in one line that shrinks and clips (`LAUNCH_ROW`), keyed
+ * `launch:<plugin>@2` so `mergeLauncherRows` (any installed plugin's) puts the rows of every plugin into one strip.
  */
 export function LauncherRow(k: Kit, r: { plugin: string; chips: Kids }): RenderElement {
   const { Box } = k
   return (
-    <Box
-      key={`${LAUNCH_PREFIX}${r.plugin}`}
-      flexDirection="row"
-      alignItems="center"
-      gap={k.graphical ? 2 : 1}
-      flexWrap="wrap"
-    >
+    <Box key={launchKey(r.plugin)} {...LAUNCH_ROW} gap={k.graphical ? 2 : 1}>
       {kids(r.chips)}
     </Box>
   )
 }
 
 type BandRow = { plugin: string; tree: RenderElement }
+const rootProps = (row: BandRow) =>
+  (row.tree as { props?: { key?: unknown; justifyContent?: unknown } }).props
 
 /** Whether a band row is a launcher row (its root Box keyed `launch:…`). */
 export function isLauncherRow(row: BandRow): boolean {
-  const key = (row.tree as { props?: { key?: unknown } }).props?.key
+  const key = rootProps(row)?.key
   return typeof key === 'string' && key.startsWith(LAUNCH_PREFIX)
 }
 
 /**
  * Whether a launcher row stands at the end of the strip: its root Box carries `justifyContent: 'flex-end'` (e.g. the
- * usage row of ds-usage-line, which grows and must push no starter).
+ * usage row of ds-usage-line, `LAUNCH_END`).
  */
 export function isTrailing(row: BandRow): boolean {
-  const props = (row.tree as { props?: { justifyContent?: unknown } }).props
-  return props?.justifyContent === 'flex-end'
+  return rootProps(row)?.justifyContent === 'flex-end'
+}
+
+/** The band version a launcher row was drawn for: the `@<n>` of its key, 1 for a row keyed before v2. */
+export function bandVersion(row: BandRow): number {
+  const m = /@(\d+)$/.exec(String(rootProps(row)?.key ?? ''))
+  return m ? Number(m[1]) : 1
 }
 
 /**
- * The `AbovePromptList` hook that lays every plugin's launcher row side by side in one wrapping strip on top of the
- * band; other rows stay stacked under it, in their order. The engine lets a hook only reorder rows and wrap what
- * `next(e)` returns (never re-place another plugin's tree), so each launcher row goes through `next` alone and the
- * strip wraps those results; presses stay with the plugin that drew the chip. Trailing rows (`isTrailing`) go last,
- * the others keep their order. Fewer than two launcher rows: passes.
- * Safe when several plugins install it (an inner one sees single rows and passes).
+ * The `AbovePromptList` hook that lays every plugin's launcher row into **one line** on top of the band: starters
+ * left, in their order (their roots shrink and clip, `LAUNCH_ROW`), trailing rows (`isTrailing`, `LAUNCH_END`) right,
+ * never shrunk. No wrap. Other rows stay stacked under it, in their order. The engine lets a hook only reorder rows
+ * and wrap what `next(e)` returns (never re-place another plugin's tree), so each launcher row goes through `next`
+ * alone and the strip wraps those results; presses stay with the plugin that drew the chip.
+ *
+ * Several plugins carry a copy: the outermost in the chain merges, the inner ones see single rows and pass. Which one
+ * is outermost does not matter: a copy that finds a row keyed for a newer band version (`@<n>`) passes the rows
+ * untouched, so the newest copy installed draws the band. Fewer than two launcher rows: passes.
  *
  *   on('ui.render', { component: 'AbovePromptList' }, ($, e, next) => mergeLauncherRows($, e, next))
  */
@@ -1712,6 +1809,7 @@ export async function mergeLauncherRows(
   const rows = e.props.rows
   const found = rows.filter(isLauncherRow)
   if (found.length < 2) return next(e)
+  if (found.some(row => bandVersion(row) > BAND_VERSION)) return next(e)
   const launch = [...found.filter(row => !isTrailing(row)), ...found.filter(isTrailing)]
   const others = rows.filter(row => !isLauncherRow(row))
   const only = (subset: readonly BandRow[]) => next({ ...e, props: { ...e.props, rows: subset } })
@@ -1719,8 +1817,9 @@ export async function mergeLauncherRows(
   for (const row of launch) parts.push((await only([row])) as RenderElement)
   const rest = others.length ? ((await only(others)) as RenderElement) : null
   const { Box } = $.ui.resolve(e) as unknown as Els
+  // Only flex props here: the engine refuses `minWidth`/`overflow` on a Box that holds another plugin's row.
   const strip = (
-    <Box key="launch-strip" flexDirection="row" alignItems="center" columnGap={2} flexWrap="wrap">
+    <Box key="launch-strip" flexDirection="row" flexWrap="nowrap" alignItems="center" columnGap={2}>
       {parts}
     </Box>
   )

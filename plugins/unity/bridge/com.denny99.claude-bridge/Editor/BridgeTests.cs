@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using UnityEditor;
 using UnityEditor.TestTools.TestRunner.Api;
 using UnityEngine;
@@ -32,6 +33,11 @@ namespace Denny99.ClaudeBridge
             public string filter;
             public string error;
             public long finishedAt;
+            public long startedAt;
+            /// <summary>Leaf tests in the run (RunStarted's TestCaseCount); 0 until it is known.</summary>
+            public int total;
+            /// <summary>The test running now (full name); empty between tests.</summary>
+            public string current;
             public List<TestResult> results = new List<TestResult>();
         }
 
@@ -42,12 +48,15 @@ namespace Denny99.ClaudeBridge
         // A tests.json that says "running" for a run this editor session never started is left over from a killed or
         // crashed editor and is marked as an error on startup.
         const string RunKey = "ClaudeBridge.testRunId";
+        // The Test Framework's own id of the run (Execute's return value where it has one), for CancelTestRun.
+        const string GuidKey = "ClaudeBridge.testRunGuid";
 
         class Callbacks : ICallbacks
         {
             public void RunStarted(ITestAdaptor testsToRun)
             {
                 if (current.state != "running") return;
+                try { current.total = testsToRun.TestCaseCount; } catch { current.total = 0; }
                 Save();
             }
 
@@ -56,11 +65,18 @@ namespace Denny99.ClaudeBridge
                 if (current.state != "running") return;
                 current.state = "done";
                 current.finishedAt = ClaudeBridge.Now();
+                current.current = "";
                 SessionState.EraseString(RunKey);
+                SessionState.EraseString(GuidKey);
                 Save();
             }
 
-            public void TestStarted(ITestAdaptor test) { }
+            public void TestStarted(ITestAdaptor test)
+            {
+                if (current.state != "running" || test.HasChildren) return;
+                current.current = test.FullName;
+                Save();
+            }
 
             public void TestFinished(ITestResultAdaptor result)
             {
@@ -112,8 +128,10 @@ namespace Denny99.ClaudeBridge
                 state = "running",
                 mode = testMode == TestMode.PlayMode ? "PlayMode" : "EditMode",
                 filter = filter,
+                startedAt = ClaudeBridge.Now(),
             };
             SessionState.SetString(RunKey, current.runId);
+            SessionState.EraseString(GuidKey);
             Save();
             var f = new Filter { testMode = testMode };
             if (!string.IsNullOrEmpty(filter))
@@ -125,7 +143,8 @@ namespace Denny99.ClaudeBridge
             }
             try
             {
-                api.Execute(new ExecutionSettings(f));
+                var guid = Execute(new ExecutionSettings(f));
+                if (!string.IsNullOrEmpty(guid)) SessionState.SetString(GuidKey, guid);
             }
             catch (Exception e)
             {
@@ -134,6 +153,75 @@ namespace Denny99.ClaudeBridge
                 SessionState.EraseString(RunKey);
                 Save();
             }
+            return current.runId;
+        }
+
+        /// <summary>
+        /// TestRunnerApi.Execute; through reflection to keep its run id where this Test Framework returns one (a string
+        /// in newer versions, void in some older ones). The run starts either way.
+        /// </summary>
+        static string Execute(ExecutionSettings settings)
+        {
+            var m = typeof(TestRunnerApi).GetMethod("Execute", new[] { typeof(ExecutionSettings) });
+            if (m == null)
+            {
+                api.Execute(settings);
+                return null;
+            }
+            try
+            {
+                return m.Invoke(api, new object[] { settings }) as string;
+            }
+            catch (TargetInvocationException e) when (e.InnerException != null)
+            {
+                throw e.InnerException;
+            }
+        }
+
+        /// <summary>
+        /// Stops the running run: TestRunnerApi.CancelAllJobs (Test Framework 1.4+), else CancelTestRun(guid) with the
+        /// remembered id. Looked up by reflection, since neither exists in every Test Framework version. The run is
+        /// marked as cancelled ("Cancelled") right away; results so far stay. Returns the run id.
+        /// </summary>
+        public static string Cancel()
+        {
+            if (current.state != "running") throw new BridgeError("bad-input", "No test run is going.");
+            var type = typeof(TestRunnerApi);
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.Static;
+            var cancelled = false;
+            try
+            {
+                var all = type.GetMethod("CancelAllJobs", flags, null, Type.EmptyTypes, null);
+                if (all != null)
+                {
+                    all.Invoke(null, null);
+                    cancelled = true;
+                }
+                else
+                {
+                    var guid = SessionState.GetString(GuidKey, "");
+                    var one = type.GetMethod("CancelTestRun", flags, null, new[] { typeof(string) }, null);
+                    if (one != null && guid.Length > 0)
+                    {
+                        var r = one.Invoke(null, new object[] { guid });
+                        cancelled = !(r is bool) || (bool)r;
+                    }
+                }
+            }
+            catch (TargetInvocationException e) when (e.InnerException != null)
+            {
+                throw new BridgeError("cancel-failed", "Cancelling failed: " + e.InnerException.Message);
+            }
+            if (!cancelled)
+                throw new BridgeError("unsupported",
+                    "This Test Framework version cannot cancel a run. Wait for it to finish, or update com.unity.test-framework to 1.4 or newer.");
+            current.state = "error";
+            current.error = "Cancelled";
+            current.current = "";
+            current.finishedAt = ClaudeBridge.Now();
+            SessionState.EraseString(RunKey);
+            SessionState.EraseString(GuidKey);
+            Save();
             return current.runId;
         }
 

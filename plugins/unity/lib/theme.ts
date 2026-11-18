@@ -113,7 +113,7 @@ const NEUTRAL_DARK: Tokens = {
   well: '#161a25',
   text: '#e7e9ef',
   muted: '#b9c1d1',
-  faint: '#8a93a6',
+  faint: '#97a0b3',
   accent: '#e9ecf2',
   onAccent: '#141821',
   accentTint: '#2c3447',
@@ -235,4 +235,91 @@ export function terminalColor(brand: Brand, tone: Tone): string | undefined {
   if (tone === 'info') return 'suggestion'
   if (tone === 'accent') return brand === 'deltastone' ? '#e08918' : brand === 'dnd' ? '#c9a253' : undefined
   return undefined
+}
+
+/**
+ * Tokens that follow the app window instead of guessing its mode. The engine tells no plugin whether the desktop
+ * window is light or dark (its `theme` setting can stay dark on a light window, and `overrideColorScheme` is ignored
+ * by the desktop), and native buttons always follow the window. So graphical surfaces paint no fills of their own and
+ * name theme keys (`text`, `inactive`, `success` …), which the app resolves for its current mode. Svg cannot take a
+ * theme key: `schemeSvg` gives every key used as `fill`/`stroke`/`stop-color` a light color and a dark one under
+ * `@media (prefers-color-scheme: dark)`. Fills only a Svg can paint (pill backgrounds) are named `tone-<tone>-bg`.
+ */
+export function windowTokens(brand: Brand): Tokens {
+  const tone = (fg: string, t: Tone): ToneColors => ({ fg, bg: `tone-${t}-bg`, border: fg })
+  return {
+    brand,
+    mode: 'dark',
+    bg: '',
+    card: '',
+    border: 'subtle',
+    line: 'subtle',
+    well: '',
+    text: 'text',
+    muted: 'text',
+    faint: 'inactive',
+    accent: 'claude',
+    onAccent: 'inverseText',
+    accentTint: '',
+    accentTintText: 'claude',
+    link: 'claude',
+    tones: {
+      ok: tone('success', 'ok'),
+      warn: tone('warning', 'warn'),
+      bad: tone('error', 'bad'),
+      info: tone('suggestion', 'info'),
+      neutral: tone('inactive', 'neutral'),
+      accent: tone('claude', 'accent'),
+    },
+  }
+}
+
+/** Whether a color is one a Box or Text can paint (a hex or a theme key), not a Svg-only name. */
+export function boxPaint(color: string | undefined): string | undefined {
+  if (!color || color.startsWith('tone-')) return undefined
+  return color
+}
+
+/** The light and dark color of each name `windowTokens` hands to a Svg. */
+export function schemeColors(brand: Brand): Record<string, { light: string; dark: string }> {
+  const l = themeTokens(brand, 'light')
+  const d = themeTokens(brand, 'dark')
+  const pick = (f: (t: Tokens) => string) => ({ light: f(l), dark: f(d) })
+  const out: Record<string, { light: string; dark: string }> = {
+    text: pick((t) => t.text),
+    inactive: pick((t) => t.faint),
+    subtle: pick((t) => t.line),
+    claude: pick((t) => t.link),
+    inverseText: pick((t) => t.onAccent),
+    success: pick((t) => t.tones.ok.fg),
+    warning: pick((t) => t.tones.warn.fg),
+    error: pick((t) => t.tones.bad.fg),
+    suggestion: pick((t) => t.tones.info.fg),
+  }
+  for (const tone of ['ok', 'warn', 'bad', 'info', 'neutral', 'accent'] as const)
+    out[`tone-${tone}-bg`] = pick((t) => t.tones[tone].bg)
+  return out
+}
+
+/**
+ * Adds a `<style>` to a Svg document for every scheme name it paints with (`fill="text"`, `stroke="success"` …): the
+ * light color, then the dark one under `@media (prefers-color-scheme: dark)`. A CSS rule beats the (invalid)
+ * presentation attribute, so the name never shows. Svg without such names is returned unchanged.
+ */
+export function schemeSvg(source: string, brand: Brand = 'neutral'): string {
+  const colors = schemeColors(brand)
+  const used = new Map<string, Set<string>>()
+  for (const m of source.matchAll(/\s(fill|stroke|stop-color)="([a-zA-Z][\w-]*)"/g)) {
+    const [, prop, name] = m
+    if (!prop || !name || !colors[name]) continue
+    if (!used.has(name)) used.set(name, new Set())
+    used.get(name)!.add(prop)
+  }
+  if (!used.size) return source
+  const rules = (mode: 'light' | 'dark') =>
+    [...used]
+      .flatMap(([name, props]) => [...props].map((p) => `[${p}="${name}"]{${p}:${colors[name]![mode]}}`))
+      .join('')
+  const style = `<style>${rules('light')}@media (prefers-color-scheme: dark){${rules('dark')}}</style>`
+  return source.replace(/^(<svg\b[^>]*>)/i, `$1${style}`)
 }

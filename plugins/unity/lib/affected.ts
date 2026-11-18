@@ -42,9 +42,19 @@ function covers(p: TestFilterPreset, file: string, projectRel: string): boolean 
   return areaWords(p).some(w => segs.includes(w))
 }
 
-/** Files that can change test outcomes: inside the Unity project, not .meta. */
-export function relevant(file: string, projectRel: string): boolean {
-  return /^(Assets|Packages)\//.test(projectRel) && !/\.meta$/i.test(file)
+/** Never change a test outcome: notes and docs, and the package lock (Unity re-resolves it locally). */
+const NOISE = /(\.(md|txt|pdf|rtf)$|(^|\/)packages-lock\.json$|(^|\/)(README|CHANGELOG|LICENSE)[^/]*$)/i
+
+/**
+ * Files that can change test outcomes: inside the Unity project, not .meta, not notes / docs / the package lock, and
+ * not listed under restoreBeforeCommit (local churn the plugin restores before a commit anyway).
+ */
+export function relevant(file: string, projectRel: string, restore: string[] = []): boolean {
+  if (!/^(Assets|Packages)\//.test(projectRel) || /\.meta$/i.test(file) || NOISE.test(projectRel)) return false
+  return !restore.some(r => {
+    const p = norm(r).replace(/^\.\//, '')
+    return p === projectRel || p === file || file.endsWith(`/${p}`)
+  })
 }
 
 export interface Affected {
@@ -59,14 +69,19 @@ export interface Affected {
  * Maps changed files (session-root relative) to areas. `projectDir` is the Unity project relative to the session
  * root ('' when it is the root).
  */
-export function affectedAreas(files: string[], presets: TestFilterPreset[], projectDir: string): Affected {
+export function affectedAreas(
+  files: string[],
+  presets: TestFilterPreset[],
+  projectDir: string,
+  restore: string[] = [],
+): Affected {
   const prefix = projectDir ? `${norm(projectDir).replace(/\/$/, '')}/` : ''
   const areas = new Map<string, { name: string; filter: string; files: string[] }>()
   const uncovered: string[] = []
   let ignored = 0
   for (const f of files) {
     const rel = prefix && f.startsWith(prefix) ? f.slice(prefix.length) : prefix ? '' : f
-    if (!rel || !relevant(f, rel)) {
+    if (!rel || !relevant(f, rel, restore)) {
       ignored++
       continue
     }
@@ -84,12 +99,17 @@ export function affectedAreas(files: string[], presets: TestFilterPreset[], proj
 /** The text for the model / the pane. */
 export function affectedText(a: Affected, landings?: { count: number; every: number }): string {
   const lines: string[] = []
-  if (!a.areas.length && !a.uncovered.length) lines.push('No changed files in the Unity project: nothing to test.')
+  if (!a.areas.length && !a.uncovered.length)
+    lines.push(
+      a.ignored
+        ? 'Nichts betroffen: die Änderungen berühren keinen Code im Unity-Projekt (Lock-Datei, Notizen oder Dateien außerhalb) – kein Testlauf nötig.'
+        : 'Keine geänderten Dateien im Unity-Projekt: nichts zu testen.',
+    )
   for (const x of a.areas)
-    lines.push(`${x.name} (${x.files.length} file${x.files.length > 1 ? 's' : ''}): ${x.files.slice(0, 5).join(', ')}`)
+    lines.push(`${x.name} (${x.files.length} Datei${x.files.length > 1 ? 'en' : ''}): ${x.files.slice(0, 5).join(', ')}`)
   if (a.uncovered.length)
     lines.push(
-      `No area covers ${a.uncovered.length} changed file(s): ${a.uncovered.slice(0, 5).join(', ')}${a.uncovered.length > 5 ? ', …' : ''} — run the full suite to be sure.`,
+      `${a.uncovered.length === 1 ? '1 geänderte Datei gehört' : `${a.uncovered.length} geänderte Dateien gehören`} zu keinem Test-Bereich: ${a.uncovered.slice(0, 5).join(', ')}${a.uncovered.length > 5 ? ', …' : ''} — zur Sicherheit alle Tests laufen lassen.`,
     )
   const reminder = landingsReminder(landings)
   if (reminder) lines.push(reminder)
@@ -99,5 +119,5 @@ export function affectedText(a: Affected, landings?: { count: number; every: num
 /** The reminder once `count` landings passed since the last full run. */
 export function landingsReminder(l: { count: number; every: number } | undefined): string | undefined {
   if (!l || l.count < l.every) return undefined
-  return `${l.count} commits landed since the last full test suite (reminder every ${l.every}): run the full suite (unity_run_tests without a filter) before the next landing.`
+  return `${l.count} Commits seit dem letzten vollen Testlauf (Erinnerung alle ${l.every}): vor dem nächsten Commit alle Tests laufen lassen (unity_run_tests ohne Filter).`
 }

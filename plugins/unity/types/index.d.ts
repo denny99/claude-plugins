@@ -25,6 +25,8 @@ export type ModelTestResult = {
   message?: string
   stack?: string
   duration?: number
+  /** Red in an earlier run that did not contain this test. */
+  carried?: boolean
 }
 
 export type ModelTestRun = {
@@ -35,6 +37,9 @@ export type ModelTestRun = {
   results: ModelTestResult[]
   error?: string
   finishedAt?: number
+  total?: number
+  startedAt?: number
+  current?: string
 }
 
 export type ModelConsoleEntry = {
@@ -85,7 +90,13 @@ export type ModelPerf = {
   seriesStep: number
   series: number[]
   costs: { name: string; avgMs: number; maxMs: number; hitchAvgMs: number; hitchMaxMs: number; hitchShare: number }[]
+  /** How many cost sources the project registered; missing from older bridges (written since this change, not yet tried in the editor). */
+  sources?: number
   aborted?: string
+  /** Newer bridges: wall-clock length, seconds since Play start at the beginning, position of the worst frame. */
+  wallSeconds?: number
+  sincePlay?: number
+  worstAt?: number
   spot?: Record<string, unknown>
 }
 
@@ -97,7 +108,7 @@ export type UnityModel = {
   /** Set at session start: this folder is a Unity project (the starter chip shows). */
   unityHere?: boolean
   sessionRoot?: string
-  project?: { root: string; sessionRoot: string; version: string; revision?: string; name: string }
+  project?: { root: string; sessionRoot: string; version: string; revision?: string; name: string; label?: string }
   editorPath?: string
   editorTried: string[]
   configFound: boolean
@@ -113,9 +124,22 @@ export type UnityModel = {
     isPaused?: boolean
     unityVersion?: string
     scene?: string
+    /** Newer bridges: active scene name and the first Build Settings scene. */
+    sceneName?: string
+    startScene?: string
     batchmode?: boolean
     compileSeq?: number
+    /** Version the bridge reports in its heartbeat (newer bridges only). */
+    version?: string
+    /** Stale heartbeat: milliseconds since its last write. */
+    age?: number
   }
+  /** Bridge package version found in the project (heartbeat, else Library/PackageCache). */
+  bridgeInstalled?: string
+  /** No editor here, but one runs for another checkout of the same repo (git worktree list). */
+  editorElsewhere?: { project: string; checkout: string; name: string; main: boolean; here: string; hereMain: boolean }
+  /** Tests tab: "Alle Tests" chosen on purpose (no filter, no area). */
+  testScope?: 'all'
   compile?: { seq: number; at: number; source: 'bridge' | 'log'; messages: ModelCompilerMessage[] }
   console: ModelConsoleEntry[]
   tests?: ModelTestRun
@@ -124,6 +148,8 @@ export type UnityModel = {
   filterInput: string
   jobs: ModelJob[]
   lastShot?: string
+  /** First enabled Build Settings scene (heartbeat of newer bridges, else ProjectSettings/EditorBuildSettings.asset); read while no scene is open. */
+  startScene?: string
   /** A worktree as the safe target for batch runs (ready once Library is copied). */
   worktree?: {
     name: string
@@ -133,6 +159,8 @@ export type UnityModel = {
     jobKey?: string
     error?: string
   }
+  /** Other checkouts of the repo (`git worktree list`), read while the target tab is open. */
+  checkouts?: { path: string; projectRoot: string; name: string; branch?: string; main: boolean }[]
   /** Lock state of the worktree's project (batch safety there). */
   targetLock?: 'free' | 'held' | 'stale'
   /** Bridge run id of a full-suite run in flight (recorded when it finishes green). */

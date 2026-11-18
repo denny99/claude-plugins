@@ -147,6 +147,11 @@ test('review list: renders on desktop and terminal; an answer is appended with s
     await ui.unmount()
   }
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  // Befund 64/65: one "Antworten" (the comment field's), the screenshot switch reads as a checkbox.
+  expect(await ui.find({ type: 'Button', key: 'rv-answer-reuse' })).toBeUndefined()
+  expect((await ui.find({ type: 'Button', key: 'rv-shot-reuse' }))?.props.label).toMatch(
+    /^[☑☐] Screenshot mitschicken$/,
+  )
   await settle(world, ui.press({ key: 'rv-goto-reuse' }))
   const gotoCmd = Object.entries(world.files).find(([p, t]) => /cmd-.*\.json$/.test(p) && t.includes('"goto"'))
   expect(gotoCmd?.[1]).toContain('spot: seed=1 x=2 z=3')
@@ -212,6 +217,34 @@ test('sounds: list, play near, mix nudge through mix_set, verdict appended as to
   await ui.unmount()
 })
 
+test('sounds after an error: "Nochmal holen", Aktualisieren and the bridge coming back each load the board again', async ($, on) => {
+  const world = reviewWorld(on)
+  await openReview($, world)
+  world.bridge.up = false
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await settle(world, ui.press({ key: 'tab-review' }))
+  await settle(world, ui.press({ key: 'rv-tab-sounds' }))
+  await ui.press({ key: 'rv-snd-load' })
+  await world.clock.advance(100)
+  expect((await findShown(ui, 'Soundboard nicht erreichbar'))?.text).toBeDefined()
+  expect((await findShown(ui, /nicht mit dem Unity-Editor verbunden/))?.text).toBeDefined()
+  world.bridge.up = true
+  await ui.press({ key: 'rv-snd-retry' })
+  await world.clock.advance(100)
+  expect((await findShown(ui, /Fackel zünden/))?.text).toBeDefined()
+  expect(await findShown(ui, 'Soundboard nicht erreichbar')).toBeUndefined()
+
+  world.bridge.up = false
+  await ui.press({ key: 'refresh' })
+  await world.clock.advance(100)
+  expect((await findShown(ui, 'Soundboard nicht erreichbar'))?.text).toBeDefined()
+  world.bridge.up = true
+  await world.clock.advance(5200) // the automatic re-fetch
+  expect(await findShown(ui, 'Soundboard nicht erreichbar')).toBeUndefined()
+  expect((await findShown(ui, /Fackel zünden/))?.text).toBeDefined()
+  await ui.unmount()
+})
+
 test('viewer: unity_review_show draws the frame as Svg with a paint Client; a stroke becomes a mark; feedback returns the image', async ($, on) => {
   const world = reviewWorld(on)
   await openReview($, world)
@@ -255,7 +288,7 @@ test('viewer: unity_review_show draws the frame as Svg with a paint Client; a st
   expect((await findShown(ui, /2 Markierungen/))?.text).toBeDefined()
   await settle(world, ui.press({ key: 'rv-view-send' }))
   expect(world.prompts.at(-1)).toContain('Markierung rot')
-  expect(world.prompts.at(-1)).toContain('mcp__unity__unity_review_feedback')
+  expect(world.prompts.at(-1)).toContain('Bild mit Markierungen holen mit unity_review_feedback')
   await ui.unmount()
   const fb = (await settle(world, $.tool.call({ tool: 'mcp__unity__unity_review_feedback' }))) as { result?: unknown }
   const blocks = fb.result as { type: string }[]
@@ -319,5 +352,39 @@ test('Problem melden from Übersicht switches to Review; measuring runs detached
   for (let i = 0; i < 120 && world.prompts.length === before; i++) await world.clock.advance(250)
   expect(world.prompts.at(-1)).toContain('Problem gemeldet im Unity-Spiel: Ruckelt.')
   expect(world.prompts.at(-1)).toContain('Leistung: 10 s, 3 Bilder')
+  await ui.unmount()
+})
+
+test('schmales Panel: Entscheidungs-Optionen ganz lesbar, keine „Entscheiden“-Pill, alle Unter-Tabs erreichbar', async ($, on) => {
+  const world = reviewWorld(on)
+  await openReview($, world)
+  const ui = await $.ui.mount({
+    ...PANE,
+    surface: 'desktop',
+    viewport: { columns: 40, rows: 30 },
+    props: { ...PANE.props, bodyColumns: 40, scroll: { offset: 0, bodyRows: 30 } },
+  })
+  if (!(await ui.find({ type: 'Button', key: 'tab-review' }))) await settle(world, ui.press({ key: 'tab-more' }))
+  await settle(world, ui.press({ key: 'tab-review' }))
+  const subs = async () =>
+    (await ui.findAll({ type: 'Button' })).map(b => String(b.props.key ?? '')).filter(k => /^rv-tab-/.test(k))
+  if ((await subs()).includes('rv-tab-more')) await settle(world, ui.press({ key: 'rv-tab-more' }))
+  for (const k of [
+    'rv-tab-look',
+    'rv-tab-decide',
+    'rv-tab-pictures',
+    'rv-tab-sounds',
+    'rv-tab-ideas',
+    'rv-tab-running',
+  ])
+    expect(await subs()).toContain(k)
+  await settle(world, ui.press({ key: 'rv-tab-decide' }))
+  expect((await subs()).includes('rv-tab-look')).toBe(true) // menu closed again, strip keeps its order
+  // the option is a wrapping text beside a short letter button; the button's label is the whole option
+  expect((await findShown(ui, 'warmes Orange'))?.text).toBeDefined()
+  const a = await ui.find({ type: 'Button', key: 'rv-choice-fackel-0' })
+  expect(a?.props.label).toBe('A · warmes Orange')
+  const alts = (await ui.findAll({ type: 'Svg' })).map(s => String(s.props.alt ?? ''))
+  expect(alts.includes('Entscheiden')).toBe(false)
   await ui.unmount()
 })

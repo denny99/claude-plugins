@@ -16,7 +16,10 @@ export interface UnityProject {
   version: string
   /** `b22767f04f04` when ProjectVersion.txt carries it. */
   revision?: string
+  /** The checkout's name (`cozy-game-panels`), not the project subfolder (`unity`). */
   name: string
+  /** Where the project sits for a human: `cozy-game-panels/unity`, or just the name when it is the root. */
+  label: string
 }
 
 /** Reads `m_EditorVersion` and the revision from ProjectVersion.txt. */
@@ -36,6 +39,7 @@ const SKIP_DIRS = new Set(['node_modules', '.git', 'Library', 'Temp', 'Logs', 'o
 export async function detectProject(
   sessionRoot: string,
   fs: Pick<HostFs, 'read' | 'exists' | 'list'>,
+  checkout?: string,
 ): Promise<UnityProject | undefined> {
   const base = norm(sessionRoot)
   const tryAt = async (root: string): Promise<UnityProject | undefined> => {
@@ -43,8 +47,12 @@ export async function detectProject(
     if (!(await fs.exists(file))) return undefined
     const parsed = parseProjectVersion(await fs.read(file))
     if (!parsed) return undefined
-    const name = root.replace(/\/+$/, '').split('/').pop() ?? root
-    return { root, sessionRoot: base, name, ...parsed }
+    const last = (p: string) => p.replace(/\/+$/, '').split('/').pop() || p
+    const folder = last(root)
+    const top = norm(checkout ?? base)
+    const name = norm(root) === top ? folder : last(top)
+    const label = name === folder ? name : `${name}/${folder}`
+    return { root, sessionRoot: base, name, label, ...parsed }
   }
   const here = await tryAt(base)
   if (here) return here
@@ -152,10 +160,15 @@ export function batchAllowed(s: { lock: LockState; bridgeUp: boolean }): { ok: b
   if (s.bridgeUp)
     return {
       ok: false,
-      reason: 'An editor has this project open (bridge is up). Use the editor, or run batch jobs in a worktree.',
+      reason:
+        'Der Editor hat das Projekt offen. Arbeite im Editor, oder lass Hintergrund-Läufe in einem Worktree laufen.',
     }
   if (s.lock === 'held')
-    return { ok: false, reason: 'An editor holds Temp/UnityLockfile. Close it, or run batch jobs in a worktree.' }
+    return {
+      ok: false,
+      reason:
+        'Ein Editor hat das Projekt offen (Sperrdatei). Schließ ihn, oder lass Hintergrund-Läufe in einem Worktree laufen.',
+    }
   return { ok: true }
 }
 
@@ -272,6 +285,8 @@ export interface TestResult {
   message?: string
   stack?: string
   duration?: number
+  /** Red in an earlier run that did not contain this test (kept until a run with it turns it green). */
+  carried?: boolean
 }
 
 export interface TestRun {
@@ -282,6 +297,12 @@ export interface TestRun {
   results: TestResult[]
   error?: string
   finishedAt?: number
+  /** Leaf tests the run started with (bridge: RunStarted's TestCaseCount). */
+  total?: number
+  /** When the run started (Unix ms). */
+  startedAt?: number
+  /** The test running right now (bridge: TestStarted). */
+  current?: string
 }
 
 function asStatus(v: unknown): TestStatus {
@@ -299,6 +320,9 @@ export const TESTS_ABORTED = 'aborted — editor closed or crashed'
  * An editor run (it has a bridge runId) still `running` while the bridge heartbeat is stale or missing: the editor
  * went away mid-run and the run will never finish. It reads as an aborted run, so a new one can start.
  */
+/** The error of a run stopped on purpose (bridge `cancel-tests` writes the same word). */
+export const TESTS_CANCELLED = 'Cancelled'
+
 export function abortedIfBridgeDown<T extends Pick<TestRun, 'state' | 'runId' | 'error'>>(
   run: T | undefined,
   bridgeUp: boolean,
@@ -309,6 +333,7 @@ export function abortedIfBridgeDown<T extends Pick<TestRun, 'state' | 'runId' | 
 
 /** The run's error as one line: "aborted — …" or "failed to start: …". */
 export function testErrorLine(run: Pick<TestRun, 'error'>): string {
+  if (run.error === TESTS_CANCELLED) return 'Testlauf abgebrochen'
   return run.error === TESTS_ABORTED
     ? `Tests ${TESTS_ABORTED}`
     : `Test run failed to start: ${run.error ?? 'unknown error'}`
@@ -342,7 +367,10 @@ export function parseBridgeTests(text: string): TestRun | undefined {
   if (raw.mode === 'EditMode' || raw.mode === 'PlayMode') run.mode = raw.mode
   if (raw.filter) run.filter = String(raw.filter)
   if (raw.error) run.error = String(raw.error)
-  if (typeof raw.finishedAt === 'number') run.finishedAt = raw.finishedAt
+  if (typeof raw.finishedAt === 'number' && raw.finishedAt > 0) run.finishedAt = raw.finishedAt
+  if (typeof raw.total === 'number' && raw.total > 0) run.total = raw.total
+  if (typeof raw.startedAt === 'number' && raw.startedAt > 0) run.startedAt = raw.startedAt
+  if (typeof raw.current === 'string' && raw.current) run.current = raw.current
   return run
 }
 
@@ -399,6 +427,22 @@ export function rankResults(results: TestResult[], previous: Record<string, Test
 }
 
 /** Counts per status. */
+/**
+ * The run to show after `next`: a narrow run (filter, or another mode) adds to the last one instead of replacing it,
+ * so red tests it did not contain stay red (marked `carried`) until a run that contains them turns them green.
+ * Idempotent: merging the same run again keeps the same carried tests.
+ */
+export function mergeRuns<R extends TestRun>(prev: TestRun | undefined, next: R): R {
+  if (!prev) return next
+  const replaces = !next.filter && (!next.mode || !prev.mode || next.mode === prev.mode)
+  if (replaces) return next
+  const names = new Set(next.results.map(r => r.fullName))
+  const carried = prev.results
+    .filter(r => r.status === 'Failed' && !names.has(r.fullName))
+    .map(r => ({ ...r, carried: true }))
+  return carried.length ? { ...next, results: [...next.results, ...carried] } : next
+}
+
 export function countResults(results: TestResult[]): {
   passed: number
   failed: number
@@ -455,7 +499,7 @@ export interface TestFilterPreset {
  *   "bannedApis": [{ "glob": "Assets/Game/Sim/**", "patterns": ["System.Random", "DateTime.Now"] }],
  *   "restoreBeforeCommit": ["Packages/packages-lock.json"],
  *   "syncReminders": [{ "glob": "**\/texts.*.json", "message": "Run the text sync job" }],
- *   "customJobs": [{ "name": "Smoke", "command": "node tools/smoke.mjs", "batch": true }],
+ *   "customJobs": [{ "name": "Smoke", "label": "Rauchtest", "description": "Startet das Spiel kurz", "command": "node tools/smoke.mjs", "batch": true }],
  *   "playRestart": { "*.cs": "restart", "*.json": "reload" },
  *   "refreshWhilePlaying": false,
  *   "watchdogMinutes": 30,
@@ -482,7 +526,8 @@ export interface ProjectConfig {
   restoreBeforeCommit?: string[]
   syncReminders?: { glob: string; message: string }[]
   /** Shell commands as pane buttons/tools; `batch: true` → only when no editor holds the project. */
-  customJobs?: { name: string; command: string; batch?: boolean }[]
+  /** `label`: the button's text (default `name`); `description`: one line under the job buttons. */
+  customJobs?: { name: string; command: string; batch?: boolean; label?: string; description?: string }[]
   /** glob → `restart` (Play must restart) | `reload` | any hint text. */
   playRestart?: Record<string, string>
   /** Let the compile gate refresh an editor that is in Play mode (default false: never disturb a running game). */
@@ -548,7 +593,13 @@ export function parseProjectConfig(text: string): ProjectConfig {
   if (Array.isArray(raw.customJobs))
     cfg.customJobs = (raw.customJobs as Record<string, unknown>[])
       .filter(j => str(j?.name) && str(j?.command))
-      .map(j => ({ name: String(j.name), command: String(j.command), ...(j.batch === true ? { batch: true } : {}) }))
+      .map(j => ({
+        name: String(j.name),
+        command: String(j.command),
+        ...(j.batch === true ? { batch: true } : {}),
+        ...(str(j.label) ? { label: String(j.label) } : {}),
+        ...(str(j.description) ? { description: String(j.description) } : {}),
+      }))
   if (typeof raw.refreshWhilePlaying === 'boolean') cfg.refreshWhilePlaying = raw.refreshWhilePlaying
   if (typeof raw.watchdogMinutes === 'number' && raw.watchdogMinutes > 0) cfg.watchdogMinutes = raw.watchdogMinutes
   return cfg

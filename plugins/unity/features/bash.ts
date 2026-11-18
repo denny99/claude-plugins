@@ -10,6 +10,7 @@ import type { EngineInterface } from 'claude-code'
 
 import {
   commitReason,
+  lockDiffEntries,
   gitCommits,
   metaFindings,
   metaReason,
@@ -56,7 +57,22 @@ export async function commitGuardReason(
       log: () => undefined,
     })
     if (st.code !== 0) continue
-    const reason = commitReason(parsePorcelain(st.stdout), root === sessionRoot ? undefined : root)
+    // A bridge update shows up as a changed lock entry: only the bridge entry → fine to commit; mixed → keep that hunk.
+    const modified: { staged: boolean; path: string }[] = []
+    const mixed: string[] = []
+    for (const x of parsePorcelain(st.stdout)) {
+      if (/(^|\/)packages-lock\.json$/.test(x.path)) {
+        const d = await host.run('git', ['-C', root, 'diff', '-U60', 'HEAD', '--', `:(top)${x.path}`], {
+          cwd: root,
+          log: () => undefined,
+        })
+        const e = d.code === 0 ? lockDiffEntries(d.stdout) : { bridge: false, other: true }
+        if (e.bridge && !e.other) continue
+        if (e.bridge) mixed.push(x.path)
+      }
+      modified.push(x)
+    }
+    const reason = commitReason(modified, root === sessionRoot ? undefined : root, mixed)
     if (reason) return reason
   }
   return undefined

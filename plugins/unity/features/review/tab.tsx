@@ -39,7 +39,7 @@ import {
   reportsDir,
   type ReviewData,
 } from './store'
-import { describeMarks, markedSvg, SVG_IMAGE_LIMIT } from './viewer'
+import { describeMarks, markedSvg, marksLine, SVG_IMAGE_LIMIT } from './viewer'
 import { openReport, reportCard, sendStoredReport } from './report'
 
 type El = (props: Record<string, unknown>) => RenderElement
@@ -188,7 +188,7 @@ export async function sendView($: EngineInterface, options: Options, fits: boole
     ...marks,
     saved.frame ? `Bild: ${saved.frame}` : '',
     saved.svg ? `Markierungen (SVG über dem Bild): ${saved.svg}` : '',
-    'Bild mit Markierungen: mcp__unity__unity_review_feedback',
+    marksLine(marks.length, true),
   ].filter(Boolean)
   await patchReview($, {
     view: undefined,
@@ -198,10 +198,27 @@ export async function sendView($: EngineInterface, options: Options, fits: boole
   await $.prompt.submit({ text: text.join('\n') })
 }
 
-export async function loadSounds($: EngineInterface, options: Options): Promise<void> {
+/** Pending automatic re-fetch after a failed load (one chain at a time). */
+let soundRetry = false
+const SOUND_RETRY_MS = 5000
+const SOUND_RETRIES = 24
+
+/**
+ * Fetches list + mix from the sound board. When the bridge is down or busy (a test run blocks the editor), it tries
+ * again on its own every 5 s for two minutes, as long as the error card still stands.
+ */
+export async function loadSounds($: EngineInterface, options: Options, tries = SOUND_RETRIES): Promise<void> {
   const list = await soundList($, options)
-  const mix = await mixGet($, options)
-  const err = play.isPlayError(list) ? list.error : play.isPlayError(mix) ? mix.error : undefined
+  const mix = play.isPlayError(list) ? list : await mixGet($, options)
+  const failed = play.isPlayError(list) ? list : play.isPlayError(mix) ? mix : undefined
+  const err = failed?.error
+  if (failed && (failed.code === 'bridge-down' || failed.code === 'bridge-busy') && tries > 0 && !soundRetry) {
+    soundRetry = true
+    $.clock.after(SOUND_RETRY_MS, () => {
+      soundRetry = false
+      void readReview($).then(s => (s.sounds?.error ? loadSounds($, options, tries - 1) : undefined))
+    })
+  }
   await patchReview($, s => ({
     sounds: {
       list: play.isPlayError(list) ? [] : list.sounds.map(x => ({ ...x, group: x.group ?? '' })),
@@ -286,33 +303,40 @@ function questionCard(
       CardTitle(k, {
         icon,
         title: q.title,
-        pill: q.kind === 'entscheiden' ? { text: 'Entscheiden', tone: 'info', glyph: false } : undefined,
+        // no "Entscheiden" pill: the sub tab says it already, and the title gets the room
       }),
       q.text ? Sentence(k, q.text) : null,
       acts.length ? Actions(k, `rv-acts-${q.id}`, acts, 3) : null,
-      choices.length
-        ? Actions(
+      choices.length && q.kind === 'entscheiden'
+        ? decisionChoices(
             k,
-            `rv-choices-${q.id}`,
-            choices.map((c, i) => ({
-              key: `rv-choice-${q.id}-${i}`,
-              label: q.kind === 'entscheiden' ? `${letter(i)} · ${c}` : c,
-              icon: choiceIcon(c),
-              variant: 'secondary' as const,
-              onPress: () =>
-                void answerItem(
-                  $,
-                  options,
-                  q.id,
-                  q.kind === 'entscheiden' ? 'kommentar' : verdictOf(c, draft),
-                  q.kind === 'entscheiden' ? c : null,
-                  draft,
-                  s.attachShot,
-                ),
-            })),
-            4,
+            q.id,
+            choices,
+            c => () => void answerItem($, options, q.id, 'kommentar', c, draft, s.attachShot),
           )
-        : null,
+        : choices.length
+          ? Actions(
+              k,
+              `rv-choices-${q.id}`,
+              choices.map((c, i) => ({
+                key: `rv-choice-${q.id}-${i}`,
+                label: q.kind === 'entscheiden' ? `${letter(i)} · ${c}` : c,
+                icon: choiceIcon(c),
+                variant: 'secondary' as const,
+                onPress: () =>
+                  void answerItem(
+                    $,
+                    options,
+                    q.id,
+                    q.kind === 'entscheiden' ? 'kommentar' : verdictOf(c, draft),
+                    q.kind === 'entscheiden' ? c : null,
+                    draft,
+                    s.attachShot,
+                  ),
+              })),
+              4,
+            )
+          : null,
       Input
         ? Input({
             key: `rv-comment-${q.id}`,
@@ -323,20 +347,25 @@ function questionCard(
             onSubmit: (v: string) => void answerItem($, options, q.id, 'kommentar', null, v, s.attachShot),
           })
         : null,
+      // One "Antworten": the comment field's own submit button; a separate one only where there is no field.
       Actions(
         k,
         `rv-send-${q.id}`,
         [
-          {
-            key: `rv-answer-${q.id}`,
-            label: 'Antworten',
-            icon: 'check',
-            variant: 'primary',
-            onPress: () => void answerItem($, options, q.id, 'kommentar', null, draft, s.attachShot),
-          },
+          ...(Input
+            ? []
+            : [
+                {
+                  key: `rv-answer-${q.id}`,
+                  label: 'Antworten',
+                  icon: 'check' as const,
+                  variant: 'primary' as const,
+                  onPress: () => void answerItem($, options, q.id, 'kommentar', null, draft, s.attachShot),
+                },
+              ]),
           {
             key: `rv-shot-${q.id}`,
-            label: s.attachShot ? 'Screenshot kommt mit' : 'Ohne Screenshot',
+            label: shotToggleLabel(s.attachShot),
             variant: 'link',
             onPress: () => void patchReview($, x => ({ attachShot: !x.attachShot })),
           },
@@ -345,6 +374,11 @@ function questionCard(
       ),
     ],
   })
+}
+
+/** The screenshot switch as a checkbox, so it reads as a switch and not as a note: "☑ Screenshot mitschicken". */
+export function shotToggleLabel(on: boolean): string {
+  return `${on ? '☑' : '☐'} Screenshot mitschicken`
 }
 
 function storedReportRow(
@@ -450,7 +484,7 @@ function soundsBody(
       EmptyState(k, {
         icon: 'speaker',
         title: 'Klänge aus dem Spiel',
-        text: 'Liste und Mix kommen über die Bridge vom Soundboard des Projekts.',
+        text: 'Liste und Mix kommen aus dem Unity-Editor vom Soundboard des Projekts.',
         action: {
           key: 'rv-snd-load',
           label: 'Klänge holen',
@@ -466,7 +500,19 @@ function soundsBody(
       Card(k, {
         key: 'rv-snd-err',
         tone: 'warn',
-        children: [CardTitle(k, { icon: 'alert', title: 'Soundboard nicht erreichbar' }), Sentence(k, snd.error)],
+        children: [
+          CardTitle(k, { icon: 'alert', title: 'Soundboard nicht erreichbar' }),
+          Sentence(k, snd.error),
+          Actions(k, 'rv-snd-err-acts', [
+            {
+              key: 'rv-snd-retry',
+              label: 'Nochmal holen',
+              icon: 'refresh',
+              variant: 'secondary',
+              onPress: () => void loadSounds($, options),
+            },
+          ]),
+        ],
       }),
     )
   if (snd.mix.length)
@@ -571,14 +617,14 @@ function soundsBody(
           [
             {
               key: 'rv-mode-near',
-              label: 'neben dir',
+              label: 'Klang an der Figur (3D)',
               icon: snd.mode === 'near' ? 'check' : 'circle',
               variant: 'secondary',
               onPress: () => void setSoundMode($, 'near'),
             },
             {
               key: 'rv-mode-flat',
-              label: 'flach',
+              label: 'ohne Raum (2D)',
               icon: snd.mode === 'flat' ? 'check' : 'circle',
               variant: 'secondary',
               onPress: () => void setSoundMode($, 'flat'),
@@ -972,7 +1018,6 @@ export async function reviewTab(
       tabs: SUBS.map(x => ({ id: x.id, label: x.label, icon: x.icon, count: counts[x.id] || undefined })),
       active: sub,
       keyPrefix: 'rv-tab-',
-      maxVisible: k.narrow ? 3 : 6,
       moreLabel: 'Mehr',
       onSelect: id => void patchReview($, { sub: id, open: undefined, notice: undefined }),
     }),
@@ -986,6 +1031,32 @@ export async function reviewTab(
   return (
     <Box key="rv" flexDirection="column" gap={1}>
       {parts.filter(Boolean)}
+    </Box>
+  )
+}
+
+/**
+ * The options of a decision, one per row: a short letter button ("A") and the whole option as wrapping text beside it,
+ * so a long option is read in full before it is chosen (a native Button cuts its label). The button's accessible
+ * label carries the whole option.
+ */
+function decisionChoices(k: Kit, id: string, choices: string[], choose: (c: string) => () => void): RenderElement {
+  const { Box, Button } = k
+  return (
+    <Box key={`rv-choices-${id}`} flexDirection="column" gap={k.graphical ? 'xs' : 0}>
+      {choices.map((c, i) => {
+        const letter = String.fromCharCode(65 + i)
+        return (
+          <Box key={`rv-choice-row-${id}-${i}`} flexDirection="row" alignItems="center" gap={1}>
+            <Box flexShrink={0}>
+              <Button key={`rv-choice-${id}-${i}`} label={`${letter} · ${c}`} variant="secondary" onPress={choose(c)}>
+                {letter}
+              </Button>
+            </Box>
+            {Sentence(k, c)}
+          </Box>
+        )
+      })}
     </Box>
   )
 }

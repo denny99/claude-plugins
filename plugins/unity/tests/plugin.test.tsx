@@ -123,7 +123,7 @@ test('lockfile rule: batch tests refused while an editor holds the lock, started
   const refused = JSON.stringify(
     await settle(held, $.tool.call({ tool: 'mcp__unity__unity_run_tests', mode: 'EditMode' })),
   )
-  expect(refused).toContain('An editor holds Temp/UnityLockfile')
+  expect(refused).toContain('Ein Editor hat das Projekt offen (Sperrdatei)')
   expect(held.calls.some(c => c.tool === 'Bash')).toBe(false)
   expect(held.argv.some(a => a.startsWith('lsof -t /g/unity/Temp/UnityLockfile'))).toBe(true)
 })
@@ -153,7 +153,7 @@ test('an editor run left running while the heartbeat goes stale reads as aborted
   const again = JSON.stringify(
     await settle(world, $.tool.call({ tool: 'mcp__unity__unity_run_tests', mode: 'EditMode' })),
   )
-  expect(again).toContain('background task')
+  expect(again).toContain('Hintergrund-Task')
 })
 
 test('batch tests start as a background shell with the editor env; exit 2 parses NUnit results', async ($, on) => {
@@ -162,7 +162,7 @@ test('batch tests start as a background shell with the editor env; exit 2 parses
   const started = JSON.stringify(
     await settle(world, $.tool.call({ tool: 'mcp__unity__unity_run_tests', mode: 'EditMode', filter: 'A;B' })),
   )
-  expect(started).toContain('background task b1')
+  expect(started).toContain('Hintergrund-Task b1')
   const bash = world.calls.find(c => c.tool === 'Bash') as { command: string; run_in_background: boolean }
   expect(bash.run_in_background).toBe(true)
   expect(bash.command).toContain(
@@ -200,7 +200,7 @@ test('the pane renders on every surface; Play and Fix with Claude work', async (
   await settle(world, ui.press({ key: 'play' }))
   expect(world.bridge.isPlaying).toBe(true)
   await settle(world, ui.press({ key: 'cfix-0' }))
-  expect(world.prompts[0]).toContain('Fix this Unity compile error')
+  expect(world.prompts[0]).toContain('Behebe diesen Unity-Kompilierfehler')
   await ui.unmount()
 })
 

@@ -47,6 +47,12 @@ export function markedSvg(href: string, size: { width: number; height: number },
 }
 
 /** The marks in words for Claude: tool, colour and where (percent of width/height). */
+/** The prompt line about marks: none, or where Claude fetches the picture with them (when there is one). */
+export function marksLine(count: number, picture: boolean): string {
+  if (!count) return 'Markierungen: keine'
+  return picture ? 'Bild mit Markierungen holen mit unity_review_feedback' : ''
+}
+
 export function describeMarks(marks: ReviewMark[]): string[] {
   const pct = (v: number) => `${Math.round(v * 100)}%`
   return marks.map((m, i) => {

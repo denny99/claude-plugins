@@ -4,8 +4,8 @@ import type { EngineInterface, RenderElement } from 'claude-code'
 import type { UnityModel } from '../../types'
 import { batchAllowed } from '../../lib/unity'
 import { Actions, Card, CardTitle, KeyValue, ListRow, ProblemCard, Sentence, type Action, type Kit } from '../../lib/ui'
-import { batchTarget, configOf, createWorktree, useMainTarget, type Options } from '../state'
-import { run } from './common'
+import { batchTarget, configOf, createWorktree, useCheckout, useMainTarget, type Options } from '../state'
+import { localStamp, run } from './common'
 
 export function targetTab($: EngineInterface, k: Kit, m: UnityModel, options: Options): RenderElement {
   const { Box } = k
@@ -16,7 +16,7 @@ export function targetTab($: EngineInterface, k: Kit, m: UnityModel, options: Op
   const editorState = m.bridge.up
     ? 'Editor offen und verbunden'
     : m.lock === 'held'
-      ? 'Editor offen, ohne Bridge'
+      ? 'Editor offen, aber nicht verbunden'
       : m.lock === 'stale'
         ? 'alte Sperrdatei, kein Editor'
         : 'kein Editor'
@@ -28,7 +28,7 @@ export function targetTab($: EngineInterface, k: Kit, m: UnityModel, options: Op
       icon: 'branch',
       variant: 'secondary',
       onPress: run($, 'worktree', async () => {
-        const stamp = new Date(await $.clock.now()).toISOString().slice(0, 16).replace(/[-:T]/g, '')
+        const stamp = localStamp(await $.clock.now())
         return createWorktree($, options, `batch-${stamp}`)
       }),
     })
@@ -81,6 +81,26 @@ export function targetTab($: EngineInterface, k: Kit, m: UnityModel, options: Op
                         : 'gesperrt: ein anderer Editor hat es offen',
               })
             : null,
+          ...(m.checkouts ?? [])
+            .filter(c => c.path !== wt?.path)
+            .slice(0, 6)
+            .map((c, i) =>
+              ListRow(k, {
+                key: `target-co-${i}`,
+                status: 'idle',
+                title: `${c.main ? 'Haupt-Checkout' : 'Worktree'} ${c.name}`,
+                meta: c.branch ?? 'ohne Branch',
+                actions: [
+                  {
+                    key: `target-use-${i}`,
+                    label: 'Nutzen',
+                    icon: 'branch',
+                    variant: 'secondary',
+                    onPress: run($, 'worktree', () => useCheckout($, options, c.path)),
+                  },
+                ],
+              }),
+            ),
           !allowed.ok && allowed.reason ? Sentence(k, allowed.reason, { faint: true }) : null,
           KeyValue(k, {
             key: 'target-kv',
@@ -101,7 +121,7 @@ export function targetTab($: EngineInterface, k: Kit, m: UnityModel, options: Op
                 key: 'config-kv',
                 rows: [
                   { label: 'Test-Bereiche', value: String(m.presets.length) },
-                  { label: 'Werkzeuge', value: String(cfg.customJobs?.length ?? 0) },
+                  { label: 'Aufgaben', value: String(cfg.customJobs?.length ?? 0) },
                   ...(cfg.restoreBeforeCommit?.length
                     ? [{ label: 'Vor Commit zurück', value: cfg.restoreBeforeCommit.join(', ') }]
                     : []),
@@ -115,7 +135,7 @@ export function targetTab($: EngineInterface, k: Kit, m: UnityModel, options: Op
               CardTitle(k, { icon: 'sliders', title: 'Projekt-Einstellungen', pill: { text: 'fehlt', tone: 'warn' } }),
               Sentence(
                 k,
-                'Mit einer .claude/unity.json kennt das Panel eure Test-Bereiche und Werkzeuge. Claude schreibt einen Entwurf aus der Code-Karte; du entscheidest, ob er gespeichert wird.',
+                'Mit einer .claude/unity.json kennt das Panel eure Test-Bereiche und Aufgaben. Claude schreibt einen Entwurf aus der Code-Karte; du entscheidest, ob er gespeichert wird.',
                 { faint: true },
               ),
               Actions(k, 'config-acts', [
@@ -126,7 +146,7 @@ export function targetTab($: EngineInterface, k: Kit, m: UnityModel, options: Op
                   variant: 'primary',
                   onPress: () =>
                     void $.prompt.submit({
-                      text: 'Run /unity-init, show me the drafted .claude/unity.json and write it only after I approve.',
+                      text: 'Führe /unity-init aus, zeig mir den Entwurf der .claude/unity.json und schreib ihn erst, wenn ich zustimme.',
                     }),
                 },
               ]),
@@ -157,7 +177,11 @@ export function targetTab($: EngineInterface, k: Kit, m: UnityModel, options: Op
             meta: 'z. B. Dateien, die Unity selbst ändert',
             pill: onOff(options.commitGuard),
           }),
-          Sentence(k, 'Umschalten in den Plugin-Einstellungen.', { faint: true }),
+          Sentence(
+            k,
+            'Umschalten: /plugin → unity → Einstellungen („Compile gate“, „.meta guard“, „Restore-before-commit guard“).',
+            { faint: true },
+          ),
         ],
       })}
     </Box>

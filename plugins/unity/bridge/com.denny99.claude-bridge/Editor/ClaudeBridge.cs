@@ -15,6 +15,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using UnityEditor;
 using UnityEditor.Compilation;
@@ -91,7 +92,30 @@ namespace Denny99.ClaudeBridge
             public bool isPaused;
             public int compileSeq;
             public string scene;
+            /// <summary>The active scene's name (also set in Play mode and for an unsaved scene: "Untitled" is "").</summary>
+            public string sceneName;
+            /// <summary>The first enabled scene in the Build Settings (what "open the start scene" opens); "" without one.</summary>
+            public string startScene;
             public bool batchmode;
+            public string bridgeVersion;
+        }
+
+        static string bridgeVersion;
+
+        /// <summary>This package's version from its package.json (via the Package Manager); empty when unknown.</summary>
+        static string BridgeVersion()
+        {
+            if (bridgeVersion != null) return bridgeVersion;
+            try
+            {
+                var info = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(ClaudeBridge).Assembly);
+                bridgeVersion = info != null && info.version != null ? info.version : "";
+            }
+            catch
+            {
+                bridgeVersion = "";
+            }
+            return bridgeVersion;
         }
 
         public static long Now() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -109,9 +133,27 @@ namespace Denny99.ClaudeBridge
                 isPaused = EditorApplication.isPaused,
                 compileSeq = SessionState.GetInt(SeqKey, 0),
                 scene = SceneManager.GetActiveScene().path,
+                sceneName = SceneManager.GetActiveScene().name ?? "",
+                startScene = StartScene(),
                 batchmode = Application.isBatchMode,
+                bridgeVersion = BridgeVersion(),
             };
             WriteAtomic("status.json", JsonUtility.ToJson(s));
+        }
+
+        /// <summary>The first enabled Build Settings scene, "" when none is listed.</summary>
+        static string StartScene()
+        {
+            try
+            {
+                foreach (var sc in EditorBuildSettings.scenes)
+                    if (sc != null && sc.enabled && !string.IsNullOrEmpty(sc.path)) return sc.path;
+            }
+            catch
+            {
+                // best effort
+            }
+            return "";
         }
 
         static void Tick()
@@ -231,6 +273,9 @@ namespace Denny99.ClaudeBridge
                 case "run-tests":
                     Answer(new Result { id = c.id, ok = true, runId = BridgeTests.Run(c.mode, c.filter) });
                     break;
+                case "cancel-tests":
+                    Answer(new Result { id = c.id, ok = true, runId = BridgeTests.Cancel() });
+                    break;
                 case "screenshot":
                     Screenshot(c);
                     break;
@@ -304,6 +349,8 @@ namespace Denny99.ClaudeBridge
                 shotPath = path;
                 shotDone = done;
                 shotFailed = failed;
+                shotWidth = width;
+                shotHeight = height;
                 // Below the plugin's 10 s command timeout, so it gets this error instead of a timeout.
                 shotDeadline = EditorApplication.timeSinceStartup + 7;
                 return;
@@ -335,6 +382,45 @@ namespace Denny99.ClaudeBridge
             done(path.Replace('\\', '/'));
         }
 
+        static int shotWidth, shotHeight;
+
+        /// <summary>
+        /// Shrinks a Play-mode capture (ScreenCapture writes the Game view's size) to fit width x height, aspect kept.
+        /// Best effort: a file that cannot be read or scaled stays as written. Untested in the editor.
+        /// </summary>
+        static void ScaleShot(string path, int width, int height)
+        {
+            Texture2D src = null, dst = null;
+            RenderTexture rt = null;
+            var prevActive = RenderTexture.active;
+            try
+            {
+                src = new Texture2D(2, 2);
+                if (!src.LoadImage(File.ReadAllBytes(path))) return;
+                var scale = Mathf.Min(width / (float)src.width, height / (float)src.height);
+                if (scale >= 1f) return;
+                int w = Mathf.Max(1, Mathf.RoundToInt(src.width * scale)), h = Mathf.Max(1, Mathf.RoundToInt(src.height * scale));
+                rt = RenderTexture.GetTemporary(w, h, 0);
+                Graphics.Blit(src, rt);
+                RenderTexture.active = rt;
+                dst = new Texture2D(w, h, TextureFormat.RGB24, false);
+                dst.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                dst.Apply();
+                File.WriteAllBytes(path, dst.EncodeToPNG());
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[ClaudeBridge] could not scale screenshot: " + e.Message);
+            }
+            finally
+            {
+                RenderTexture.active = prevActive;
+                if (rt != null) RenderTexture.ReleaseTemporary(rt);
+                if (src != null) UnityEngine.Object.DestroyImmediate(src);
+                if (dst != null) UnityEngine.Object.DestroyImmediate(dst);
+            }
+        }
+
         static void CheckShot()
         {
             var path = shotPath;
@@ -342,6 +428,7 @@ namespace Denny99.ClaudeBridge
             if (File.Exists(path) && new FileInfo(path).Length > 0)
             {
                 shotPath = null;
+                if (shotWidth > 0 && shotHeight > 0) ScaleShot(path, shotWidth, shotHeight);
                 done(path.Replace('\\', '/'));
             }
             else if (EditorApplication.timeSinceStartup > shotDeadline)
@@ -410,6 +497,8 @@ namespace Denny99.ClaudeBridge
             var f = new CompileFile { seq = seq, finishedAt = Now() };
             lock (pendingMessages) f.messages.AddRange(pendingMessages);
             WriteAtomic("compile.json", JsonUtility.ToJson(f));
+            // Unity drops fixed compile errors from its own console after a clean compile; the bridge's copy follows.
+            if (!f.messages.Exists(m => m.severity == "error")) DropCompileErrors();
             WriteStatus();
         }
 
@@ -429,6 +518,19 @@ namespace Denny99.ClaudeBridge
         class ConsoleFile
         {
             public List<ConsoleEntry> entries = new List<ConsoleEntry>();
+        }
+
+        // "Assets/A.cs(5,6): error CS1001: ..." as Unity logs a compile error.
+        static readonly System.Text.RegularExpressions.Regex CompileErrorLine = new System.Text.RegularExpressions.Regex(
+            @"\(\d+,\d+\)\s*:\s*error\s+[A-Z]+\d+\s*:");
+
+        static void DropCompileErrors()
+        {
+            lock (consoleLock)
+            {
+                var removed = console.RemoveAll(e => e != null && e.type == "Error" && e.message != null && CompileErrorLine.IsMatch(e.message));
+                if (removed > 0) consoleDirty = true;
+            }
         }
 
         static void OnLog(string message, string stack, LogType type)
@@ -511,6 +613,8 @@ namespace Denny99.ClaudeBridge
             catch { /* next cleanup */ }
         }
 
+        const int MaxShots = 10;
+
         static void Cleanup()
         {
             try
@@ -520,6 +624,11 @@ namespace Denny99.ClaudeBridge
                     if (File.GetLastWriteTimeUtc(f) < cutoff) TryDelete(f);
                 foreach (var f in Directory.GetFiles(Dir, "*.tmp"))
                     if (File.GetLastWriteTimeUtc(f) < cutoff) TryDelete(f);
+                // Overview screenshots: only the newest few stay (each is 1-2 MB).
+                var shots = Path.Combine(Dir, "shots");
+                if (Directory.Exists(shots))
+                    foreach (var f in Directory.GetFiles(shots, "shot-*.png").OrderByDescending(x => File.GetLastWriteTimeUtc(x)).Skip(MaxShots))
+                        TryDelete(f);
             }
             catch
             {

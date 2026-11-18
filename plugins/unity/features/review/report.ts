@@ -19,11 +19,13 @@ import {
   nowStamp,
   patchReview,
   readReview,
+  ensureReportsIgnored,
   reportsDir,
   reviewRoot,
 } from './store'
-import { describeMarks } from './viewer'
+import { describeMarks, marksLine } from './viewer'
 import { newView, saveMarks } from './tab'
+import { bridgeUpdateAction } from '../pane/common'
 
 type El = (props: Record<string, unknown>) => RenderElement
 
@@ -37,10 +39,26 @@ export const REPORT_KINDS: { id: string; icon: IconName }[] = [
 
 export const MEASURE_SECONDS = 10
 
+/**
+ * Facts for the report card: the project's spot (IClaudeSpotProvider) when it reports one, else what the bridge knows
+ * itself (scene, camera) plus why there is no spot.
+ */
+export function captureFacts(shot: play.CaptureResult): string[] {
+  const facts = spotFacts(shot.spot)
+  if (facts.length) return facts
+  const out: string[] = []
+  if (shot.scene) out.push(`Szene ${shot.scene.split('/').pop()?.replace(/\.unity$/, '') ?? shot.scene}`)
+  const p = shot.camera?.position
+  if (p) out.push(`Kamera ${p.map(n => Math.round(n)).join(' / ')}`)
+  out.push(shot.provider ? 'Stelle: Projekt meldet hier keine' : 'Stelle unbekannt (Projekt meldet keine Stelle)')
+  return out
+}
+
 /** Header button: capture now (full picture for Claude + a small one the pane can draw), open the report card. */
 export async function openReport($: EngineInterface, options: Options): Promise<void> {
   const { root, cfg } = await reviewRoot($)
   const dir = reportsDir(root, cfg)
+  await ensureReportsIgnored($, root, cfg)
   const t = await nowStamp($)
   const full = join(dir, `report-${t.file}.png`)
   const small = join(dir, `report-${t.file}-klein.png`)
@@ -57,7 +75,7 @@ export async function openReport($: EngineInterface, options: Options): Promise<
     preview: shown,
     spot: shot.spot ?? null,
     spotLine: spotText(shot.spot),
-    facts: spotFacts(shot.spot),
+    facts: captureFacts(shot),
     note: '',
     measure: false,
   }
@@ -85,7 +103,7 @@ function reportText(r: Report, marks: string[], svg: string | undefined): string
     svg ? `Markierungen (SVG über dem Bild): ${svg}` : '',
     spotText(r.spot) ? `Stelle (für unity goto): ${spotText(r.spot)}` : '',
     r.perf ? `Leistung: ${r.perf}` : '',
-    r.screenshot ? 'Bild mit Markierungen: mcp__unity__unity_review_feedback' : '',
+    marksLine(marks.length, !!r.screenshot),
   ]
     .filter(Boolean)
     .join('\n')
@@ -179,6 +197,9 @@ export async function sendStoredReport($: EngineInterface, _options: Options, r:
   await $.prompt.submit({ text })
 }
 
+/** The error text of lib/play.ts playError for code `outdated`. */
+const OUTDATED = /Update com\.denny99\.claude-bridge/
+
 /** The report card (above the viewer that shows the picture to paint on). */
 export async function reportCard(
   $: EngineInterface,
@@ -195,12 +216,15 @@ export async function reportCard(
       title: 'Kein Screenshot',
       cause: r.error,
       tone: 'warn',
-      action: {
-        key: 'rv-report-retry',
-        label: 'Nochmal versuchen',
-        icon: 'camera',
-        onPress: () => void openReport($, options),
-      },
+      // An old bridge cannot capture: trying again changes nothing, updating it does.
+      action: OUTDATED.test(r.error)
+        ? bridgeUpdateAction($, options)
+        : {
+            key: 'rv-report-retry',
+            label: 'Nochmal versuchen',
+            icon: 'camera',
+            onPress: () => void openReport($, options),
+          },
       more: [
         { key: 'rv-report-cancel', label: 'Abbrechen', onPress: () => void patchReview($, { report: undefined }) },
       ],

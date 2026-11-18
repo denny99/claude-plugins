@@ -162,14 +162,62 @@ export function parsePorcelain(text: string): { staged: boolean; path: string }[
   return out
 }
 
-/** The deny reason for a commit while restore-before-commit files are modified, or undefined. */
-export function commitReason(modified: { staged: boolean; path: string }[], gitDir?: string): string | undefined {
+export const BRIDGE_PACKAGE_ID = 'com.denny99.claude-bridge'
+
+/**
+ * Which entries of Packages/packages-lock.json a `git diff` (with enough context, e.g. -U60) changes: the bridge's
+ * own entry (a bridge update, wanted) and/or any other (local churn). A changed line before any entry key counts as
+ * other.
+ */
+export function lockDiffEntries(diff: string): { bridge: boolean; other: boolean } {
+  let bridge = false
+  let other = false
+  let current: string | undefined
+  let inHunk = false
+  for (const line of diff.split(/\r?\n/)) {
+    if (line.startsWith('@@')) {
+      inHunk = true
+      current = undefined
+      continue
+    }
+    if (!inHunk || line.startsWith('+++') || line.startsWith('---')) continue
+    const key = /^[ +-] {4}"([^"]+)":\s*\{/.exec(line)
+    if (key) current = key[1]
+    else if (/^[ +-] {0,2}[}\]]/.test(line)) current = undefined
+    if (line[0] !== '+' && line[0] !== '-') continue
+    if (current === BRIDGE_PACKAGE_ID) bridge = true
+    else other = true
+  }
+  return { bridge, other }
+}
+
+/**
+ * The deny reason for a commit while restore-before-commit files are modified, or undefined. `bridgeMixed` lists lock
+ * files whose change includes a bridge update next to churn: that entry may land, the rest goes back.
+ */
+export function commitReason(
+  modified: { staged: boolean; path: string }[],
+  gitDir?: string,
+  bridgeMixed: string[] = [],
+): string | undefined {
   if (!modified.length) return undefined
   const git = gitDir ? `git -C ${shQuote(gitDir)}` : 'git'
-  const fix = modified.map(m => `${git} checkout ${m.staged ? 'HEAD ' : ''}-- ${shQuote(m.path)}`)
+  const fix = modified.flatMap(m =>
+    bridgeMixed.includes(m.path)
+      ? [
+          `${git} add -p -- ${shQuote(m.path)}   # stage only the ${BRIDGE_PACKAGE_ID} entry (bridge update)`,
+          `${git} checkout -- ${shQuote(m.path)}   # then drop the rest`,
+        ]
+      : [`${git} checkout ${m.staged ? 'HEAD ' : ''}-- ${shQuote(m.path)}`],
+  )
   return [
     `Unity: ${modified.map(m => m.path).join(', ')} ${modified.length > 1 ? 'are' : 'is'} modified and listed under restoreBeforeCommit in .claude/unity.json (it churns locally and must not land in a commit).`,
-    `Restore it first, then commit again:`,
+    ...(bridgeMixed.length
+      ? [
+          `${bridgeMixed.join(', ')} also changes the ${BRIDGE_PACKAGE_ID} entry: that is a bridge update and may be committed (restoring it would pin the old bridge again). Keep only that entry.`,
+        ]
+      : []),
+    bridgeMixed.length ? 'Then commit again:' : `Restore it first, then commit again:`,
     ...fix.map(f => `  ${f}`),
   ].join('\n')
 }
@@ -434,5 +482,6 @@ export function metaReason(line: string, findings: MetaFinding[]): string | unde
       : []),
     'Run this instead:',
     `  ${fixed}`,
+    'Safest ways: `git mv` for the file and its .meta (git keeps the history), or move/delete it in the Unity editor\'s Project window, which takes the .meta along. Already moved without the .meta? Move the leftover .meta next to the file the same way (`git mv old.meta new.meta`).',
   ].join('\n')
 }
