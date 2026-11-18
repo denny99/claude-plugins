@@ -44,7 +44,8 @@ export function statusPill(m: UnityModel): PillProps {
   if (!b.up && m.editorElsewhere)
     return { text: `Editor in ${m.editorElsewhere.main ? 'Haupt-Checkout' : m.editorElsewhere.name}`, tone: 'warn' }
   if (!b.up) return { text: b.why === 'stale' ? 'antwortet nicht' : 'nicht verbunden', tone: 'bad' }
-  if (b.isCompiling) return { text: 'kompiliert', tone: 'warn', glyph: '◷' }
+  // Entering Play reloads the domain (isCompiling for a moment); the heartbeat's isPlaying wins.
+  if (b.isCompiling && !b.isPlaying) return { text: 'kompiliert', tone: 'warn', glyph: '◷' }
   if (testsRunning(m)) return { text: 'Tests laufen', tone: 'warn', glyph: '◷' }
   if (b.isPlaying) return { text: b.isPaused ? 'pausiert' : 'Play-Modus', tone: 'info', icon: 'play' }
   if (bridgeOutdated(m)) return { text: `Bridge ${m.bridgeInstalled} veraltet`, tone: 'warn' }

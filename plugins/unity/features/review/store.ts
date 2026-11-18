@@ -208,6 +208,21 @@ export async function appendAnswer(
   return full
 }
 
+/**
+ * The default report folder sits inside the repo: a `.gitignore` with `*` keeps screenshots and reports out of
+ * `git status` (written once; a configured `review.reports` folder is left alone).
+ */
+export async function ensureReportsIgnored($: EngineInterface, root: string, cfg?: ReviewConfig): Promise<void> {
+  if (cfg?.reports && cfg.reports !== DEFAULT_REPORTS) return
+  const file = join(reportsDir(root, cfg), '.gitignore')
+  try {
+    if (!(await $.fs.exists(file)))
+      await $.fs.write(file, '# Unity-Panel: Meldungen und Screenshots, nicht einchecken\n*\n')
+  } catch {
+    // best effort: the report itself still works
+  }
+}
+
 export async function appendReport($: EngineInterface, r: Report): Promise<void> {
   const { root, cfg } = await reviewRoot($)
   const path = join(reportsDir(root, cfg), 'reports.jsonl')

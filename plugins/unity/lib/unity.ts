@@ -285,6 +285,8 @@ export interface TestResult {
   message?: string
   stack?: string
   duration?: number
+  /** Red in an earlier run that did not contain this test (kept until a run with it turns it green). */
+  carried?: boolean
 }
 
 export interface TestRun {
@@ -425,6 +427,22 @@ export function rankResults(results: TestResult[], previous: Record<string, Test
 }
 
 /** Counts per status. */
+/**
+ * The run to show after `next`: a narrow run (filter, or another mode) adds to the last one instead of replacing it,
+ * so red tests it did not contain stay red (marked `carried`) until a run that contains them turns them green.
+ * Idempotent: merging the same run again keeps the same carried tests.
+ */
+export function mergeRuns<R extends TestRun>(prev: TestRun | undefined, next: R): R {
+  if (!prev) return next
+  const replaces = !next.filter && (!next.mode || !prev.mode || next.mode === prev.mode)
+  if (replaces) return next
+  const names = new Set(next.results.map(r => r.fullName))
+  const carried = prev.results
+    .filter(r => r.status === 'Failed' && !names.has(r.fullName))
+    .map(r => ({ ...r, carried: true }))
+  return carried.length ? { ...next, results: [...next.results, ...carried] } : next
+}
+
 export function countResults(results: TestResult[]): {
   passed: number
   failed: number

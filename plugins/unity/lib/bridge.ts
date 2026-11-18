@@ -31,6 +31,10 @@ export interface BridgeStatus {
   isPaused: boolean
   compileSeq: number
   scene?: string
+  /** Active scene's name (newer bridges; set in Play mode, "" for an unsaved "Untitled" scene). */
+  sceneName?: string
+  /** First enabled Build Settings scene (newer bridges; ungetestet im Editor). */
+  startScene?: string
   /** The editor runs with -batchmode (no window: Play-mode screenshots cannot work). Absent from older bridges. */
   batchmode?: boolean
   /** The package version of the bridge itself (absent from bridges before it reported one). */
@@ -101,6 +105,8 @@ export async function readStatus(
   if (raw.unityVersion) status.unityVersion = String(raw.unityVersion)
   if (raw.projectPath) status.projectPath = String(raw.projectPath)
   if (raw.scene) status.scene = String(raw.scene)
+  if (typeof raw.sceneName === 'string' && raw.sceneName) status.sceneName = raw.sceneName
+  if (typeof raw.startScene === 'string' && raw.startScene) status.startScene = raw.startScene
   if (typeof raw.batchmode === 'boolean') status.batchmode = raw.batchmode
   if (typeof raw.bridgeVersion === 'string' && raw.bridgeVersion) status.bridgeVersion = raw.bridgeVersion
   if (now - status.updatedAt > STALE_MS) return { up: false, why: 'stale', status }

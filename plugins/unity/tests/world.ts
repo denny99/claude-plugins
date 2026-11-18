@@ -16,6 +16,8 @@ export type World = {
   calls: Record<string, unknown>[]
   argv: string[]
   prompts: string[]
+  /** Extra heartbeat fields (newer bridge fields, or overrides like isCompiling / scene). */
+  statusExtra: Record<string, unknown>
   bridge: { up: boolean; isPlaying: boolean; compileSeq: number; errors: boolean; nothingToCompile?: boolean }
   clock: { advance(ms: number): Promise<void> }
 }
@@ -54,6 +56,7 @@ export function fakeWorld(
     calls: [],
     argv: [],
     prompts: [],
+    statusExtra: {},
     bridge: { up: opts.bridge ?? true, isPlaying: false, compileSeq: 3, errors: true },
     clock: mock.clock(on, { now: 1000 }),
   }
@@ -66,6 +69,7 @@ export function fakeWorld(
       isPaused: false,
       compileSeq: world.bridge.compileSeq,
       scene: 'Assets/Scenes/Main.unity',
+      ...world.statusExtra,
     })
   const read = (p: string): string | undefined =>
     p === `${BRIDGE}/status.json` && world.bridge.up ? statusText() : files[p]

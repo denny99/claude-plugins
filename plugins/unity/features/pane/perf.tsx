@@ -129,9 +129,10 @@ function runCard($: EngineInterface, k: Kit, options: Options, at: number, p: Mo
       }),
       Sentence(
         k,
-        `${where ? `${where} · ` : ''}${dec(p.seconds, 0)} s · ${thousands(p.frames)} Frames${p.aborted ? ` · abgebrochen: ${p.aborted}` : ''}`,
+        `${where ? `${where} · ` : ''}${perfLength(p)} · ${thousands(p.frames)} Frames${p.aborted ? ` · abgebrochen: ${p.aborted}` : ''}`,
         { faint: true },
       ),
+      outlierNote(p) ? Sentence(k, outlierNote(p)!, { faint: true }) : null,
       Sentence(k, `${dec(p.p50)} ms Median · ${dec(p.p95)} ms p95 · ${dec(p.worst)} ms schlimmster`),
       k.graphical && Svg ? (
         <Box key="perf-chart" flexDirection="column">
@@ -176,8 +177,42 @@ function runCard($: EngineInterface, k: Kit, options: Options, at: number, p: Mo
             ]
           : []),
       ]),
+      p.spot ? null : Sentence(k, NO_SPOT, { faint: true }),
     ],
   })
+}
+
+export const NO_SPOT = 'Stelle unbekannt: das Projekt meldet bei der Messung keine Stelle, darum kein Hinspringen.'
+
+/** The recording's length; says when it ran shorter than asked (older bridges summed frame times). */
+export function perfLength(p: Pick<ModelPerf, 'seconds' | 'requestedSeconds' | 'wallSeconds' | 'aborted'>): string {
+  const s = p.wallSeconds ?? p.seconds
+  const short = !p.aborted && p.requestedSeconds > 0 && s < p.requestedSeconds * 0.9
+  return `${dec(s, 0)} s${short ? ` von ${dec(p.requestedSeconds, 0)} s (die Bridge zählte Frame-Zeiten statt Echtzeit; Bridge aktualisieren)` : ''}`
+}
+
+/** A frame far above the rest (≥ 4× p99 and over 100 ms) counts as an outlier. */
+export function hasOutlier(p: Pick<ModelPerf, 'worst' | 'p99'>): boolean {
+  return p.worst >= 100 && p.worst >= p.p99 * 4
+}
+
+/** Seconds after Play start under which a hitch is likely loading. */
+const WARMUP_S = 10
+
+/** Where the outlier sits and whether the recording started right after Play (loading hitches); '' without one. */
+export function outlierNote(p: Pick<ModelPerf, 'worst' | 'p99' | 'sincePlay' | 'worstAt'>): string {
+  const parts: string[] = []
+  if (hasOutlier(p))
+    parts.push(
+      `Ausreißer: ${dec(p.worst)} ms${p.worstAt !== undefined ? ` bei ${dec(p.worstAt)} s der Messung` : ''}${outlierEarly(p) ? ', vermutlich Lade-/Startruckler' : ''}`,
+    )
+  if (p.sincePlay !== undefined && p.sincePlay < WARMUP_S)
+    parts.push(`Messung begann ${dec(p.sincePlay)} s nach Play-Start`)
+  return parts.join(' · ')
+}
+
+function outlierEarly(p: Pick<ModelPerf, 'sincePlay' | 'worstAt'>): boolean {
+  return p.sincePlay !== undefined && p.sincePlay + (p.worstAt ?? 0) < WARMUP_S
 }
 
 /** Why a recording has no named costs: no source registered, the source gave nothing, or the bridge does not say. */
@@ -201,6 +236,12 @@ export function perfPrompt(at: number, p: ModelPerf): string {
           .join('\n')}`
       : noCostsText(p),
     p.spot ? `Stelle: ${JSON.stringify(p.spot)}` : '',
+    p.sincePlay !== undefined
+      ? `Die Messung begann ${dec(p.sincePlay)} s nach dem Play-Start.`
+      : 'Wie lange nach dem Play-Start gemessen wurde, ist unbekannt.',
+    hasOutlier(p)
+      ? `${outlierNote(p)}. ${outlierEarly(p) ? 'Der Ausreißer liegt in der Ladephase: getrennt bewerten und nicht als Laufzeit-Problem behandeln, außer er wiederholt sich.' : 'Prüfe, ob der Ausreißer ein einmaliger Lade-Ruckler ist, bevor du ihn als Laufzeit-Problem behandelst.'}`
+      : '',
     'Finde die wahrscheinliche Ursache im Code und schlag eine Lösung vor.',
   ]
     .filter(Boolean)

@@ -83,6 +83,12 @@ export interface PerfResult {
   sources?: number
   /** Why the recording stopped early (Play mode ended). */
   aborted?: string
+  /** Wall-clock length of the recording (newer bridges; ungetestet im Editor). */
+  wallSeconds?: number
+  /** Seconds since Play mode started when the recording began (newer bridges). */
+  sincePlay?: number
+  /** Seconds into the recording at which the worst frame ended (newer bridges). */
+  worstAt?: number
   /** The spot at the start of the recording, if the project has a spot provider. */
   spot?: Spot
 }
@@ -171,6 +177,9 @@ export function parsePerf(d: Record<string, unknown>): PerfResult | undefined {
       }
     }),
     ...(typeof p.sources === 'number' ? { sources: p.sources } : {}),
+    ...(typeof p.wallSeconds === 'number' && p.wallSeconds > 0 ? { wallSeconds: p.wallSeconds } : {}),
+    ...(typeof p.sincePlay === 'number' ? { sincePlay: p.sincePlay } : {}),
+    ...(typeof p.worstAt === 'number' ? { worstAt: p.worstAt } : {}),
     ...(aborted ? { aborted } : {}),
     ...(spot ? { spot } : {}),
   }

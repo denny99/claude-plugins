@@ -42,6 +42,7 @@ import {
   parseCompilerMessages,
   parseNUnitXml,
   testReport,
+  mergeRuns,
   type ProjectConfig,
   type TestRun,
 } from '../lib/unity'
@@ -127,6 +128,7 @@ export async function refreshModel($: EngineInterface, options: Options): Promis
     before.worktree?.status === 'ready' ? await lockState(host, before.worktree.projectRoot) : undefined
   const live = await readBridge(host, project.root)
   const installed = live.bridge.version ?? (await installedBridgeVersion(host, project.root))
+  const checkouts = before.tab === 'target' ? await listCheckouts(host, sessionRoot, project.root) : before.checkouts
   const elsewhere =
     !live.bridge.up && live.bridge.why === 'missing'
       ? await findEditorElsewhere(host, sessionRoot, project.root)
@@ -153,8 +155,9 @@ export async function refreshModel($: EngineInterface, options: Options): Promis
     ...(targetLock ? { targetLock } : {}),
     bridgeInstalled: installed,
     editorElsewhere: elsewhere,
+    ...(checkouts ? { checkouts } : {}),
     ...live,
-    tests: live.tests ?? (wasAborted ? aborted : m.tests),
+    tests: live.tests ? mergeRuns(m.tests, live.tests) : wasAborted ? aborted : m.tests,
     ...(fullDone || wasAborted ? { fullPending: undefined } : {}),
     error: undefined,
   }))
@@ -197,9 +200,36 @@ async function readBridge(
   const compile = await readCompile(host.fs, project)
   if (compile)
     out.compile = { seq: compile.seq, at: compile.finishedAt ?? 0, source: 'bridge', messages: compile.messages }
+  // Unity drops fixed compile errors after a clean compile; older bridges keep them in their console copy.
+  if (compile?.finishedAt && !compile.messages.some(x => x.severity === 'error'))
+    out.console = out.console.filter(e => !(isCompileErrorLine(e) && (e.time ?? 0) <= compile.finishedAt!))
+  if (!st.scene && !st.isPlaying) {
+    const start = st.startScene ?? (await buildSettingsStartScene(host, project))
+    if (start) out.startScene = start
+  }
   const tests = await readTests(host.fs, project)
   if (tests) out.tests = tests
   return out
+}
+
+/** "Assets/A.cs(5,6): error CS1001: …" – a compile error as Unity logs it to the console. */
+export function isCompileErrorLine(e: { type: string; message: string }): boolean {
+  return e.type === 'Error' && /\(\d+,\d+\)\s*:\s*error\s+[A-Z]+\d+\s*:/.test(e.message)
+}
+
+/** The first enabled scene in ProjectSettings/EditorBuildSettings.asset (YAML: `- enabled: 1` then `path: …`). */
+export function parseStartScene(text: string): string | undefined {
+  const re = /-\s*enabled:\s*(\d)\s*\n\s*path:\s*(\S[^\n]*)/g
+  for (let m = re.exec(text); m; m = re.exec(text)) if (m[1] === '1' && m[2]) return m[2].trim()
+  return undefined
+}
+
+async function buildSettingsStartScene(host: Host, project: string): Promise<string | undefined> {
+  try {
+    return parseStartScene(await host.fs.read(join(project, 'ProjectSettings', 'EditorBuildSettings.asset')))
+  } catch {
+    return undefined
+  }
 }
 
 /** How long a stale heartbeat still counts as "editor busy" while a test run goes (then: aborted). */
@@ -530,14 +560,26 @@ export async function runTests(
     const res = await sendCommand(host, m.project.root, { cmd: 'run-tests', mode, ...(filter ? { filter } : {}) })
     if (!res.ok) return `Tests nicht gestartet: ${res.error}`
     const runId = String(res.data.runId ?? '')
-    await patchModel($, {
+    const startedAt = await host.now()
+    await patchModel($, x => ({
       previous,
-      tests: { runId, state: 'running', mode, ...(filter ? { filter } : {}), results: [], startedAt: await host.now() },
+      tests: mergeRuns(x.tests, {
+        runId,
+        state: 'running',
+        mode,
+        ...(filter ? { filter } : {}),
+        results: [],
+        startedAt,
+      }),
       fullPending: filter ? undefined : runId,
-    })
+    }))
     if (waitMs <= 0) return `${mode}-Tests im Editor gestartet (Lauf ${runId}). Das Unity-Panel zeigt die Ergebnisse.`
     const run = await awaitBridgeTests(host, m.project.root, runId, waitMs)
-    if (run) await patchModel($, { tests: run, ...(run.state !== 'running' ? { fullPending: undefined } : {}) })
+    if (run)
+      await patchModel($, x => ({
+        tests: mergeRuns(x.tests, run),
+        ...(run.state !== 'running' ? { fullPending: undefined } : {}),
+      }))
     if (run && !filter && fullRunGreen(run)) await recordFullRun($, options)
     if (!run || run.state === 'running')
       return `${mode}-Tests laufen nach ${Math.round(waitMs / 1000)} s noch (Lauf ${runId}). Später unity_test_results aufrufen.`
@@ -612,6 +654,7 @@ export async function affectedTests(
     changedFiles(diff, untracked),
     m.presets,
     projectDir === m.project.root ? '' : projectDir,
+    configOf(m).restoreBeforeCommit ?? [],
   )
   const landings = await refreshLandings($, options)
   let text = affectedText(picked, landings)
@@ -671,6 +714,45 @@ export async function createWorktree($: EngineInterface, options: Options, name:
   }
   await patchModel($, { worktree: { ...worktree, jobKey: started.job.key } })
   return `Worktree ${wt.path} angelegt; Library/ wird im Hintergrund kopiert (Task ${started.job.taskId ?? '?'}). Hintergrund-Läufe wechseln dorthin, sobald die Kopie fertig ist.`
+}
+
+/** `git worktree list --porcelain` → checkouts (the first is the main one). */
+export function parseWorktreeList(text: string): { path: string; branch?: string }[] {
+  const out: { path: string; branch?: string }[] = []
+  for (const line of text.split(/\r?\n/)) {
+    if (line.startsWith('worktree ')) out.push({ path: line.slice(9).trim().replace(/\\/g, '/') })
+    else if (line.startsWith('branch ') && out.length)
+      out[out.length - 1]!.branch = line.slice(7).trim().replace(/^refs\/heads\//, '')
+  }
+  return out
+}
+
+/** The other checkouts of this repo (not the session's own), for the target tab. */
+async function listCheckouts(host: Host, sessionRoot: string, projectRoot: string): Promise<UnityModel['checkouts']> {
+  const top = (await gitOut(host, sessionRoot, ['rev-parse', '--show-toplevel']))?.trim()
+  if (!top) return []
+  const list = parseWorktreeList((await gitOut(host, sessionRoot, ['worktree', 'list', '--porcelain'])) ?? '')
+  const rel = relative(top, projectRoot)
+  const sub = rel && rel !== projectRoot ? rel : ''
+  return list
+    .map((t, i) => ({
+      path: t.path,
+      projectRoot: sub ? join(t.path, sub) : t.path,
+      name: basename(t.path),
+      ...(t.branch ? { branch: t.branch } : {}),
+      main: i === 0,
+    }))
+    .filter(t => t.path !== top)
+}
+
+/** Batch runs go to an existing checkout (worktree or main checkout of another session). */
+export async function useCheckout($: EngineInterface, options: Options, path: string): Promise<string> {
+  const m = await readModel($)
+  const c = m.checkouts?.find(x => x.path === path)
+  if (!c) return 'Diesen Worktree gibt es nicht mehr.'
+  await patchModel($, { worktree: { name: c.name, path: c.path, projectRoot: c.projectRoot, status: 'ready' } })
+  await refreshModel($, options)
+  return `Hintergrund-Läufe gehen jetzt nach ${c.name}${c.branch ? ` (${c.branch})` : ''}.`
 }
 
 /** Batch runs go back to the main checkout (the worktree stays on disk). */
@@ -765,15 +847,15 @@ export async function startBatchJob(
   const job = started.job
   if (kind === 'tests') {
     const previous = Object.fromEntries((m.tests?.results ?? []).map(r => [r.fullName, r.status]))
-    await patchModel($, {
+    await patchModel($, x => ({
       previous,
-      tests: {
-        state: 'running',
+      tests: mergeRuns(x.tests, {
+        state: 'running' as const,
         ...(spec.mode ? { mode: spec.mode } : {}),
         ...(spec.filter ? { filter: spec.filter } : {}),
         results: [],
-      },
-    })
+      }),
+    }))
   }
   return `"${name}" läuft als Hintergrund-Task ${job.taskId ?? '(ohne Kennung)'}${job.outputPath ? `; Ausgabe: ${job.outputPath}` : ''}. Am Ende kommt eine Task-Meldung; das Unity-Panel zeigt das Log-Ende.`
 }
@@ -915,7 +997,11 @@ async function finishBatchTests($: EngineInterface, host: Host, job: ModelJob, c
       ? { error: `Exit ${code}; letzte Log-Zeilen im Unity-Panel` }
       : {}),
   }
-  await patchModel($, { tests: run })
+  // The batch run keeps the filter it started with (set when the job began), so a narrow run adds to the last one.
+  await patchModel($, x => {
+    const filter = !job.full && x.tests?.state === 'running' ? x.tests.filter : undefined
+    return { tests: mergeRuns(x.tests, { ...run, ...(filter ? { filter } : {}) }) }
+  })
   if (job.full && fullRunGreen(run)) await recordFullRun($, {})
 }
 

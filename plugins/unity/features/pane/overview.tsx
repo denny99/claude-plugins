@@ -121,40 +121,94 @@ export function playActions($: EngineInterface, m: UnityModel, options: Options)
       variant: 'secondary',
       onPress: run($, 'screenshot', async () => {
         const r = await screenshot($, options)
-        return 'error' in r ? `Screenshot fehlgeschlagen: ${r.error}` : `Screenshot: ${r.path}`
+        if ('error' in r) return `Screenshot fehlgeschlagen: ${r.error}`
+        await $.prompt.submit({ text: shotPrompt(m, r.path) })
+        return 'Screenshot an Claude geschickt'
       }),
     },
   )
   return acts
 }
 
+/** The open scene's name: the heartbeat's sceneName (newer bridges), else the file name of its path. */
+export function sceneLabel(b: UnityModel['bridge']): string | undefined {
+  if (b.sceneName) return b.sceneName
+  const file = b.scene?.split('/').pop()
+  return file ? file.replace(/\.unity$/, '') : undefined
+}
+
+/** No saved scene open in Edit mode ("Untitled"): Play would start an empty world. */
+export function noSceneOpen(b: UnityModel['bridge']): boolean {
+  return b.up && !b.isPlaying && !b.isCompiling && !b.scene
+}
+
+/** The prompt of the overview's "Screenshot" button: the picture goes to Claude. */
+export function shotPrompt(m: UnityModel, path: string): string {
+  const b = m.bridge
+  const scene = sceneLabel(b)
+  const state = b.isPlaying ? 'Play-Modus' : 'Edit-Modus'
+  return [
+    `Screenshot aus dem Unity-Editor (${state}${scene ? `, Szene ${scene}` : ''}): ${path}`,
+    '',
+    'Sieh dir das Bild an (Datei lesen) und sag mir, was dir auffällt.',
+  ].join('\n')
+}
+
 function editorCard($: EngineInterface, k: Kit, m: UnityModel, options: Options, now: number): RenderElement {
   const b = m.bridge
   const errors = (m.compile?.messages ?? []).filter(x => x.severity === 'error')
   const warnings = (m.compile?.messages.length ?? 0) - errors.length
-  const state = b.isCompiling ? 'kompiliert' : b.isPlaying ? (b.isPaused ? 'pausiert' : 'Play-Modus') : 'Edit-Modus'
-  const title = b.isCompiling
+  // Entering Play reloads the domain (isCompiling for a moment): Play mode wins over "kompiliert".
+  const compiling = b.isCompiling && !b.isPlaying
+  const state = compiling ? 'kompiliert' : b.isPlaying ? (b.isPaused ? 'pausiert' : 'Play-Modus') : 'Edit-Modus'
+  const scene = sceneLabel(b)
+  const noScene = noSceneOpen(b)
+  const start = m.startScene
+  const title = compiling
     ? 'Kompiliert gerade …'
     : errors.length
       ? `${errors.length} ${errors.length === 1 ? 'Kompilierfehler' : 'Kompilierfehler'}`
       : warnings
         ? `Kompiliert mit ${warnings} ${warnings === 1 ? 'Warnung' : 'Warnungen'}`
         : 'Kompiliert ohne Fehler'
-  const when = m.compile ? `${ago(now, m.compile.at)} · ` : ''
+  // While compiling, the last compile's age would contradict "gerade".
+  const when = m.compile && !compiling ? `${ago(now, m.compile.at)} · ` : ''
   return Card(k, {
     key: 'editor',
     tone: errors.length ? 'bad' : undefined,
     children: [
       CardTitle(k, {
-        icon: errors.length ? 'xCircle' : b.isCompiling ? 'clock' : 'checkCircle',
+        icon: errors.length ? 'xCircle' : compiling ? 'clock' : 'checkCircle',
         title,
-        tone: errors.length ? 'bad' : b.isCompiling ? 'warn' : 'ok',
+        tone: errors.length ? 'bad' : compiling ? 'warn' : 'ok',
       }),
       Sentence(
         k,
-        `${when}${state} · Unity ${b.unityVersion ?? m.project?.version ?? ''}${b.scene ? ` · Szene ${b.scene}` : ''}`,
+        `${when}${state} · Unity ${b.unityVersion ?? m.project?.version ?? ''}${scene ? ` · Szene ${scene}` : ''}`,
         { faint: true },
       ),
+      noScene
+        ? Sentence(
+            k,
+            start
+              ? `Keine Szene offen – Play startet eine leere Welt. Startszene: ${start.split('/').pop()?.replace(/\.unity$/, '')}.`
+              : 'Keine Szene offen – Play startet eine leere Welt. In den Build Settings ist keine Startszene eingetragen.',
+            { tone: 'warn' },
+          )
+        : null,
+      noScene && start
+        ? Actions(k, 'scene-acts', [
+            {
+              key: 'open-start-scene',
+              label: 'Startszene öffnen',
+              icon: 'play',
+              variant: 'secondary',
+              onPress: run($, 'open-scene', async () =>
+                msg(await bridgeCommand($, options, { cmd: 'open-scene', path: start }), 'Startszene geöffnet'),
+              ),
+            },
+          ])
+        : null,
       ...errors.slice(0, 5).map((x, i) =>
         ListRow(k, {
           key: `cerr-${i}`,

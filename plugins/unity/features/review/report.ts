@@ -19,6 +19,7 @@ import {
   nowStamp,
   patchReview,
   readReview,
+  ensureReportsIgnored,
   reportsDir,
   reviewRoot,
 } from './store'
@@ -38,10 +39,26 @@ export const REPORT_KINDS: { id: string; icon: IconName }[] = [
 
 export const MEASURE_SECONDS = 10
 
+/**
+ * Facts for the report card: the project's spot (IClaudeSpotProvider) when it reports one, else what the bridge knows
+ * itself (scene, camera) plus why there is no spot.
+ */
+export function captureFacts(shot: play.CaptureResult): string[] {
+  const facts = spotFacts(shot.spot)
+  if (facts.length) return facts
+  const out: string[] = []
+  if (shot.scene) out.push(`Szene ${shot.scene.split('/').pop()?.replace(/\.unity$/, '') ?? shot.scene}`)
+  const p = shot.camera?.position
+  if (p) out.push(`Kamera ${p.map(n => Math.round(n)).join(' / ')}`)
+  out.push(shot.provider ? 'Stelle: Projekt meldet hier keine' : 'Stelle unbekannt (Projekt meldet keine Stelle)')
+  return out
+}
+
 /** Header button: capture now (full picture for Claude + a small one the pane can draw), open the report card. */
 export async function openReport($: EngineInterface, options: Options): Promise<void> {
   const { root, cfg } = await reviewRoot($)
   const dir = reportsDir(root, cfg)
+  await ensureReportsIgnored($, root, cfg)
   const t = await nowStamp($)
   const full = join(dir, `report-${t.file}.png`)
   const small = join(dir, `report-${t.file}-klein.png`)
@@ -58,7 +75,7 @@ export async function openReport($: EngineInterface, options: Options): Promise<
     preview: shown,
     spot: shot.spot ?? null,
     spotLine: spotText(shot.spot),
-    facts: spotFacts(shot.spot),
+    facts: captureFacts(shot),
     note: '',
     measure: false,
   }

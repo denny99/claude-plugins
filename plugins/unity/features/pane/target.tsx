@@ -4,7 +4,7 @@ import type { EngineInterface, RenderElement } from 'claude-code'
 import type { UnityModel } from '../../types'
 import { batchAllowed } from '../../lib/unity'
 import { Actions, Card, CardTitle, KeyValue, ListRow, ProblemCard, Sentence, type Action, type Kit } from '../../lib/ui'
-import { batchTarget, configOf, createWorktree, useMainTarget, type Options } from '../state'
+import { batchTarget, configOf, createWorktree, useCheckout, useMainTarget, type Options } from '../state'
 import { localStamp, run } from './common'
 
 export function targetTab($: EngineInterface, k: Kit, m: UnityModel, options: Options): RenderElement {
@@ -81,6 +81,26 @@ export function targetTab($: EngineInterface, k: Kit, m: UnityModel, options: Op
                         : 'gesperrt: ein anderer Editor hat es offen',
               })
             : null,
+          ...(m.checkouts ?? [])
+            .filter(c => c.path !== wt?.path)
+            .slice(0, 6)
+            .map((c, i) =>
+              ListRow(k, {
+                key: `target-co-${i}`,
+                status: 'idle',
+                title: `${c.main ? 'Haupt-Checkout' : 'Worktree'} ${c.name}`,
+                meta: c.branch ?? 'ohne Branch',
+                actions: [
+                  {
+                    key: `target-use-${i}`,
+                    label: 'Nutzen',
+                    icon: 'branch',
+                    variant: 'secondary',
+                    onPress: run($, 'worktree', () => useCheckout($, options, c.path)),
+                  },
+                ],
+              }),
+            ),
           !allowed.ok && allowed.reason ? Sentence(k, allowed.reason, { faint: true }) : null,
           KeyValue(k, {
             key: 'target-kv',
