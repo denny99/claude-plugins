@@ -126,3 +126,22 @@ export function iconSvg(name: IconName, color: string, size = 16): string {
 export function isIconName(name: unknown): name is IconName {
   return typeof name === 'string' && Object.prototype.hasOwnProperty.call(ICONS, name)
 }
+
+/**
+ * Makes an SVG string a standalone document a desktop can draw as an image: adds `xmlns` (without it the image loader
+ * refuses the markup and draws a broken-image placeholder), `xmlns:xlink` when `xlink:href` is used, and `width` /
+ * `height` from the `viewBox` when missing. A data-URI `<image href="data:image/webp;base64,…">` inside works then too.
+ */
+export function svgDocument(source: string): string {
+  const src = source.trim()
+  const m = /^<svg\b([^>]*)>/i.exec(src)
+  if (!m) return src
+  let attrs = m[1]
+  if (!/\sxmlns\s*=/.test(attrs)) attrs = ` xmlns="http://www.w3.org/2000/svg"${attrs}`
+  if (/xlink:href/.test(src) && !/\sxmlns:xlink\s*=/.test(attrs))
+    attrs = `${attrs} xmlns:xlink="http://www.w3.org/1999/xlink"`
+  const vb = /\sviewBox\s*=\s*["']\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)\s*["']/.exec(attrs)
+  if (vb && !/\swidth\s*=/.test(attrs)) attrs = `${attrs} width="${vb[1]}"`
+  if (vb && !/\sheight\s*=/.test(attrs)) attrs = `${attrs} height="${vb[2]}"`
+  return `<svg${attrs}>${src.slice(m[0].length)}`
+}

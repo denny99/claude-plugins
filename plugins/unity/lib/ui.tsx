@@ -24,10 +24,10 @@ import { atom, read, update } from 'claude-code'
 import type { RenderInput, EngineInterface, RenderElement } from 'claude-code'
 
 import type { UiKitState } from '../types'
-import { iconSvg, TERM_GLYPHS, type IconName } from './icons'
+import { iconSvg, svgDocument, TERM_GLYPHS, type IconName } from './icons'
 import { modeFromTheme, terminalColor, themeTokens, type Brand, type Mode, type Tokens, type Tone } from './theme'
 
-export { ICONS, iconSvg, isIconName, TERM_GLYPHS, type IconName } from './icons'
+export { ICONS, iconSvg, isIconName, svgDocument, TERM_GLYPHS, type IconName } from './icons'
 export {
   modeFromTheme,
   terminalColor,
@@ -372,19 +372,28 @@ export function Icon(
   )
 }
 
-/** Default mark of a pill per tone: ✓ ok, ⚠ warn, ✕ bad, ● info. Running states pass `glyph: '◷'`, updates `'↑'`. */
-const TONE_GLYPH: Record<Tone, string> = { ok: '✓', warn: '⚠', bad: '✕', info: '●', neutral: '', accent: '' }
+/**
+ * Default mark of a pill per tone: ✓ ok, ◷ warn (yellow means "running" here), ✕ bad, ● info. The mark follows the
+ * meaning, not the color: a real warning passes `icon: 'alert'` (or `glyph: '⚠'`), an update `glyph: '↑'`.
+ */
+const TONE_GLYPH: Record<Tone, string> = { ok: '✓', warn: '◷', bad: '✕', info: '●', neutral: '', accent: '' }
+/** Default icon of a pill per tone on graphical surfaces (in place of the glyph), unless `glyph` or `icon` is given. */
+const TONE_ICON: Partial<Record<Tone, IconName>> = { warn: 'clock' }
 
 export type PillProps = {
   text: string
   tone?: Tone
   /** The mark before the text; `false` for none. Default per tone (TONE_GLYPH). */
   glyph?: string | false
-  /** An icon in place of the glyph on graphical surfaces. */
+  /** An icon in place of the glyph on graphical surfaces. Default per tone (TONE_ICON: warn → clock). */
   icon?: IconName
 }
 
-/** A state pill: tinted chip with a mark (✓ ◷ ↑ ⚠ ✕) and a short sentence ("3 rot · 2 neu"). */
+/**
+ * A state pill: tinted chip with a mark (✓ ◷ ↑ ⚠ ✕) and a short sentence ("3 rot · 2 neu"). Graphical: no border (a
+ * desktop draws a bordered Box a full cell row taller at the top and bottom, which made pills three rows high), one
+ * row high, and wrapped in a centering row so it neither stretches to a row's height nor to a column's width.
+ */
 export function Pill(k: Kit, p: PillProps): RenderElement {
   const { Box, Text } = k
   const tone = p.tone ?? 'neutral'
@@ -397,22 +406,25 @@ export function Pill(k: Kit, p: PillProps): RenderElement {
     )
   }
   const c = k.t.tones[tone]
-  const icon = p.icon ? Icon(k, p.icon, { size: 12, color: c.fg }) : null
+  const iconName = p.icon ?? (p.glyph === undefined ? TONE_ICON[tone] : undefined)
+  const icon = iconName ? Icon(k, iconName, { size: 12, color: c.fg }) : null
   return (
-    <Box
-      flexDirection="row"
-      alignItems="center"
-      gap={1}
-      paddingX={1}
-      backgroundColor={c.bg}
-      borderStyle="round"
-      borderColor={c.border}
-      flexShrink={0}
-    >
-      {icon}
-      <Text size="caption" weight="bold" color={c.fg} wrap="truncate-end">
-        {sanitize(!icon && glyph ? `${glyph} ${p.text}` : p.text)}
-      </Text>
+    <Box flexDirection="row" alignItems="center" flexShrink={0}>
+      <Box
+        flexDirection="row"
+        alignItems="center"
+        alignSelf="center"
+        gap={1}
+        paddingX={1}
+        paddingY={0}
+        backgroundColor={c.bg}
+        flexShrink={0}
+      >
+        {icon}
+        <Text size="caption" weight="bold" color={c.fg} wrap="truncate-end">
+          {sanitize(!icon && glyph ? `${glyph} ${p.text}` : p.text)}
+        </Text>
+      </Box>
     </Box>
   )
 }
@@ -557,7 +569,7 @@ export function PaneHeader(
   const logo =
     typeof hd.logo === 'string' && Svg ? (
       <Svg
-        source={hd.logo}
+        source={svgDocument(hd.logo)}
         alt={hd.logoAlt ?? hd.label ?? 'logo'}
         width={hd.logoWidth ?? 18}
         height={hd.logoHeight ?? hd.logoWidth ?? 18}
@@ -566,7 +578,7 @@ export function PaneHeader(
       hd.logo
     ) : null
   return (
-    <Box flexDirection="row" alignItems="center" gap={1}>
+    <Box flexDirection="row" alignItems="center" gap={1} flexWrap="wrap">
       {logo}
       {hd.label && !k.narrow ? (
         <Text size="caption" weight="bold" color={k.t.faint}>
@@ -749,48 +761,62 @@ export function ListRow(
   )
 }
 
-/** Label / value rows; `copy` adds a copy button for raw data (paths, URLs, IDs). */
+/**
+ * Label / value rows; `copy` adds a framed copy knob for raw data (paths, URLs, IDs). Graphical: drawn as a card (it is
+ * one block of facts); `bare: true` leaves the frame off when it already sits in a Card.
+ */
 export function KeyValue(
   k: Kit,
-  kv: { key?: string; rows: { key?: string; label: string; value: string; copy?: boolean; tone?: Tone }[] },
+  kv: {
+    key?: string
+    bare?: boolean
+    rows: { key?: string; label: string; value: string; copy?: boolean; tone?: Tone }[]
+  },
 ): RenderElement {
   const { Box, Text } = k
   const width = Math.min(Math.floor(k.cols / 2), Math.max(0, ...kv.rows.map(r => [...sanitize(r.label)].length)))
+  const rows = kv.rows.map((r, i) => {
+    const id = r.key ?? `${kv.key ?? 'kv'}-${i}`
+    const copy = r.copy ? CopyButton(k, { key: `${id}-copy`, text: r.value, iconOnly: true }) : null
+    if (!k.graphical) {
+      const label = truncate(sanitize(r.label).padEnd(width), width)
+      const room = Math.max(4, k.cols - width - 2 - (copy ? 4 : 0))
+      return (
+        <Box key={id} flexDirection="row" gap={1}>
+          <Text dimColor>{label}</Text>
+          <Text color={r.tone ? terminalColor(k.brand, r.tone) : undefined}>{truncate(r.value, room)}</Text>
+          {copy}
+        </Box>
+      )
+    }
+    return (
+      <Box key={id} flexDirection="row" alignItems="center" gap={1}>
+        <Box flexShrink={0}>
+          <Text size="footnote" color={k.t.muted}>
+            {sanitize(r.label)}
+          </Text>
+        </Box>
+        <Box flexGrow={1} flexShrink={1} flexDirection="row" justifyContent="flex-end">
+          <Text size="footnote" tabular color={r.tone ? k.t.tones[r.tone].fg : k.t.text} wrap="truncate-middle">
+            {sanitize(r.value)}
+          </Text>
+        </Box>
+        {copy}
+      </Box>
+    )
+  })
+  if (k.graphical && !kv.bare) return Card(k, { key: kv.key, children: rows })
   return (
     <Box key={kv.key} flexDirection="column">
-      {kv.rows.map((r, i) => {
-        const id = r.key ?? `${kv.key ?? 'kv'}-${i}`
-        const copy = r.copy ? CopyButton(k, { key: `${id}-copy`, text: r.value, iconOnly: true }) : null
-        if (!k.graphical) {
-          const label = truncate(sanitize(r.label).padEnd(width), width)
-          const room = Math.max(4, k.cols - width - 2 - (copy ? 4 : 0))
-          return (
-            <Box key={id} flexDirection="row" gap={1}>
-              <Text dimColor>{label}</Text>
-              <Text color={r.tone ? terminalColor(k.brand, r.tone) : undefined}>{truncate(r.value, room)}</Text>
-              {copy}
-            </Box>
-          )
-        }
-        return (
-          <Box key={id} flexDirection="row" alignItems="center" gap={1}>
-            <Box flexGrow={1} flexShrink={1}>
-              <Text size="footnote" color={k.t.muted} wrap="truncate-end">
-                {sanitize(r.label)}
-              </Text>
-            </Box>
-            <Text size="footnote" tabular color={r.tone ? k.t.tones[r.tone].fg : k.t.text} wrap="truncate-middle">
-              {sanitize(r.value)}
-            </Text>
-            {copy}
-          </Box>
-        )
-      })}
+      {rows}
     </Box>
   )
 }
 
-/** A copy button for raw data; `show` prints the value (mono, cut in the middle) before it. */
+/**
+ * A copy button for raw data; `show` prints the value (mono, cut in the middle) before it. `iconOnly`: graphical, a
+ * small framed knob with the copy icon (the label is its click target, as on every framed knob); terminal, `⧉`.
+ */
 export function CopyButton(
   k: Kit,
   c: { key: string; text: string; label?: string; show?: boolean; iconOnly?: boolean },
@@ -798,15 +824,18 @@ export function CopyButton(
   const { Box, Text, Button } = k
   const label = c.label ?? k.s.copy
   const press = (e: { surface?: string }) => k.copy(c.text, e?.surface)
-  const btn = c.iconOnly ? (
-    <Button key={c.key} label={label} plain onPress={press}>
-      {TERM_GLYPHS.copy ?? label}
-    </Button>
-  ) : (
-    <Button key={c.key} plain onPress={press}>
-      {label}
-    </Button>
-  )
+  const btn =
+    c.iconOnly && k.graphical ? (
+      IconButton(k, { key: c.key, icon: 'copy', label, onPress: press as () => void })
+    ) : c.iconOnly ? (
+      <Button key={c.key} label={label} plain onPress={press}>
+        {TERM_GLYPHS.copy ?? label}
+      </Button>
+    ) : (
+      <Button key={c.key} plain onPress={press}>
+        {label}
+      </Button>
+    )
   const icon = !c.iconOnly && k.graphical ? Icon(k, 'copy', { size: 14, color: k.t.muted }) : null
   if (!c.show && !icon) return btn
   return (
@@ -970,22 +999,26 @@ export function ActionButton(k: Kit, a: Action): RenderElement {
   })
 }
 
-type FrameLook = 'primary' | 'secondary' | 'tab' | 'tabActive' | 'knob'
+export type FrameLook = 'primary' | 'secondary' | 'tab' | 'tabActive' | 'knob'
 
-/** Fill, border, label color and hover fill per look, from the brand tokens. */
-function frameStyle(
+/** Fill, border, label color and hover fill per look, from the brand tokens (exported for the contrast test). */
+export function frameStyle(
   k: Kit,
   look: FrameLook,
 ): { bg?: string; border?: string; fg: string; hoverBg: string; hoverBorder?: string; bold: boolean } {
   const t = k.t
   switch (look) {
     case 'primary':
+      // A desktop draws every Button natively, `plain` too, and keeps its own label color (the app's foreground):
+      // `Text color` inside a Button is ignored there and ButtonProps has no rest-state label color (only `hover`).
+      // So the primary is the accent tint with an accent border, a fill the app's light (dark mode) or dark (light
+      // mode) label reads on at >= 4.5:1 in every brand; `fg` still colors it where the surface honors it.
       return {
-        bg: t.accent,
+        bg: t.accentTint,
         border: t.accent,
-        fg: t.onAccent,
-        hoverBg: t.accentTintText,
-        hoverBorder: t.accentTintText,
+        fg: t.accentTintText,
+        hoverBg: t.tones.accent.border,
+        hoverBorder: t.accent,
         bold: true,
       }
     case 'secondary':
