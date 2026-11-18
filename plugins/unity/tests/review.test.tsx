@@ -1,4 +1,5 @@
 import { expect, test, type Engine } from 'claude-code/testing'
+import { findShown } from './shown'
 
 import {
   appendLines,
@@ -140,7 +141,7 @@ test('review list: renders on desktop and terminal; an answer is appended with s
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
     await settle(world, ui.press({ key: 'tab-review' }))
-    expect((await ui.find({ type: 'Text', text: /Reuse am Fluss/ }))?.text).toBeDefined()
+    expect((await findShown(ui, /Reuse am Fluss/))?.text).toBeDefined()
     expect(await ui.find({ type: 'Button', key: 'rv-goto-reuse' })).toBeDefined()
     expect(await ui.find({ type: 'Button', key: 'rv-tab-decide' })).toBeDefined()
     await ui.unmount()
@@ -183,7 +184,7 @@ test('review without config: setup hint; Laufend reads status globs and the queu
   await openReview($, world)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await settle(world, ui.press({ key: 'tab-review' }))
-  expect((await ui.find({ type: 'Text', text: /Review ist nicht eingerichtet/ }))?.text).toBeDefined()
+  expect((await findShown(ui, /Review ist nicht eingerichtet/))?.text).toBeDefined()
   await ui.unmount()
 })
 
@@ -194,20 +195,20 @@ test('sounds: list, play near, mix nudge through mix_set, verdict appended as to
   await settle(world, ui.press({ key: 'tab-review' }))
   await settle(world, ui.press({ key: 'rv-tab-sounds' }))
   await settle(world, ui.press({ key: 'rv-snd-load' }))
-  expect((await ui.find({ type: 'Text', text: /Fackel zünden/ }))?.text).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /Ruhig · Abend · Ufer/ })).toBeUndefined()
+  expect((await findShown(ui, /Fackel zünden/))?.text).toBeDefined()
+  expect(await findShown(ui, /Ruhig · Abend · Ufer/)).toBeUndefined()
   await settle(world, ui.press({ key: 'rv-play-fackel_an' }))
   const playCmd = Object.values(world.files).find(t => t.includes('"sound_play"'))
   expect(playCmd).toContain('"near"')
   await settle(world, ui.press({ key: 'rv-mix-Ambience-down' }))
   const mixCmd = Object.values(world.files).find(t => t.includes('"mix_set"'))
   expect(JSON.parse(mixCmd ?? '{}')).toMatchObject({ group: 'Ambience', db: -7 })
-  expect((await ui.find({ type: 'Text', text: /−7 dB/ }))?.text).toBeDefined()
+  expect((await findShown(ui, /−7 dB/))?.text).toBeDefined()
   await settle(world, ui.press({ key: 'rv-ok-fackel_an' }))
   const last = JSON.parse((world.files[`${ROOT}/docs/antworten.jsonl`] ?? '').trim().split('\n').pop() ?? '{}')
   expect(last).toMatchObject({ id: 'ton:fackel_an', verdict: 'passt', choice: 'fackel_an' })
   await settle(world, ui.press({ key: 'rv-music-toggle' }))
-  expect((await ui.find({ type: 'Text', text: /Ruhig · Abend · Ufer/ }))?.text).toBeDefined()
+  expect((await findShown(ui, /Ruhig · Abend · Ufer/))?.text).toBeDefined()
   await ui.unmount()
 })
 
@@ -232,9 +233,9 @@ test('viewer: unity_review_show draws the frame as Svg with a paint Client; a st
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await settle(world, ui.press({ key: 'tab-review' }))
   expect(await ui.find({ type: 'Svg' })).toBeDefined()
-  expect((await ui.find({ type: 'Text', text: /Claude fragt: „Sauber in allen Richtungen\?“/ }))?.text).toBeDefined()
+  expect((await findShown(ui, /Claude fragt: „Sauber in allen Richtungen\?“/))?.text).toBeDefined()
   await settle(world, ui.press({ key: 'rv-next' }))
-  expect((await ui.find({ type: 'Text', text: /N · Bild 2\/2/ }))?.text).toBeDefined()
+  expect((await findShown(ui, /N · Bild 2\/2/))?.text).toBeDefined()
   await ui.post(
     {
       type: 'mark',
@@ -245,13 +246,13 @@ test('viewer: unity_review_show draws the frame as Svg with a paint Client; a st
     },
     { in: 'rv-paint' },
   )
-  expect((await ui.find({ type: 'Text', text: /1 Markierung/ }))?.text).toBeDefined()
+  expect((await findShown(ui, /1 Markierung/))?.text).toBeDefined()
   // The real surface module: a drag over its region posts a stroke.
   await ui.pointer({ type: 'down', x: 0, y: 0, button: 'left', in: 'rv-paint' } as never)
   await ui.pointer({ type: 'move', x: 3, y: 1, button: 'left', in: 'rv-paint' } as never)
   await ui.pointer({ type: 'up', x: 3, y: 1, button: 'left', in: 'rv-paint' } as never)
   await settle(world, Promise.resolve())
-  expect((await ui.find({ type: 'Text', text: /2 Markierungen/ }))?.text).toBeDefined()
+  expect((await findShown(ui, /2 Markierungen/))?.text).toBeDefined()
   await settle(world, ui.press({ key: 'rv-view-send' }))
   expect(world.prompts.at(-1)).toContain('Markierung rot')
   expect(world.prompts.at(-1)).toContain('mcp__unity__unity_review_feedback')
@@ -271,7 +272,7 @@ test('viewer: unity_review_show draws the frame as Svg with a paint Client; a st
   )
   const term = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await settle(world, term.press({ key: 'tab-review' }))
-  expect((await term.find({ type: 'Text', text: /Bild in Datei \/g\/art\/n1\.png/ }))?.text).toBeDefined()
+  expect((await findShown(term, /Bild in Datei \/g\/art\/n1\.png/))?.text).toBeDefined()
   await term.unmount()
 })
 
@@ -282,7 +283,7 @@ test('Problem melden: capture + spot, kind and note, "Nur merken" lists it, send
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await settle(world, ui.press({ key: 'tab-review' }))
   await settle(world, ui.press({ key: 'rv-report-open' }))
-  expect((await ui.find({ type: 'Text', text: /Problem melden/ }))?.text).toBeDefined()
+  expect((await findShown(ui, /Problem melden/))?.text).toBeDefined()
   const shots = Object.keys(world.files).filter(p =>
     /\.claude\/unity-review\/report-\d{8}-\d{6}(-klein)?\.png$/.test(p),
   )
@@ -292,7 +293,7 @@ test('Problem melden: capture + spot, kind and note, "Nur merken" lists it, send
   await settle(world, ui.press({ key: 'rv-report-keep' }))
   const saved = world.files[`${ROOT}/.claude/unity-review/reports.jsonl`] ?? ''
   expect(JSON.parse(saved.trim())).toMatchObject({ kind: 'Sieht falsch aus', note: 'Baum schwebt', sent: false })
-  expect((await ui.find({ type: 'Text', text: /Sieht falsch aus: Baum schwebt/ }))?.text).toBeDefined()
+  expect((await findShown(ui, /Sieht falsch aus: Baum schwebt/))?.text).toBeDefined()
   const id = (JSON.parse(saved.trim()) as { id: string }).id
   await settle(world, ui.press({ key: `rv-rep-send-${id}` }))
   expect(world.prompts.at(-1)).toContain('Problem gemeldet im Unity-Spiel: Sieht falsch aus.')
@@ -308,11 +309,11 @@ test('Problem melden from Übersicht switches to Review; measuring runs detached
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await settle(world, ui.press({ key: 'report' }))
   expect((await ui.find({ type: 'Button', key: 'tab-review' }))?.props.variant).toBe('primary')
-  expect((await ui.find({ type: 'Text', text: /Problem melden/ }))?.text).toBeDefined()
+  expect((await findShown(ui, /Problem melden/))?.text).toBeDefined()
   await settle(world, ui.press({ key: 'rv-kind-ruckelt' }))
   // The button's hook returns before the 10 s recording ends.
   await ui.press({ key: 'rv-report-send' })
-  expect((await ui.find({ type: 'Text', text: /Messe 10 s Leistung/ }))?.text).toBeDefined()
+  expect((await findShown(ui, /Messe 10 s Leistung/))?.text).toBeDefined()
   expect(await ui.find({ type: 'Button', key: 'rv-report-send' })).toBeUndefined()
   const before = world.prompts.length
   for (let i = 0; i < 120 && world.prompts.length === before; i++) await world.clock.advance(250)

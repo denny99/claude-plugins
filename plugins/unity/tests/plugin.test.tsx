@@ -1,4 +1,5 @@
 import { expect, test } from 'claude-code/testing'
+import { findShown } from './shown'
 
 import { BRIDGE, EDITOR, fakeWorld, PANE, PROJECT, ROOT, settle } from './world'
 
@@ -146,7 +147,7 @@ test('an editor run left running while the heartbeat goes stale reads as aborted
   expect(results).toContain('Tests aborted — editor closed or crashed')
   await settle(world, $.command.run({ command: 'unity', args: '' } as never))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /aborted — editor closed or crashed/ }))?.text).toBeDefined()
+  expect((await findShown(ui, /aborted — editor closed or crashed/))?.text).toBeDefined()
   await ui.unmount()
 
   const again = JSON.stringify(
@@ -188,9 +189,9 @@ test('the pane renders on every surface; Play and Fix with Claude work', async (
   )
   for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    expect((await ui.find({ type: 'Text', text: /Editor bereit/ }))?.text).toBeDefined()
-    expect((await ui.find({ type: 'Text', text: /Edit-Modus · Unity 6000\.6\.7f1/ }))?.text).toBeDefined()
-    expect((await ui.find({ type: 'Text', text: /error CS1002/ }))?.text).toContain('Assets/Game/A.cs(3,1)')
+    expect((await findShown(ui, /Editor bereit/))?.text).toBeDefined()
+    expect((await findShown(ui, /Edit-Modus · Unity 6000\.6\.7f1/))?.text).toBeDefined()
+    expect((await findShown(ui, /error CS1002/))?.text).toContain('Assets/Game/A.cs(3,1)')
     expect(await ui.find({ type: 'Button', key: 'play' })).toBeDefined()
     expect(await ui.find({ type: 'Button', key: 'tab-tests' })).toBeDefined()
     await ui.unmount()
@@ -209,7 +210,7 @@ test('the pane without a bridge shows the install hint', async ($, on) => {
   await settle(world, $.command.run({ command: 'unity', args: '' } as never))
   for (const surface of ['terminal', 'mobile'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    expect((await ui.find({ type: 'Text', text: /Claude sieht den Unity-Editor nicht/ }))?.text).toBeDefined()
+    expect((await findShown(ui, /Claude sieht den Unity-Editor nicht/))?.text).toBeDefined()
     expect(await ui.find({ type: 'Button', key: 'copy-bridge-url' })).toBeDefined()
     await ui.unmount()
   }
@@ -221,23 +222,22 @@ test('Leistung: 10 s messen in Play mode keeps the recording; outside Play a pro
   await settle(world, $.command.run({ command: 'unity', args: '' } as never))
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await settle(world, ui.press({ key: 'tab-perf' }))
-  expect((await ui.find({ type: 'Text', text: /Messen geht im Play-Modus/ }))?.text).toBeDefined()
+  expect((await findShown(ui, /Messen geht im Play-Modus/))?.text).toBeDefined()
   await settle(world, ui.press({ key: 'play' }))
   await settle(world, $.tool.call({ tool: 'mcp__unity__unity_status' }))
   // the button only starts the recording (detached on the clock) and returns at once
   await ui.press({ key: 'perf-10' })
-  expect((await ui.find({ type: 'Text', text: /^Messe 10 s Leistung/ }))?.text).toBeDefined()
+  expect((await findShown(ui, /^Messe 10 s Leistung/))?.text).toBeDefined()
   expect(await ui.find({ type: 'Button', key: 'perf-10' })).toBeUndefined()
-  for (let i = 0; i < 80 && (await ui.find({ type: 'Text', text: /^Messe 10 s Leistung/ })); i++)
-    await world.clock.advance(250)
-  expect(await ui.find({ type: 'Text', text: /^Messe 10 s Leistung/ })).toBeUndefined()
+  for (let i = 0; i < 80 && (await findShown(ui, /^Messe 10 s Leistung/)); i++) await world.clock.advance(250)
+  expect(await findShown(ui, /^Messe 10 s Leistung/)).toBeUndefined()
   await settle(world, $.tool.call({ tool: 'mcp__unity__unity_status' }))
-  expect((await ui.find({ type: 'Text', text: /^Messung \d\d:\d\d$/ }))?.text).toBeDefined()
-  expect((await ui.find({ type: 'Text', text: /ms Median/ }))?.text).toBeDefined()
+  expect((await findShown(ui, /^Messung \d\d:\d\d$/))?.text).toBeDefined()
+  expect((await findShown(ui, /ms Median/))?.text).toBeDefined()
   expect(await ui.find({ type: 'Svg' })).toBeDefined()
   await ui.unmount()
   const term = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await term.find({ type: 'Text', text: /[▁▂▃▄▅▆▇█]/ }))?.text).toBeDefined()
+  expect((await findShown(term, /[▁▂▃▄▅▆▇█]/))?.text).toBeDefined()
   await term.unmount()
 })
 
@@ -246,6 +246,6 @@ test('auto-open: a session started in a Unity project opens the pane, autoOpen f
   await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
   await settle(world, Promise.resolve())
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect((await ui.find({ type: 'Text', text: /Editor bereit/ }))?.text).toBeDefined()
+  expect((await findShown(ui, /Editor bereit/))?.text).toBeDefined()
   await ui.unmount()
 })

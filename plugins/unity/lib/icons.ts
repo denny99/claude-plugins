@@ -117,82 +117,32 @@ const VS15 = '\uFE0E'
 
 /**
  * Text glyph per icon for the label of a native `Button` (a desktop draws every Button natively and refuses an `Svg`
- * inside one, so a clickable icon is a character in front of its label: "↑ Pushen"). Only characters the system
- * fonts of macOS (SF/Menlo/Apple Symbols) and Windows (Segoe UI Symbol) carry; those with an emoji form get U+FE0E
- * so they stay text, never a color emoji.
+ * inside one, so a clickable icon is a character in front of its label: "↑ Pushen"). Only icons whose character shows
+ * the action unmistakably have one (play, stop, again, push/update, download, copy, ok, cancel, open, edit, report);
+ * every other icon (folder, grid, dice, app, branch, …) has none and its button shows the bare label. Tabs and
+ * launcher chips never carry a glyph. Characters with an emoji form carry U+FE0E so they stay text, never a color
+ * emoji (test "glyphs are text").
  */
-export const ICON_GLYPHS: Record<IconName, string> = {
+export const ICON_GLYPHS: Partial<Record<IconName, string>> = {
   play: `▶${VS15}`,
   stop: '■',
   refresh: '⟳',
-  rerun: '↺',
+  rerun: '⟳',
   up: '↑',
   push: '↑',
-  commit: '◉',
-  log: '≡',
-  claude: '✻',
-  camera: '◎',
-  flag: '⚑',
-  gauge: '◔',
-  external: `↗${VS15}`,
-  check: '✓',
-  x: '✕',
-  diff: '±',
-  copy: '⧉',
   download: '↓',
-  power: '⊙',
-  plug: '↯',
-  list: '≡',
-  wand: '✦',
-  trash: '⌫',
-  globe: '⊕',
-  branch: '⎇',
-  eye: '◉',
-  flask: `⚗${VS15}`,
-  terminal: '❯',
-  grid: '▦',
-  folder: '▤',
-  server: '☰',
-  dots: '…',
-  phone: `☎${VS15}`,
-  app: '▢',
-  speaker: '♪',
-  dice: '⚄',
-  hammer: `⚒${VS15}`,
-  heart: `♥${VS15}`,
-  scroll: '§',
-  next: '→',
-  book: '❐',
-  ticket: '⌗',
-  box: '▣',
-  container: '⬚',
-  alert: `⚠${VS15}`,
-  tag: '◈',
-  activity: '∿',
-  sliders: '☷',
-  translate: '⇄',
-  stethoscope: `⚕${VS15}`,
-  link: '⊸',
-  moon: '☾',
-  pin: '⌖',
-  pen: '✎',
-  bookmark: '◫',
-  user: '◯',
-  chat: '❝',
-  arrow: '→',
-  mic: '●',
-  gear: `⚙${VS15}`,
-  music: '♫',
-  xCircle: '⊗',
+  copy: '⧉',
+  check: '✓',
   checkCircle: '✓',
-  clock: '◷',
-  circle: '○',
-  info: `ℹ${VS15}`,
+  x: '✕',
+  external: `↗${VS15}`,
+  pen: '✎',
+  flag: '⚑',
 }
 
-/** `"<glyph> <label>"` for a native Button (just `label` without an icon). */
+/** `"<glyph> <label>"` for a native Button (just `label` without an icon or for an icon without a glyph). */
 export function glyphLabel(icon: IconName | undefined, label: string): string {
-  const g = icon ? ICON_GLYPHS[icon] : ''
+  const g = icon ? ICON_GLYPHS[icon] : undefined
   return g ? `${g} ${label}` : label
 }
 
