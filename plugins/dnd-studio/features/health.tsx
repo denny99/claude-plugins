@@ -104,28 +104,28 @@ async function healthLine($: EngineInterface): Promise<string> {
 const RULES: { key: keyof Rules; label: string; text: string }[] = [
   {
     key: "annotate",
-    label: "Claude Tipps am Tisch geben",
+    label: "Tipps am Tisch",
     text: "Claude bekommt während des Abends kurze Erinnerungen, etwa wenn Discord nicht verbunden ist oder ein Spieler noch wartet.",
   },
   {
     key: "denyLeaks",
-    label: "Geheimes nur privat zeigen",
+    label: "Geheimes privat",
     text: "Handouts und Geheimnisse für einen Spieler landen nicht im gemeinsamen Fenster, sondern als Flüstern bei ihm.",
   },
   {
     key: "denyTalkNpc",
-    label: "NPCs am Tisch selbst sprechen lassen",
+    label: "NPCs sprechen selbst",
     text: "Bei laufendem Tisch antworten NPCs sofort mit ihrer eigenen Stimme, statt erst im Hintergrund vorbereitet zu werden.",
   },
   {
     key: "denyFamily",
-    label: "Profil „Meine Familie“ schützen",
-    text: "Solange dieses Profil im Studio offen ist, ändert Claude dort nichts.",
+    label: "Familie schützen",
+    text: "Solange das Profil „Meine Familie“ im Studio offen ist, ändert Claude dort nichts.",
   },
   {
     key: "spoilerSafe",
-    label: "Spoilerfrei (ich spiele mit)",
-    text: "Blendet Ziele, Notizen, Geheimnisse und Bilder aus, damit du als Mitspieler nichts vorher siehst.",
+    label: "Spoilerfrei",
+    text: "Für dich als Mitspieler: blendet Ziele, Notizen, Geheimnisse und Bilder aus, damit du nichts vorher siehst.",
   },
 ];
 

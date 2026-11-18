@@ -331,6 +331,7 @@ export async function reportCard(
         : null,
       // Two short sentences that wrap, not one long line (live it was cut: "Danach wird der Ber…").
       r.busy ? Sentence(k, r.busy, { faint: true, wrap: 'wrap' }) : null,
+      forced && !r.busy ? Sentence(k, 'Bei „Ruckelt“ misst der Bericht immer mit.', { faint: true, wrap: 'wrap' }) : null,
       r.busy
         ? Sentence(
             k,
@@ -348,7 +349,7 @@ export async function reportCard(
             [
               {
                 key: 'rv-measure-toggle',
-                label: `${MEASURE_SECONDS} s Leistung mitmessen${forced ? ' (bei „Ruckelt“ immer)' : ''}`,
+                label: `${MEASURE_SECONDS} s mitmessen`,
                 icon: r.measure || forced ? 'check' : 'gauge',
                 variant: 'secondary',
                 onPress: () => void patchReport($, x => ({ measure: !x.measure })),

@@ -257,6 +257,9 @@ export type Kit = Els & {
   toggle: (key: string) => void;
   isMore: (key: string) => boolean;
   toggleMore: (key: string) => void;
+  /** The page a paged strip (Tabs) was turned to; undefined = follow the active tab. */
+  pageOf?: (key: string) => number | undefined;
+  setPage?: (key: string, page: number | undefined) => void;
   isConfirming: (key: string) => boolean;
   askConfirm: (key: string) => void;
   clearConfirm: () => void;
@@ -359,6 +362,14 @@ export async function kit(
       void patchUi($, (s) => ({ toggled: flip(s.toggled, key) })),
     isMore: (key) => state.more.includes(key),
     toggleMore: (key) => void patchUi($, (s) => ({ more: flip(s.more, key) })),
+    pageOf: (key) => state.pages?.[key],
+    setPage: (key, page) =>
+      void patchUi($, (s) => {
+        const pages = { ...(s.pages ?? {}) };
+        if (page === undefined) delete pages[key];
+        else pages[key] = page;
+        return { pages };
+      }),
     isConfirming: (key) => state.confirm === key,
     askConfirm: (key) => void patchUi($, { confirm: key }),
     clearConfirm: () => void patchUi($, { confirm: undefined }),
@@ -502,7 +513,8 @@ function charWidth(c: string): number {
 
 /**
  * The `<svg>` document of a graphical pill: a slightly rounded tinted rect (`rx` = PILL.radius), an optional icon at
- * the left and the text in the system font, both in the tone color. Width estimated from the text length.
+ * the left and the text in the system font, both in the tone color. Width estimated from the text length; the text is
+ * centred in its room so an estimate that is off spreads over both sides instead of eating the right padding.
  */
 export function pillSvg(
   text: string,
@@ -521,8 +533,9 @@ export function pillSvg(
     : "";
   const source = svgDocument(
     `<svg viewBox="0 0 ${width} ${PILL.h}"><rect width="${width}" height="${PILL.h}" rx="${PILL.radius}" ` +
-      `fill="${bg}"></rect>${mark}<text x="${PILL.pad + iconW + textW / 2}" y="${PILL.h / 2 + PILL.font * 0.35}" ` +
-      `text-anchor="middle" font-family="-apple-system, Segoe UI, sans-serif" font-size="${PILL.font}" font-weight="600" ` +
+      `fill="${bg}"></rect>${mark}<text x="${PILL.pad + iconW + textW / 2}" text-anchor="middle" ` +
+      `y="${PILL.h / 2 + PILL.font * 0.35}" ` +
+      `font-family="-apple-system, Segoe UI, sans-serif" font-size="${PILL.font}" font-weight="600" ` +
       `fill="${fg}">${xmlText(text)}</text></svg>`,
   );
   return { source, width };
@@ -710,17 +723,26 @@ export type IconAction = {
   icon: IconName;
   label: string;
   onPress: () => void;
+  /** `primary` marks a knob whose view is open (e.g. a Jobs view covering the tabs); default secondary. */
+  variant?: "primary" | "secondary";
 };
 
 /**
  * A header knob: a native Button, pressable as a whole. Graphical: "<glyph> <label>" (compact bodies: the glyph alone,
- * `label` stays its accessible name), `variant` secondary. Terminal: a one-glyph plain Button named by `label`.
+ * `label` stays its accessible name), `variant` secondary unless the action says primary. Terminal: a one-glyph
+ * Button named by `label`, plain unless primary.
  */
 export function IconButton(k: Kit, a: IconAction): RenderElement {
   const { Button } = k;
   if (!k.graphical)
     return (
-      <Button key={a.key} label={a.label} plain onPress={a.onPress}>
+      <Button
+        key={a.key}
+        label={a.label}
+        plain={a.variant === "primary" ? undefined : true}
+        variant={a.variant === "primary" ? "primary" : undefined}
+        onPress={a.onPress}
+      >
         {TERM_GLYPHS[a.icon] ?? a.label}
       </Button>
     );
@@ -728,7 +750,12 @@ export function IconButton(k: Kit, a: IconAction): RenderElement {
   // A desktop draws `label` in place of the children: the glyph must be in the label itself.
   const shown = k.compact && glyph ? glyph : glyphLabel(a.icon, a.label);
   return (
-    <Button key={a.key} label={shown} variant="secondary" onPress={a.onPress}>
+    <Button
+      key={a.key}
+      label={shown}
+      variant={a.variant ?? "secondary"}
+      onPress={a.onPress}
+    >
       {shown}
     </Button>
   );
@@ -811,7 +838,9 @@ function Rule(k: Kit): RenderElement | null {
   if (!Svg) return null;
   return (
     <Svg
-      source={svgDocument(`<svg width="4000" height="1" viewBox="0 0 4000 1" preserveAspectRatio="none"><rect width="4000" height="1" fill="${k.t.line}"/></svg>`)}
+      source={svgDocument(
+        `<svg width="4000" height="1" viewBox="0 0 4000 1" preserveAspectRatio="none"><rect width="4000" height="1" fill="${k.t.line}"/></svg>`,
+      )}
       alt="divider"
       height={1}
     />
@@ -1011,7 +1040,10 @@ export function Stepper(
   );
 }
 
-/** A list row: status icon, title, meta (hidden when narrow), a pill, actions. Error rows get the cross-in-circle. */
+/**
+ * A list row: status icon, title, meta, a pill, actions. Error rows get the cross-in-circle. Narrow (graphical) or
+ * compact (terminal) bodies put the meta on a wrapping line of its own under the title instead of dropping it.
+ */
 export function ListRow(
   k: Kit,
   r: {
@@ -1040,6 +1072,11 @@ export function ListRow(
       Math.max(6, k.cols - pillLen),
     );
     const rest = Math.max(0, k.cols - [...head].length - pillLen);
+    const inline = !!meta && rest > 3;
+    const below =
+      r.meta && !inline
+        ? wrapText(sanitize(r.meta), Math.max(4, k.cols - 2))
+        : [];
     return (
       <Box key={r.key} flexDirection="column">
         <Box flexDirection="row" gap={1}>
@@ -1048,12 +1085,13 @@ export function ListRow(
             dimColor={g?.dim}
           >
             {head}
-            {meta && rest > 3 ? (
-              <Text dimColor>{truncate(meta, rest)}</Text>
-            ) : null}
+            {inline ? <Text dimColor>{truncate(meta, rest)}</Text> : null}
           </Text>
           {r.pill ? Pill(k, r.pill) : null}
         </Box>
+        {below.map((line) => (
+          <Text dimColor>{`  ${line}`}</Text>
+        ))}
         {r.actions?.length ? Actions(k, r.key, r.actions) : null}
       </Box>
     );
@@ -1071,7 +1109,13 @@ export function ListRow(
                 size: 14,
               })
             : null}
-          <Box flexDirection="column" flexGrow={1} flexShrink={1} minWidth={0} gap={0}>
+          <Box
+            flexDirection="column"
+            flexGrow={1}
+            flexShrink={1}
+            minWidth={0}
+            gap={0}
+          >
             <Text size="footnote" color={k.t.text} wrap="wrap">
               {sanitize(r.title)}
             </Text>
@@ -1118,6 +1162,11 @@ export function ListRow(
         ) : null}
         {acts && !k.narrow ? acts : null}
       </Box>
+      {r.meta && k.narrow ? (
+        <Text size="caption" color={k.t.faint} wrap="wrap">
+          {sanitize(r.meta)}
+        </Text>
+      ) : null}
       {acts && k.narrow ? acts : null}
     </Box>
   );
@@ -1315,7 +1364,14 @@ export type Action = {
   icon?: IconName;
   /** v2: primary (one per view), secondary, link (plain text button). Absent with no icon: the v1 plain look. */
   variant?: "primary" | "secondary" | "link";
+  /**
+   * Destroys data (delete, wipe, prune): the label carries a ⚠ in front on every surface (a desktop Button takes no
+   * color), the terminal draws it red. Pair it with `confirm` naming the target and the consequence.
+   */
+  danger?: boolean;
 };
+
+const DANGER_GLYPH = "⚠";
 
 function isV2(a: Action): boolean {
   return a.icon !== undefined || a.variant !== undefined;
@@ -1347,7 +1403,10 @@ export function StatusGlyph(k: Kit, status: Status): RenderElement {
   );
 }
 
-/** Two-step destructive button: first press turns it into "Really …?" + Cancel. */
+/**
+ * Two-step destructive button: first press turns it into "Really …?" + Cancel. `danger`: a ⚠ in front of both labels
+ * (the terminal draws them red).
+ */
 export function ConfirmButton(
   k: Kit,
   a: {
@@ -1355,12 +1414,17 @@ export function ConfirmButton(
     label: string;
     confirmLabel?: string;
     onConfirm: () => void;
+    danger?: boolean;
   },
 ): RenderElement {
-  const { Box, Button } = k;
+  const { Box, Button, Text } = k;
+  const marked = (text: string) =>
+    a.danger ? `${DANGER_GLYPH} ${text}` : text;
+  const draw = (text: string) =>
+    a.danger && !k.graphical ? <Text color="red">{text}</Text> : text;
   // Graphical: a real (secondary) button like its neighbours, not bare text; the terminal keeps the plain one.
-  if (!k.isConfirming(a.key))
-    return k.graphical ? (
+  if (!k.isConfirming(a.key) && k.graphical && !a.danger)
+    return (
       <Button
         key={a.key}
         label={a.label}
@@ -1369,26 +1433,51 @@ export function ConfirmButton(
       >
         {a.label}
       </Button>
-    ) : (
-      <Button key={a.key} plain onPress={() => k.askConfirm(a.key)}>
-        {a.label}
+    );
+  if (!k.isConfirming(a.key))
+    return (
+      <Button
+        key={a.key}
+        label={a.danger ? marked(a.label) : undefined}
+        plain={a.danger && k.graphical ? undefined : true}
+        variant={a.danger && k.graphical ? "secondary" : undefined}
+        onPress={() => k.askConfirm(a.key)}
+      >
+        {draw(marked(a.label))}
       </Button>
     );
-  return (
+  // A question longer than a word or two never goes into the button: it stands as its own wrapped line above the
+  // buttons, and the confirming button keeps the short action label ("Aktualisieren"), so it never runs out of a row.
+  const long = a.confirmLabel !== undefined;
+  const question = marked(long ? a.label : k.s.really(a.label));
+  const buttons = (
     <Box flexDirection="row" gap={1}>
       <Button
         key={a.key}
+        label={a.danger ? question : undefined}
         variant="primary"
         onPress={() => {
           k.clearConfirm();
           a.onConfirm();
         }}
       >
-        {a.confirmLabel ?? k.s.really(a.label)}
+        {draw(question)}
       </Button>
       <Button key={`${a.key}-cancel`} plain onPress={() => k.clearConfirm()}>
         {k.s.cancel}
       </Button>
+    </Box>
+  );
+  if (!long) return buttons;
+  const ask = marked(a.confirmLabel ?? "");
+  return (
+    <Box key={`${a.key}-ask`} flexDirection="column">
+      {a.danger && !k.graphical ? (
+        <Text color="red">{wrapText(ask, k.cols).join("\n")}</Text>
+      ) : (
+        Sentence(k, ask)
+      )}
+      {buttons}
     </Box>
   );
 }
@@ -1400,14 +1489,24 @@ export function ConfirmButton(
  * (`label` names it). The terminal keeps `[ label ]`.
  */
 export function ActionButton(k: Kit, a: Action): RenderElement {
-  const { Button } = k;
+  const { Button, Text } = k;
   if (a.confirm)
     return ConfirmButton(k, {
       key: a.key,
       label: a.label,
       confirmLabel: typeof a.confirm === "string" ? a.confirm : undefined,
       onConfirm: a.onPress,
+      danger: a.danger,
     });
+  if (a.danger) {
+    // the ⚠ is the mark (no icon glyph); a desktop Button takes no color, the terminal draws it red
+    const label = `${DANGER_GLYPH} ${a.label}`;
+    return (
+      <Button key={a.key} label={label} variant="secondary" onPress={a.onPress}>
+        {k.graphical ? label : <Text color="red">{label}</Text>}
+      </Button>
+    );
+  }
   if (!isV2(a))
     return (
       <Button
@@ -1709,6 +1808,7 @@ export function ErrorState(
   const detailLines = shown
     ? details
         .split("\n")
+        .flatMap((l) => (l ? wrapText(l, k.cols) : [" "]))
         .slice(0, Math.max(3, k.rows - 6))
         .map((l) => (
           <Text
@@ -1896,14 +1996,17 @@ export type TabItem<T extends string> = {
 /**
  * Tab bar: one Button per tab keyed `${keyPrefix ?? 'tab-'}${id}`, the active one primary; wraps on narrow bodies (v1).
  * v2 (any `icon` or `maxVisible`): one row of native Buttons, the active one `variant: 'primary'`, the rest plain, each
- * "<label> · <count>" (no glyph); past `maxVisible` the rest sit behind a "More" tab (`${prefix}more`) whose menu lists them
- * under the strip (same keys); the active tab always stays in the strip. Narrow bodies keep the strip on one line.
+ * "<label> · <count>" (no glyph), in a fixed order. Only what does not fit the body width (estimated, `maxVisible` an
+ * upper bound) sits behind a "More ▾" tab (`${prefix}more`, primary while the active tab is in it) whose menu lists
+ * the rest as a framed, indented submenu (same keys) and closes after a choice. The strip wraps rather than clips.
+ * When a tab itself has the id `more`, the overflow button is keyed `${prefix}overflow` instead.
  */
 export function Tabs<T extends string>(
   k: Kit,
   t: {
     tabs: TabItem<T>[];
-    active: T;
+    /** The active tab; `undefined` marks none (another view, e.g. a header button's, covers the body). */
+    active: T | undefined;
     onSelect: (id: T) => void;
     keyPrefix?: string;
     maxVisible?: number;
@@ -1930,39 +2033,62 @@ export function Tabs<T extends string>(
         ))}
       </Box>
     );
-  const max = Math.max(2, t.maxVisible ?? t.tabs.length);
-  let strip = t.tabs;
-  let rest: TabItem<T>[] = [];
-  if (t.tabs.length > max) {
-    strip = t.tabs.slice(0, max - 1);
-    const active = t.tabs.find((tab) => tab.id === t.active);
-    if (active && !strip.includes(active))
-      strip = [...strip.slice(0, -1), active];
-    rest = t.tabs.filter((tab) => !strip.includes(tab));
+  // The strip pages like the band over the prompt: everything that fits stays in one row; otherwise the row shows one
+  // page of tabs, "+N" at its end goes to the next page (N tabs further on) and "‹" at its start goes back. The page
+  // holding the active tab is shown until the person pages; choosing a tab drops the paging again.
+  // Width estimate in body columns: a desktop button is the label + 2 (proportional text, small padding), the terminal
+  // draws "[ label ]" (+4); 1 gap. `maxVisible` caps a page.
+  const pad = k.graphical ? 2 : 4;
+  const width = (label: string) => [...label].length + pad;
+  const max = Math.max(
+    1,
+    Math.min(t.maxVisible ?? t.tabs.length, t.tabs.length),
+  );
+  const total = t.tabs.reduce((w, tab) => w + width(text(tab)) + 1, -1);
+  const pages: TabItem<T>[][] = [];
+  if (t.tabs.length <= max && total <= k.cols) pages.push(t.tabs);
+  else {
+    let start = 0;
+    while (start < t.tabs.length) {
+      const back = start > 0 ? width("‹") + 1 : 0;
+      let used = back;
+      let n = 0;
+      for (let i = start; i < t.tabs.length; i++) {
+        const tab = t.tabs[i] as TabItem<T>;
+        const w = width(text(tab)) + (n ? 1 : 0);
+        const left = t.tabs.length - i - 1;
+        const fwd = left ? width(`+${left}`) + 1 : 0;
+        if (n >= max || (n > 0 && used + w + fwd > k.cols)) break;
+        used += w;
+        n++;
+      }
+      pages.push(t.tabs.slice(start, start + Math.max(1, n)));
+      start += Math.max(1, n);
+    }
   }
-  const menuKey = `${prefix}menu`;
-  const menuOpen = rest.length > 0 && k.isMore(menuKey);
-  const one = (tab: TabItem<T>, inMenu = false) => {
+  const pageKey = `${prefix}page`;
+  const activePage = Math.max(
+    0,
+    pages.findIndex((p) => p.some((tab) => tab.id === t.active)),
+  );
+  const chosen = k.pageOf?.(pageKey);
+  const page = Math.min(pages.length - 1, Math.max(0, chosen ?? activePage));
+  const shown = pages[page] ?? t.tabs;
+  const after = pages.slice(page + 1).reduce((n, p) => n + p.length, 0);
+  // a tab of its own with id "more" (ds-flutter's „Mehr“ tab) keeps its key; the paging button then takes another
+  const moreKey = t.tabs.some((tab) => tab.id === "more")
+    ? `${prefix}overflow`
+    : `${prefix}more`;
+  const one = (tab: TabItem<T>) => {
     const on = tab.id === t.active;
     const press = () => {
-      if (inMenu) k.toggleMore(menuKey);
+      if (chosen !== undefined) k.setPage?.(pageKey, undefined);
       t.onSelect(tab.id);
     };
-    if (k.graphical)
-      return (
-        <Button
-          key={`${prefix}${tab.id}`}
-          label={text(tab)}
-          plain={on ? undefined : true}
-          variant={on ? "primary" : undefined}
-          onPress={press}
-        >
-          {text(tab)}
-        </Button>
-      );
     return (
       <Button
         key={`${prefix}${tab.id}`}
+        label={k.graphical ? text(tab) : undefined}
         plain={on ? undefined : true}
         variant={on ? "primary" : undefined}
         onPress={press}
@@ -1971,54 +2097,22 @@ export function Tabs<T extends string>(
       </Button>
     );
   };
-  const moreText = `${t.moreLabel ?? k.s.more}${menuOpen ? " ▴" : " ▾"}`;
-  const moreTab = !rest.length ? null : k.graphical ? (
+  const nav = (key: string, label: string, to: number) => (
     <Button
-      key={`${prefix}more`}
-      label={t.moreLabel ?? k.s.more}
+      key={key}
+      label={k.graphical ? label : undefined}
       plain
-      onPress={() => k.toggleMore(menuKey)}
+      onPress={() => k.setPage?.(pageKey, to)}
     >
-      {moreText}
+      {label}
     </Button>
-  ) : (
-    <Box flexDirection="row" alignItems="center" gap={1} flexShrink={0}>
-      <Button key={`${prefix}more`} plain onPress={() => k.toggleMore(menuKey)}>
-        {moreText}
-      </Button>
-    </Box>
   );
-  const bar = k.graphical ? (
-    <Box
-      flexDirection="row"
-      alignItems="center"
-      gap={1}
-      flexWrap={k.narrow ? "nowrap" : "wrap"}
-      overflow={k.narrow ? "hidden" : undefined}
-    >
-      {strip.map((tab) => one(tab))}
-      {moreTab}
-    </Box>
-  ) : (
-    <Box flexDirection="row" gap={1} flexWrap="wrap">
-      {strip.map((tab) => one(tab))}
-      {moreTab}
-    </Box>
-  );
-  if (!menuOpen) return bar;
-  const menu = k.graphical ? (
-    <Box flexDirection="row" gap={1} flexWrap="wrap">
-      {rest.map((tab) => one(tab, true))}
-    </Box>
-  ) : (
-    <Box flexDirection="column" paddingLeft={2}>
-      {rest.map((tab) => one(tab, true))}
-    </Box>
-  );
+  // Wraps rather than clips: every tab stays reachable even when the estimate is off.
   return (
-    <Box flexDirection="column" gap={k.graphical ? 1 : 0}>
-      {bar}
-      {menu}
+    <Box flexDirection="row" alignItems="center" gap={1} flexWrap="wrap">
+      {page > 0 ? nav(`${prefix}prev`, "‹", page - 1) : null}
+      {shown.map((tab) => one(tab))}
+      {after > 0 ? nav(moreKey, `+${after}`, page + 1) : null}
     </Box>
   );
 }
@@ -2691,12 +2785,7 @@ export async function mergeLauncherRows(
   // plain buttons, no hover card (it would cover the prompt).
   const { Button } = $.ui.resolve(e) as unknown as Els;
   const pager = (key: string, label: string, to: number) => (
-    <Button
-      key={key}
-      label={label}
-      plain
-      onPress={() => turnBandPage($, to)}
-    >
+    <Button key={key} label={label} plain onPress={() => turnBandPage($, to)}>
       {label}
     </Button>
   );

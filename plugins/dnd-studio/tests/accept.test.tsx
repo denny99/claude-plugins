@@ -157,7 +157,7 @@ test("Build: the plan is signed off by a press, recorded, and the main thread is
   // two steps: the first press asks into which campaign, only the yes sends
   await ui.press({ key: "plan-approve" });
   expect(w.submitted).toEqual([]);
-  const yes = await ui.find({ type: "Button", text: /In „Breeland“ weiterbauen\?/ });
+  const yes = await ui.find({ type: "Text", text: /In „Breeland“ weiterbauen\?/ });
   expect(yes).toBeDefined();
   await ui.press({ key: "plan-approve" });
   expect(w.submitted.length).toBe(1);
@@ -349,7 +349,7 @@ test("Build: a part that cannot be read leaves its rows unchecked and locks the 
   // the other rows still count: maps, pins and NPCs are open, scenes are not
   expect(await findShown(ui, "3 offen")).toBeDefined();
   expect(
-    await ui.find({ type: "Button", text: /Offene Punkte beheben lassen/ }),
+    await ui.find({ type: "Button", text: /Offene Punkte beheben/ }),
   ).toBeUndefined();
   expect(await findShown(ui, /ist gesperrt, bis jeder Teil/)).toBeDefined();
   await ui.unmount();
@@ -361,7 +361,7 @@ test("Build: a part that cannot be read leaves its rows unchecked and locks the 
   expect(by.pins?.unchecked).toBeUndefined();
 });
 
-test("Build: „Offene Punkte beheben lassen“ asks first into which campaign, only the yes sends", async ($, on) => {
+test("Build: „Offene Punkte beheben“ asks first into which campaign, only the yes sends", async ($, on) => {
   const w = world(on);
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd", args: "build" } as never);
@@ -369,7 +369,7 @@ test("Build: „Offene Punkte beheben lassen“ asks first into which campaign, 
   await ui.press({ key: "check-fix" });
   expect(w.submitted).toEqual([]);
   expect(
-    await ui.find({ type: "Button", text: /In „Breeland“ beheben lassen\?/ }),
+    await ui.find({ type: "Text", text: /In „Breeland“ beheben lassen\?/ }),
   ).toBeDefined();
   await ui.press({ key: "check-fix" });
   expect(w.submitted.length).toBe(1);

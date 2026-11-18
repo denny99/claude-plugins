@@ -18,7 +18,7 @@ import { launcherStatus } from '../features/launcher'
 import { statusPill } from '../features/pane'
 import { jobDescription, jobLabel, jobNotes } from '../features/pane/overview'
 import { decisionChoices } from '../features/review/tab'
-import { findShown } from './shown'
+import { findShown, reveal } from './shown'
 import { BRIDGE, fakeWorld, PANE, ROOT, settle } from './world'
 
 type Node = { type: string; key?: string; text?: string; props: Record<string, unknown> }
@@ -398,7 +398,7 @@ test('(4) decision at ~300 px: each option a wrapping text with a short "A wähl
   for (const r of rows) expect(r.props?.flexDirection).toBe('column')
 })
 
-test('(5) "Mehr" closes after a choice, also when the tab changes from the header; narrow keeps "Tests" in the strip', async ($, on) => {
+test('(5) narrow strip pages like the band: „+N“ on, „‹“ back; a choice shows its own page, also from the header', async ($, on) => {
   const world = fakeWorld(on)
   await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
   await settle(world, $.command.run({ command: 'unity', args: '' } as never))
@@ -409,20 +409,18 @@ test('(5) "Mehr" closes after a choice, also when the tab changes from the heade
     props: { ...PANE.props, bodyColumns: 29, scroll: { offset: 0, bodyRows: 30 } },
   })
   const btn = (key: string) => ui.find({ type: 'Button', key })
-  expect(await btn('tab-tests')).toBeDefined() // ~300 px: Übersicht, Tests, Mehr
+  expect(await btn('tab-tests')).toBeDefined() // ~300 px: Übersicht, Tests, +N
   expect(await btn('tab-console')).toBeUndefined()
-  await settle(world, ui.press({ key: 'tab-more' }))
-  expect(await btn('tab-console')).toBeDefined()
+  expect(String((await btn('tab-more'))?.props.label)).toMatch(/^\+\d+$/)
+  await reveal(ui, 'tab-target')
   await settle(world, ui.press({ key: 'tab-target' }))
-  expect(await btn('tab-console')).toBeUndefined() // the choice closed the menu
-  await settle(world, ui.press({ key: 'tab-overview' }))
-  await settle(world, ui.press({ key: 'tab-more' }))
-  expect(await btn('tab-console')).toBeDefined()
-  await settle(world, ui.press({ key: 'tab-target' })) // Ziel from the open menu (no header knob any more)
-  expect(await btn('tab-console')).toBeUndefined()
+  expect((await btn('tab-target'))?.props.variant).toBe('primary') // the page with the chosen tab stays
+  expect(await btn('tab-overview')).toBeUndefined()
   expect(await ui.find({ type: 'Button', key: 'settings' })).toBeUndefined()
-  await settle(world, ui.press({ key: 'tab-overview' })) // the menu left open on Übersicht does not come back
-  expect(await btn('tab-console')).toBeUndefined()
+  await reveal(ui, 'tab-overview')
+  await settle(world, ui.press({ key: 'tab-overview' }))
+  expect(await btn('tab-tests')).toBeDefined() // back on the first page, no „‹“
+  expect(await btn('tab-prev')).toBeUndefined()
   await ui.unmount()
 })
 
@@ -465,7 +463,7 @@ test('(r1) console warnings say what they count: compiler warnings Unity logged 
   expect(consoleWarningsLine([{ type: 'Log', message: 'x' }])).toBeUndefined()
 })
 
-test('(r2) "Ziel" only as a tab: no header knob, the narrow pane reaches it through "Mehr"', async ($, on) => {
+test('(r2) "Ziel" only as a tab: no header knob, the narrow pane reaches it by paging', async ($, on) => {
   const world = fakeWorld(on)
   await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
   await settle(world, $.command.run({ command: 'unity', args: '' } as never))
@@ -476,7 +474,7 @@ test('(r2) "Ziel" only as a tab: no header knob, the narrow pane reaches it thro
     props: { ...PANE.props, bodyColumns: 29, scroll: { offset: 0, bodyRows: 30 } },
   })
   expect(await ui.find({ type: 'Button', key: 'settings' })).toBeUndefined()
-  await settle(world, ui.press({ key: 'tab-more' }))
+  await reveal(ui, 'tab-target')
   await settle(world, ui.press({ key: 'tab-target' }))
   expect((await findShown(ui, /Worauf Claude arbeitet/))?.text).toBeDefined()
   await ui.unmount()
@@ -531,7 +529,7 @@ test('(r5) Ziel tab narrow: the pill goes below a one-word title, the restore li
       viewport: { columns: cols, rows: 40 },
       props: { ...PANE.props, bodyColumns: cols, scroll: { offset: 0, bodyRows: 40 } },
     })
-    if (!(await ui.find({ type: 'Button', key: 'tab-target' }))) await settle(world, ui.press({ key: 'tab-more' }))
+    await reveal(ui, 'tab-target')
     await settle(world, ui.press({ key: 'tab-target' }))
     const value = (await ui.findAll({ type: 'Text' })).find(t => t.text === restore.join(', '))
     expect(value).toBeDefined()

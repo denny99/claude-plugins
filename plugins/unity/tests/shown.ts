@@ -20,3 +20,22 @@ export async function findShown(ui: Ui, text: string | RegExp): Promise<{ text: 
   )
   return hit === undefined ? undefined : { text: hit }
 }
+
+/**
+ * Pages a paged kit strip (Tabs: „‹“ back, „+N“ on) until the button `key` is drawn; does nothing when it already is.
+ * `prefix` is the strip's key prefix ('tab-' for the pane tabs, 'rv-tab-' for the review sub tabs).
+ */
+export async function reveal(
+  ui: {
+    find: (q: { type?: string; key?: string }) => Promise<unknown>
+    press: (q: { key: string }) => Promise<unknown>
+  },
+  key: string,
+  prefix = 'tab-',
+): Promise<void> {
+  const has = async (k: string) => !!(await ui.find({ type: 'Button', key: k }))
+  for (let i = 0; i < 10 && !(await has(key)) && (await has(`${prefix}prev`)); i++)
+    await ui.press({ key: `${prefix}prev` })
+  for (let i = 0; i < 10 && !(await has(key)) && (await has(`${prefix}more`)); i++)
+    await ui.press({ key: `${prefix}more` })
+}

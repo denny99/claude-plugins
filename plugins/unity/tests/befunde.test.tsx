@@ -95,8 +95,10 @@ test('tests tab: nothing preselected; "Alle Tests" asks first; no one-click full
   await settle(world, ui.press({ key: 'edit-tests' }))
   const runs = () => Object.entries(world.files).filter(([p, t]) => p.includes('/cmd-') && t.includes('run-tests'))
   expect(runs().length).toBe(0)
+  // the question stands as a line above the buttons, the button keeps its short label
+  expect((await findShown(ui, /^Alle EditMode-Tests \(die ganze Suite\)\? Der Editor ist bis zum Ende blockiert\./))?.text).toBeDefined()
   const ask = (await ui.find({ type: 'Button', key: 'edit-tests' })) as { props: { label?: string }; text?: string }
-  expect(JSON.stringify(ask)).toContain('Alle EditMode-Tests (die ganze Suite)? Der Editor ist bis zum Ende blockiert.')
+  expect(String(ask?.text).split(' ').length).toBeLessThanOrEqual(3)
   await settle(world, ui.press({ key: 'edit-tests' }))
   expect(runs().length).toBe(1)
   expect(JSON.parse(runs()[0]?.[1] ?? '{}').filter).toBeUndefined()

@@ -632,7 +632,7 @@ export function registerBuild(on: On): void {
   });
 }
 
-/** "Offene Punkte beheben lassen": asks Claude to start the named agent for every open item. */
+/** "Offene Punkte beheben": asks Claude to start the named agent for every open item. */
 export function fixPrompt(open: AcceptItem[]): string {
   const lines = open
     .filter((it) => it.fix)
@@ -949,13 +949,13 @@ export async function renderBuild(
               unchecked.length && open.some((it) => it.fix)
                 ? Sentence(
                     k,
-                    "„Offene Punkte beheben lassen“ ist gesperrt, bis jeder Teil der Kampagne gelesen ist: „Neu prüfen“ versucht es noch einmal.",
+                    "„Offene Punkte beheben“ ist gesperrt, bis jeder Teil der Kampagne gelesen ist: „Neu prüfen“ versucht es noch einmal.",
                     { faint: true },
                   )
                 : canFix
                   ? Sentence(
                     k,
-                    `„Offene Punkte beheben lassen“ bittet Claude, ${agentLabel(open.map((it) => it.fix).filter(Boolean).join(", ")).split(", ").filter((v, i, a) => a.indexOf(v) === i).join(", ")} zu starten. Sie schreiben und malen direkt in ${campName ? `„${campName}“` : "die offene Kampagne"}; danach wird neu geprüft.`,
+                    `„Offene Punkte beheben“ bittet Claude, ${agentLabel(open.map((it) => it.fix).filter(Boolean).join(", ")).split(", ").filter((v, i, a) => a.indexOf(v) === i).join(", ")} zu starten. Sie schreiben und malen direkt in ${campName ? `„${campName}“` : "die offene Kampagne"}; danach wird neu geprüft.`,
                     { faint: true },
                   )
                   : null,
@@ -979,7 +979,7 @@ export async function renderBuild(
                     k,
                     {
                       key: "check-fix",
-                      label: "Offene Punkte beheben lassen",
+                      label: "Offene Punkte beheben",
                       icon: "wand",
                       variant: "primary",
                       text: fixPrompt(open),

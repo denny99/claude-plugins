@@ -230,6 +230,9 @@ export type Kit = Els & {
   toggleMore: (key: string) => void
   /** Drops every "more" entry starting with `prefix`, then adds `key` when given (one write). */
   setMore: (prefix: string, key?: string) => void
+  /** The page a paged strip (Tabs) was turned to; undefined = follow the active tab. */
+  pageOf?: (key: string) => number | undefined
+  setPage?: (key: string, page: number | undefined) => void
   isConfirming: (key: string) => boolean
   askConfirm: (key: string) => void
   clearConfirm: () => void
@@ -318,7 +321,6 @@ export async function kit(
     graphical,
     brand,
     mode,
-    // Graphical surfaces follow the app window (the engine `theme` can stay dark on a light window): theme keys, no fills.
     t: graphical && opts.mode !== 'dark' && opts.mode !== 'light' ? windowTokens(brand) : themeTokens(brand, mode),
     s: KIT_STRINGS[opts.lang ?? 'en'],
     state,
@@ -328,6 +330,14 @@ export async function kit(
     toggleMore: key => void patchUi($, s => ({ more: flip(s.more, key) })),
     setMore: (prefix, key) =>
       void patchUi($, s => ({ more: [...s.more.filter(x => !x.startsWith(prefix)), ...(key ? [key] : [])] })),
+    pageOf: key => state.pages?.[key],
+    setPage: (key, page) =>
+      void patchUi($, s => {
+        const pages = { ...(s.pages ?? {}) }
+        if (page === undefined) delete pages[key]
+        else pages[key] = page
+        return { pages }
+      }),
     isConfirming: key => state.confirm === key,
     askConfirm: key => void patchUi($, { confirm: key }),
     clearConfirm: () => void patchUi($, { confirm: undefined }),
@@ -456,7 +466,8 @@ function charWidth(c: string): number {
 
 /**
  * The `<svg>` document of a graphical pill: a slightly rounded tinted rect (`rx` = PILL.radius), an optional icon at
- * the left and the text in the system font, both in the tone color. Width estimated from the text length.
+ * the left and the text in the system font, both in the tone color. Width estimated from the text length; the text is
+ * centred in its room so an estimate that is off spreads over both sides instead of eating the right padding.
  */
 export function pillSvg(text: string, fg: string, bg: string, icon?: IconName): { source: string; width: number } {
   const iconW = icon ? PILL.icon + PILL.gap : 0
@@ -470,8 +481,9 @@ export function pillSvg(text: string, fg: string, bg: string, icon?: IconName): 
     : ''
   const source = svgDocument(
     `<svg viewBox="0 0 ${width} ${PILL.h}"><rect width="${width}" height="${PILL.h}" rx="${PILL.radius}" ` +
-      `fill="${bg}"></rect>${mark}<text x="${PILL.pad + iconW + textW / 2}" y="${PILL.h / 2 + PILL.font * 0.35}" ` +
-      `text-anchor="middle" font-family="-apple-system, Segoe UI, sans-serif" font-size="${PILL.font}" font-weight="600" ` +
+      `fill="${bg}"></rect>${mark}<text x="${PILL.pad + iconW + textW / 2}" text-anchor="middle" ` +
+      `y="${PILL.h / 2 + PILL.font * 0.35}" ` +
+      `font-family="-apple-system, Segoe UI, sans-serif" font-size="${PILL.font}" font-weight="600" ` +
       `fill="${fg}">${xmlText(text)}</text></svg>`,
   )
   return { source, width }
@@ -628,17 +640,31 @@ export function Sentence(
   )
 }
 
-export type IconAction = { key: string; icon: IconName; label: string; onPress: () => void }
+export type IconAction = {
+  key: string
+  icon: IconName
+  label: string
+  onPress: () => void
+  /** `primary` marks a knob whose view is open (e.g. a Jobs view covering the tabs); default secondary. */
+  variant?: 'primary' | 'secondary'
+}
 
 /**
  * A header knob: a native Button, pressable as a whole. Graphical: "<glyph> <label>" (compact bodies: the glyph alone,
- * `label` stays its accessible name), `variant` secondary. Terminal: a one-glyph plain Button named by `label`.
+ * `label` stays its accessible name), `variant` secondary unless the action says primary. Terminal: a one-glyph
+ * Button named by `label`, plain unless primary.
  */
 export function IconButton(k: Kit, a: IconAction): RenderElement {
   const { Button } = k
   if (!k.graphical)
     return (
-      <Button key={a.key} label={a.label} plain onPress={a.onPress}>
+      <Button
+        key={a.key}
+        label={a.label}
+        plain={a.variant === 'primary' ? undefined : true}
+        variant={a.variant === 'primary' ? 'primary' : undefined}
+        onPress={a.onPress}
+      >
         {TERM_GLYPHS[a.icon] ?? a.label}
       </Button>
     )
@@ -646,7 +672,7 @@ export function IconButton(k: Kit, a: IconAction): RenderElement {
   // A desktop draws `label` in place of the children: the glyph must be in the label itself.
   const shown = k.compact && glyph ? glyph : glyphLabel(a.icon, a.label)
   return (
-    <Button key={a.key} label={shown} variant="secondary" onPress={a.onPress}>
+    <Button key={a.key} label={shown} variant={a.variant ?? 'secondary'} onPress={a.onPress}>
       {shown}
     </Button>
   )
@@ -733,7 +759,7 @@ function Rule(k: Kit): RenderElement | null {
       source={svgDocument(
         `<svg width="4000" height="1" viewBox="0 0 4000 1" preserveAspectRatio="none"><rect width="4000" height="1" fill="${k.t.line}"/></svg>`,
       )}
-      alt="Trennlinie"
+      alt="divider"
       height={1}
     />
   )
@@ -891,7 +917,10 @@ export function Stepper(k: Kit, s: { key?: string; steps: Step[] }): RenderEleme
   )
 }
 
-/** A list row: status icon, title, meta (hidden when narrow), a pill, actions. Error rows get the cross-in-circle. */
+/**
+ * A list row: status icon, title, meta, a pill, actions. Error rows get the cross-in-circle. Narrow (graphical) or
+ * compact (terminal) bodies put the meta on a wrapping line of its own under the title instead of dropping it.
+ */
 export function ListRow(
   k: Kit,
   r: {
@@ -915,15 +944,20 @@ export function ListRow(
     const pillLen = r.pill ? [...r.pill.text].length + 3 : 0
     const head = truncate(`${mark ? `${mark} ` : ''}${sanitize(r.title)}`, Math.max(6, k.cols - pillLen))
     const rest = Math.max(0, k.cols - [...head].length - pillLen)
+    const inline = !!meta && rest > 3
+    const below = r.meta && !inline ? wrapText(sanitize(r.meta), Math.max(4, k.cols - 2)) : []
     return (
       <Box key={r.key} flexDirection="column">
         <Box flexDirection="row" gap={1}>
           <Text color={tone ? terminalColor(k.brand, tone) : undefined} dimColor={g?.dim}>
             {head}
-            {meta && rest > 3 ? <Text dimColor>{truncate(meta, rest)}</Text> : null}
+            {inline ? <Text dimColor>{truncate(meta, rest)}</Text> : null}
           </Text>
           {r.pill ? Pill(k, r.pill) : null}
         </Box>
+        {below.map(line => (
+          <Text dimColor>{`  ${line}`}</Text>
+        ))}
         {r.actions?.length ? Actions(k, r.key, r.actions) : null}
       </Box>
     )
@@ -952,6 +986,11 @@ export function ListRow(
         ) : null}
         {acts && !k.narrow ? acts : null}
       </Box>
+      {r.meta && k.narrow ? (
+        <Text size="caption" color={k.t.faint} wrap="wrap">
+          {sanitize(r.meta)}
+        </Text>
+      ) : null}
       {acts && k.narrow ? acts : null}
     </Box>
   )
@@ -1129,7 +1168,14 @@ export type Action = {
   icon?: IconName
   /** v2: primary (one per view), secondary, link (plain text button). Absent with no icon: the v1 plain look. */
   variant?: 'primary' | 'secondary' | 'link'
+  /**
+   * Destroys data (delete, wipe, prune): the label carries a ⚠ in front on every surface (a desktop Button takes no
+   * color), the terminal draws it red. Pair it with `confirm` naming the target and the consequence.
+   */
+  danger?: boolean
 }
+
+const DANGER_GLYPH = '⚠'
 
 function isV2(a: Action): boolean {
   return a.icon !== undefined || a.variant !== undefined
@@ -1161,31 +1207,61 @@ export function StatusGlyph(k: Kit, status: Status): RenderElement {
   )
 }
 
-/** Two-step destructive button: first press turns it into "Really …?" + Cancel. */
+/**
+ * Two-step destructive button: first press turns it into "Really …?" + Cancel. `danger`: a ⚠ in front of both labels
+ * (the terminal draws them red).
+ */
 export function ConfirmButton(
   k: Kit,
-  a: { key: string; label: string; confirmLabel?: string; onConfirm: () => void },
+  a: { key: string; label: string; confirmLabel?: string; onConfirm: () => void; danger?: boolean },
 ): RenderElement {
-  const { Box, Button } = k
+  const { Box, Button, Text } = k
+  const marked = (text: string) => (a.danger ? `${DANGER_GLYPH} ${text}` : text)
+  const draw = (text: string) => (a.danger && !k.graphical ? <Text color="red">{text}</Text> : text)
   // Graphical: a real (secondary) button like its neighbours, not bare text; the terminal keeps the plain one.
-  if (!k.isConfirming(a.key))
-    return k.graphical ? (
+  if (!k.isConfirming(a.key) && k.graphical && !a.danger)
+    return (
       <Button key={a.key} label={a.label} variant="secondary" onPress={() => k.pressConfirm(a.key, a.onConfirm)}>
         {a.label}
       </Button>
-    ) : (
-      <Button key={a.key} plain onPress={() => k.pressConfirm(a.key, a.onConfirm)}>
-        {a.label}
+    )
+  if (!k.isConfirming(a.key))
+    return (
+      <Button
+        key={a.key}
+        label={a.danger ? marked(a.label) : undefined}
+        plain={a.danger && k.graphical ? undefined : true}
+        variant={a.danger && k.graphical ? 'secondary' : undefined}
+        onPress={() => k.pressConfirm(a.key, a.onConfirm)}
+      >
+        {draw(marked(a.label))}
       </Button>
     )
-  return (
+  // A question longer than a word or two never goes into the button: it stands as its own wrapped line above the
+  // buttons, and the confirming button keeps the short action label ("Aktualisieren"), so it never runs out of a row.
+  const long = a.confirmLabel !== undefined
+  const question = marked(long ? a.label : k.s.really(a.label))
+  const buttons = (
     <Box flexDirection="row" gap={1}>
-      <Button key={a.key} variant="primary" onPress={() => k.pressConfirm(a.key, a.onConfirm)}>
-        {a.confirmLabel ?? k.s.really(a.label)}
+      <Button
+        key={a.key}
+        label={a.danger ? question : undefined}
+        variant="primary"
+        onPress={() => k.pressConfirm(a.key, a.onConfirm)}
+      >
+        {draw(question)}
       </Button>
       <Button key={`${a.key}-cancel`} plain onPress={() => k.clearConfirm()}>
         {k.s.cancel}
       </Button>
+    </Box>
+  )
+  if (!long) return buttons
+  const ask = marked(a.confirmLabel ?? '')
+  return (
+    <Box key={`${a.key}-ask`} flexDirection="column">
+      {a.danger && !k.graphical ? <Text color="red">{wrapText(ask, k.cols).join('\n')}</Text> : Sentence(k, ask)}
+      {buttons}
     </Box>
   )
 }
@@ -1197,14 +1273,24 @@ export function ConfirmButton(
  * (`label` names it). The terminal keeps `[ label ]`.
  */
 export function ActionButton(k: Kit, a: Action): RenderElement {
-  const { Button } = k
+  const { Button, Text } = k
   if (a.confirm)
     return ConfirmButton(k, {
       key: a.key,
       label: a.label,
       confirmLabel: typeof a.confirm === 'string' ? a.confirm : undefined,
       onConfirm: a.onPress,
+      danger: a.danger,
     })
+  if (a.danger) {
+    // the ⚠ is the mark (no icon glyph); a desktop Button takes no color, the terminal draws it red
+    const label = `${DANGER_GLYPH} ${a.label}`
+    return (
+      <Button key={a.key} label={label} variant="secondary" onPress={a.onPress}>
+        {k.graphical ? label : <Text color="red">{label}</Text>}
+      </Button>
+    )
+  }
   if (!isV2(a))
     return (
       <Button
@@ -1464,6 +1550,7 @@ export function ErrorState(
   const detailLines = shown
     ? details
         .split('\n')
+        .flatMap(l => (l ? wrapText(l, k.cols) : [' ']))
         .slice(0, Math.max(3, k.rows - 6))
         .map(l => (
           <Text
@@ -1615,12 +1702,14 @@ export type TabItem<T extends string> = {
  * "<label> · <count>" (no glyph), in a fixed order. Only what does not fit the body width (estimated, `maxVisible` an
  * upper bound) sits behind a "More ▾" tab (`${prefix}more`, primary while the active tab is in it) whose menu lists
  * the rest as a framed, indented submenu (same keys) and closes after a choice. The strip wraps rather than clips.
+ * When a tab itself has the id `more`, the overflow button is keyed `${prefix}overflow` instead.
  */
 export function Tabs<T extends string>(
   k: Kit,
   t: {
     tabs: TabItem<T>[]
-    active: T
+    /** The active tab; `undefined` marks none (another view, e.g. a header button's, covers the body). */
+    active: T | undefined
     onSelect: (id: T) => void
     keyPrefix?: string
     maxVisible?: number
@@ -1647,60 +1736,57 @@ export function Tabs<T extends string>(
         ))}
       </Box>
     )
-  // The strip keeps its order whatever is active (no tab jumps in or out); only what does not fit goes behind "More".
-  // Width estimate in body columns: label + the button's padding (2 on the desktop, whose plain buttons are slim; 3 in
-  // the terminal), 1 gap; `maxVisible` is an upper bound only. 3 on the desktop left "Tests" behind "Mehr" at ~300 px.
-  const pad = k.graphical ? 2 : 3
+  // The strip pages like the band over the prompt: everything that fits stays in one row; otherwise the row shows one
+  // page of tabs, "+N" at its end goes to the next page (N tabs further on) and "‹" at its start goes back. The page
+  // holding the active tab is shown until the person pages; choosing a tab drops the paging again.
+  // Width estimate in body columns: a desktop button is the label + 2 (proportional text, small padding), the terminal
+  // draws "[ label ]" (+4); 1 gap. `maxVisible` caps a page.
+  const pad = k.graphical ? 2 : 4
   const width = (label: string) => [...label].length + pad
-  const moreName = t.moreLabel ?? k.s.more
-  const activeTab = t.tabs.find(tab => tab.id === t.active)
   const max = Math.max(1, Math.min(t.maxVisible ?? t.tabs.length, t.tabs.length))
   const total = t.tabs.reduce((w, tab) => w + width(text(tab)) + 1, -1)
-  let strip = t.tabs
-  let rest: TabItem<T>[] = []
-  if (t.tabs.length > max || total > k.cols) {
-    const moreRoom = width(`${moreName} ▾`) + 1
-    let used = 0
-    let n = 0
-    for (const tab of t.tabs) {
-      const w = width(text(tab)) + (n ? 1 : 0)
-      if (n >= max - 1 || (n > 0 && used + w + moreRoom > k.cols)) break
-      used += w
-      n++
+  const pages: TabItem<T>[][] = []
+  if (t.tabs.length <= max && total <= k.cols) pages.push(t.tabs)
+  else {
+    let start = 0
+    while (start < t.tabs.length) {
+      const back = start > 0 ? width('‹') + 1 : 0
+      let used = back
+      let n = 0
+      for (let i = start; i < t.tabs.length; i++) {
+        const tab = t.tabs[i] as TabItem<T>
+        const w = width(text(tab)) + (n ? 1 : 0)
+        const left = t.tabs.length - i - 1
+        const fwd = left ? width(`+${left}`) + 1 : 0
+        if (n >= max || (n > 0 && used + w + fwd > k.cols)) break
+        used += w
+        n++
+      }
+      pages.push(t.tabs.slice(start, start + Math.max(1, n)))
+      start += Math.max(1, n)
     }
-    strip = t.tabs.slice(0, Math.max(1, n))
-    rest = t.tabs.slice(strip.length)
   }
-  // The open menu belongs to the tab it was opened on (`…menu@<active>`): any change of the active tab closes it,
-  // also one from outside the strip (the header's "Ziel" button), which never touched the kit state before.
-  const menuBase = `${prefix}menu`
-  const menuKey = `${menuBase}@${t.active}`
-  const menuOpen = rest.length > 0 && k.isMore(menuKey)
-  const stale = k.state.more.some(x => x.startsWith(menuBase) && x !== menuKey)
-  const activeInRest = !!activeTab && rest.includes(activeTab)
-  const toggleMenu = () => (menuOpen ? k.setMore(menuBase) : k.setMore(menuBase, menuKey))
+  const pageKey = `${prefix}page`
+  const activePage = Math.max(
+    0,
+    pages.findIndex(p => p.some(tab => tab.id === t.active)),
+  )
+  const chosen = k.pageOf?.(pageKey)
+  const page = Math.min(pages.length - 1, Math.max(0, chosen ?? activePage))
+  const shown = pages[page] ?? t.tabs
+  const after = pages.slice(page + 1).reduce((n, p) => n + p.length, 0)
+  // a tab of its own with id "more" (ds-flutter's „Mehr“ tab) keeps its key; the paging button then takes another
+  const moreKey = t.tabs.some(tab => tab.id === 'more') ? `${prefix}overflow` : `${prefix}more`
   const one = (tab: TabItem<T>) => {
     const on = tab.id === t.active
     const press = () => {
-      // a choice closes the menu (also one from the strip while it is open) and clears one left from another tab
-      if (menuOpen || stale) k.setMore(menuBase)
-      if (!on) t.onSelect(tab.id)
+      if (chosen !== undefined) k.setPage?.(pageKey, undefined)
+      t.onSelect(tab.id)
     }
-    if (k.graphical)
-      return (
-        <Button
-          key={`${prefix}${tab.id}`}
-          label={text(tab)}
-          plain={on ? undefined : true}
-          variant={on ? 'primary' : undefined}
-          onPress={press}
-        >
-          {text(tab)}
-        </Button>
-      )
     return (
       <Button
         key={`${prefix}${tab.id}`}
+        label={k.graphical ? text(tab) : undefined}
         plain={on ? undefined : true}
         variant={on ? 'primary' : undefined}
         onPress={press}
@@ -1709,49 +1795,17 @@ export function Tabs<T extends string>(
       </Button>
     )
   }
-  // The arrow sits in the shown label too (the desktop draws `label`); an active tab behind "More" marks it primary.
-  const moreText = `${moreName}${menuOpen ? ' ▴' : ' ▾'}`
-  const moreTab = !rest.length ? null : k.graphical ? (
-    <Button
-      key={`${prefix}more`}
-      label={moreText}
-      plain={activeInRest ? undefined : true}
-      variant={activeInRest ? 'primary' : undefined}
-      onPress={toggleMenu}
-    >
-      {moreText}
+  const nav = (key: string, label: string, to: number) => (
+    <Button key={key} label={k.graphical ? label : undefined} plain onPress={() => k.setPage?.(pageKey, to)}>
+      {label}
     </Button>
-  ) : (
-    <Box flexDirection="row" alignItems="center" gap={1} flexShrink={0}>
-      <Button key={`${prefix}more`} plain onPress={toggleMenu}>
-        {moreText}
-      </Button>
-    </Box>
   )
   // Wraps rather than clips: every tab stays reachable even when the estimate is off.
-  const bar = (
-    <Box flexDirection="row" alignItems="center" gap={1} flexWrap="wrap">
-      {strip.map(tab => one(tab))}
-      {moreTab}
-    </Box>
-  )
-  if (!menuOpen) return bar
-  // The menu reads as a submenu of "More": its own framed, indented list, one entry per row.
-  const menu = k.graphical ? (
-    <Box key={`${prefix}menu-list`} flexDirection="column" paddingLeft={2}>
-      <Box flexDirection="column" padding={1} borderStyle="round" borderColor={k.t.border}>
-        {rest.map(tab => one(tab))}
-      </Box>
-    </Box>
-  ) : (
-    <Box flexDirection="column" paddingLeft={2}>
-      {rest.map(tab => one(tab))}
-    </Box>
-  )
   return (
-    <Box flexDirection="column" gap={k.graphical ? 'xs' : 0}>
-      {bar}
-      {menu}
+    <Box flexDirection="row" alignItems="center" gap={1} flexWrap="wrap">
+      {page > 0 ? nav(`${prefix}prev`, '‹', page - 1) : null}
+      {shown.map(tab => one(tab))}
+      {after > 0 ? nav(moreKey, `+${after}`, page + 1) : null}
     </Box>
   )
 }
@@ -1917,7 +1971,10 @@ async function releaseAsk($: EngineInterface, key: string, at: number): Promise<
  * `turn.start` of the main loop (call after `await next(e)`): Claude is busy; each waiting task whose probe is in
  * this turn's text is now being answered, bound to this turn. Tasks not in the text keep waiting.
  */
-export async function askTurnStart($: EngineInterface, e: { agentId?: string; text?: string; turnId?: string }): Promise<void> {
+export async function askTurnStart(
+  $: EngineInterface,
+  e: { agentId?: string; text?: string; turnId?: string },
+): Promise<void> {
   if (e.agentId !== undefined) return
   const now = await $.clock.now()
   const text = fold(e.text ?? '')
@@ -2122,7 +2179,11 @@ export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
       {`· ${sanitize(c.status)}`}
     </Text>
   ) : (
-    <Text color={tone ? terminalColor(k.brand, tone) : undefined} dimColor={tone ? undefined : true} wrap="truncate-end">
+    <Text
+      color={tone ? terminalColor(k.brand, tone) : undefined}
+      dimColor={tone ? undefined : true}
+      wrap="truncate-end"
+    >
       {`· ${truncate(c.status, Math.max(6, Math.floor(k.cols / 3)))}`}
     </Text>
   )
@@ -2163,8 +2224,7 @@ type BandNode = { type?: unknown; props?: Record<string, unknown>; children?: un
 /** A Button in a settled tree: its handler sits in `press` once drawn, in `props.onPress` before. */
 const isPressable = (n: BandNode): boolean =>
   n.type === 'Button' || n.press !== undefined || typeof n.props?.onPress === 'function'
-const rootProps = (row: BandRow) =>
-  (row.tree as { props?: { key?: unknown; justifyContent?: unknown } }).props
+const rootProps = (row: BandRow) => (row.tree as { props?: { key?: unknown; justifyContent?: unknown } }).props
 
 /** Whether a band row is a launcher row (its root Box keyed `launch:…`). */
 export function isLauncherRow(row: BandRow): boolean {
@@ -2195,7 +2255,9 @@ const plainText = (n: unknown): string =>
   typeof n === 'string' || typeof n === 'number'
     ? String(n)
     : n && typeof n === 'object'
-      ? nodeKids(n as BandNode).map(plainText).join('')
+      ? nodeKids(n as BandNode)
+          .map(plainText)
+          .join('')
       : ''
 
 /** The names of a starter row's buttons (their `label`), in order. */
@@ -2248,7 +2310,8 @@ export function starterMinWidth(row: BandRow): number {
  */
 export function fitStarters<T extends BandRow>(starters: readonly T[], columns: number): { shown: T[]; hidden: T[] } {
   const gap = 2
-  const need = (rows: readonly T[]) => rows.reduce((sum, r) => sum + starterMinWidth(r), 0) + Math.max(0, rows.length - 1) * gap
+  const need = (rows: readonly T[]) =>
+    rows.reduce((sum, r) => sum + starterMinWidth(r), 0) + Math.max(0, rows.length - 1) * gap
   const shown = [...starters]
   const hidden: T[] = []
   const more = () => (hidden.length ? gap + `+${hidden.length}`.length + 2 : 0)

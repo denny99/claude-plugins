@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { findShown, shownTexts } from './shown'
+import { findShown, reveal, shownTexts } from './shown'
 
 import { bashVerdictReason } from '../features/bash'
 import { launcherStatus } from '../features/launcher'
@@ -242,8 +242,7 @@ test('render check: every pane section on every surface at 40x15 and 120x40 stay
       })
       await settle(world, ui.press({ key: 'tab-overview' }))
       for (const view of VIEWS) {
-        if (view.press && !(await ui.find({ type: 'Button', key: view.press })))
-          await settle(world, ui.press({ key: 'tab-more' }))
+        if (view.press) await reveal(ui, view.press)
         if (view.press) await settle(world, ui.press({ key: view.press }))
         const texts = await ui.findAll({ type: 'Text' })
         expect((await shownTexts(ui)).length).toBeGreaterThan(3)
@@ -258,6 +257,7 @@ test('render check: every pane section on every surface at 40x15 and 120x40 stay
         if (!texts.some(t => view.expect.test(t.text)))
           throw new Error(`${surface}/${cols}/${view.press ?? 'overview'}: nothing matches ${view.expect}`)
       }
+      await reveal(ui, 'tab-overview')
       await settle(world, ui.press({ key: 'tab-overview' }))
       await ui.unmount()
     }

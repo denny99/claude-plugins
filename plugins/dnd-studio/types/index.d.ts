@@ -6,6 +6,8 @@ export type UiKitState = {
   more: string[];
   details: string[];
   logMore: string[];
+  /** Paged strips (Tabs): the page turned to, by key; absent = the page with the active tab. */
+  pages?: Record<string, number>;
 };
 
 export type Tab = "table" | "build" | "review" | "health";

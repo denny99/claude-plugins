@@ -7,6 +7,8 @@ export type UiKitState = {
   more: string[]
   details: string[]
   logMore: string[]
+  /** Paged strips (Tabs): the page turned to, by key; absent = the page with the active tab. */
+  pages?: Record<string, number>
 }
 
 /** One task sent to Claude (kit section „ask Claude“): queued until a turn carrying its probe starts, then running, then done. */

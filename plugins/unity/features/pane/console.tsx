@@ -46,7 +46,7 @@ export function consoleTab($: EngineInterface, k: Kit, m: UnityModel, options: O
     tools.push(
       askAction($, k, {
         key: 'console-fix-all',
-        label: `Alle ${handable.length} ${kind} an Claude geben`,
+        label: `${kind} an Claude`,
         text: consolePrompt(handable.slice(-20)),
       }),
     )

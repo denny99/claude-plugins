@@ -42,7 +42,7 @@ test("ask Claude: two presses across a turn end give exactly one prompt; the loc
   // sending again is a choice: it asks first, then goes once more
   await ui.press({ key: "check-fix" });
   expect(w.submitted).toHaveLength(1);
-  expect(await ui.find({ type: "Button", text: /In „Breeland“ beheben lassen\?/ })).toBeDefined();
+  expect(await ui.find({ type: "Text", text: /In „Breeland“ beheben lassen\?/ })).toBeDefined();
   await ui.press({ key: "check-fix" });
   expect(w.submitted).toHaveLength(2);
   await ui.unmount();
@@ -63,7 +63,7 @@ test("ask Claude: a subagent's turn and a typed prompt release nothing; the fall
   await $.turn.complete(done("t-typed"));
   expect((await ui.find({ type: "Button", key: "check-fix" }))?.text).toContain("An Claude geschickt");
   await w.clock.advance(15 * 60_000 + 1);
-  expect((await ui.find({ type: "Button", key: "check-fix" }))?.text).toBe("Offene Punkte beheben lassen");
+  expect((await ui.find({ type: "Button", key: "check-fix" }))?.text).toBe("Offene Punkte beheben");
   // free again: the next yes sends anew
   await ui.press({ key: "check-fix" });
   await ui.press({ key: "check-fix" });

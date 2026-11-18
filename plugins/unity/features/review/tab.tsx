@@ -709,7 +709,7 @@ function soundsBody(
           [
             {
               key: 'rv-mode-near',
-              label: 'Klang an der Figur (3D)',
+              label: 'An der Figur (3D)',
               icon: snd.mode === 'near' ? 'check' : 'circle',
               variant: 'secondary',
               onPress: () => void setSoundMode($, 'near'),

@@ -1,5 +1,5 @@
 import { expect, test, type Engine } from 'claude-code/testing'
-import { findShown } from './shown'
+import { findShown, reveal } from './shown'
 
 import {
   appendLines,
@@ -369,11 +369,16 @@ test('schmales Panel: Entscheidungs-Optionen ganz lesbar, keine „Entscheiden�
     viewport: { columns: 40, rows: 30 },
     props: { ...PANE.props, bodyColumns: 40, scroll: { offset: 0, bodyRows: 30 } },
   })
-  if (!(await ui.find({ type: 'Button', key: 'tab-review' }))) await settle(world, ui.press({ key: 'tab-more' }))
+  await reveal(ui, 'tab-review')
   await settle(world, ui.press({ key: 'tab-review' }))
   const subs = async () =>
     (await ui.findAll({ type: 'Button' })).map(b => String(b.props.key ?? '')).filter(k => /^rv-tab-/.test(k))
-  if ((await subs()).includes('rv-tab-more')) await settle(world, ui.press({ key: 'rv-tab-more' }))
+  // the sub tabs page like the band: every one is reachable through „+N“
+  const seen = new Set(await subs())
+  for (let i = 0; i < 10 && (await subs()).includes('rv-tab-more'); i++) {
+    await settle(world, ui.press({ key: 'rv-tab-more' }))
+    for (const k of await subs()) seen.add(k)
+  }
   for (const k of [
     'rv-tab-look',
     'rv-tab-decide',
@@ -382,9 +387,10 @@ test('schmales Panel: Entscheidungs-Optionen ganz lesbar, keine „Entscheiden�
     'rv-tab-ideas',
     'rv-tab-running',
   ])
-    expect(await subs()).toContain(k)
+    expect([...seen]).toContain(k)
+  await reveal(ui, 'rv-tab-decide', 'rv-tab-')
   await settle(world, ui.press({ key: 'rv-tab-decide' }))
-  expect((await subs()).includes('rv-tab-look')).toBe(true) // menu closed again, strip keeps its order
+  expect((await subs()).includes('rv-tab-decide')).toBe(true) // the page with the chosen tab stays shown
   // the option is a wrapping text above a short button; the button carries no option text (runde 2, Befund 4)
   expect((await findShown(ui, 'A: warmes Orange'))?.text).toBeDefined()
   const a = await ui.find({ type: 'Button', key: 'rv-choice-fackel-0' })

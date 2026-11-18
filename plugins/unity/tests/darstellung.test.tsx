@@ -105,7 +105,7 @@ test('feste Tab-Leiste: breit alle sechs Tabs ohne „Mehr“, Reihenfolge bleib
   await ui.unmount()
 })
 
-test('schmales Panel (~320 px): Leiste behält die Reihenfolge, „Mehr ▾“ bietet den Rest als Untermenü und schließt nach der Wahl', async ($, on) => {
+test('schmales Panel (~320 px): Leiste behält die Reihenfolge und blättert mit „+N“ und „‹“ wie das Band', async ($, on) => {
   const world = fakeWorld(on)
   await $.session.start(start)
   const ui = await $.ui.mount({
@@ -115,24 +115,23 @@ test('schmales Panel (~320 px): Leiste behält die Reihenfolge, „Mehr ▾“ b
     props: { ...PANE.props, bodyColumns: 40, scroll: { offset: 0, bodyRows: 30 } },
   })
   await settle(world, ui.press({ key: 'refresh' }))
+  const all = ['tab-overview', 'tab-tests', 'tab-review', 'tab-perf', 'tab-console', 'tab-target']
   const strip = await tabKeys(ui)
-  expect(strip).toContain('tab-more')
   expect(strip[0]).toBe('tab-overview')
+  expect(strip).not.toContain('tab-prev')
   const more = await ui.find({ type: 'Button', key: 'tab-more' })
-  expect(String(more?.props.label)).toMatch(/^Mehr ▾$/)
-  await settle(world, ui.press({ key: 'tab-more' }))
-  const open = await tabKeys(ui)
-  // every tab reachable: strip + menu = all six
-  for (const k of ['tab-overview', 'tab-tests', 'tab-review', 'tab-perf', 'tab-console', 'tab-target'])
-    expect(open).toContain(k)
-  expect(String((await ui.find({ type: 'Button', key: 'tab-more' }))?.props.label)).toMatch(/▴$/)
+  expect(String(more?.props.label)).toMatch(/^\+\d+$/)
+  // every tab reachable by paging on; the order stays
+  const seen: string[] = strip.filter(k => all.includes(k))
+  for (let i = 0; i < 10 && (await ui.find({ type: 'Button', key: 'tab-more' })); i++) {
+    await settle(world, ui.press({ key: 'tab-more' }))
+    for (const k of await tabKeys(ui)) if (all.includes(k) && !seen.includes(k)) seen.push(k)
+  }
+  expect(seen).toEqual(all)
+  expect(String((await ui.find({ type: 'Button', key: 'tab-prev' }))?.props.label)).toBe('‹')
   await settle(world, ui.press({ key: 'tab-target' }))
   expect((await findShown(ui, /Worauf Claude arbeitet/))?.text).toBeDefined()
-  const after = await tabKeys(ui)
-  expect(after).toEqual(strip) // menu closed, strip unchanged: "Ziel" displaces nothing
-  const moreAfter = await ui.find({ type: 'Button', key: 'tab-more' })
-  expect(String(moreAfter?.props.label)).toBe('Mehr ▾')
-  expect(moreAfter?.props.variant).toBe('primary')
+  expect((await ui.find({ type: 'Button', key: 'tab-target' }))?.props.variant).toBe('primary')
   await ui.unmount()
 })
 
