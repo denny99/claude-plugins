@@ -6,6 +6,7 @@
  * place in the plain markup (reduced motion), the subject kept off the middle and the foot.
  */
 import { makeColors } from "./make-colors.js";
+import { PIXEL_LOOKS } from "./looks/index";
 
 export type LookId =
   | "table"
@@ -310,7 +311,7 @@ export const LOOKS: Record<LookId, Look> = Object.fromEntries(
         label: s.label,
         colors: theme,
         problems,
-        svg: svg(s.hue, s.sat, s.body),
+        svg: PIXEL_LOOKS[id]?.() || svg(s.hue, s.sat, s.body),
         alt: s.alt,
       },
     ];
