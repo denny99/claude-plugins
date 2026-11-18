@@ -2,7 +2,7 @@ import { expect, test } from "claude-code/testing";
 import { findShown } from "./shown";
 
 import { resetAutoOpen } from "../features/dnd-ui";
-import { openArgv, playArgv, resultPrompt } from "../features/review";
+import { isStudioPath, openArgv, playArgv, resultPrompt } from "../features/review";
 import type { ReviewItem } from "../types";
 import { pane, world } from "./world";
 
@@ -93,4 +93,58 @@ test("review: local playback commands per OS", () => {
   expect(playArgv("linux", "/a.wav")?.[0]).toBe("paplay");
   expect(playArgv("windows", "C:\\a'b.wav")?.[3]).toContain("C:\\a''b.wav");
   expect(openArgv("macos", "https://x")).toEqual(["open", "https://x"]);
+});
+
+test("review: a Studio path is fetched through results save before playing; verdicts only after listening; a failed fetch is refused with its reason", async ($, on) => {
+  resetAutoOpen();
+  const w = world(on, {
+    results: (a: Record<string, unknown>) => [
+      {
+        type: "text",
+        text: JSON.stringify(
+          a.action === "list"
+            ? { results: [{ id: "77", kind: "sound", file: "dnd-dland/tor_01.mp3 [output]" }] }
+            : { folder: "/var/tmp/dnd-studio-review", saved: [{ id: "77", path: "/var/tmp/dnd-studio-review/tor_01.mp3" }] },
+        ),
+      },
+    ],
+  });
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  const added = await $.tool.call({
+    tool: "mcp__dnd-studio__review",
+    action: "add",
+    items: [{ name: "Tor", kind: "sound", source: "dnd-dland/tor_01.mp3" }],
+  } as never);
+  expect(JSON.stringify(added)).toContain("1 added");
+  expect(w.calls.map((c) => c.args.action)).toEqual(["list", "save"]);
+  expect(w.calls[1]?.args.folder).toBe("/var/tmp/dnd-studio-review");
+
+  const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
+  expect(await findShown(ui, /Erst anhören, dann urteilen/)).toBeDefined();
+  expect(await ui.find({ type: "Button", text: /Abspielen/ })).toBeDefined();
+  expect(await ui.find({ type: "Button", text: /Passt/ })).toBeUndefined();
+  await ui.unmount();
+
+  // the Studio cannot hand the file over: refused with a reason, nothing added
+  w.answers.results = () => [
+    { type: "text", text: JSON.stringify({ results: [] }) },
+  ];
+  const refused = JSON.stringify(
+    await $.tool.call({
+      tool: "mcp__dnd-studio__review",
+      action: "add",
+      items: [{ name: "Krähen", kind: "sound", source: "dnd-dland/kr.mp3" }],
+    } as never),
+  );
+  expect(refused).toContain("Nothing added");
+  expect(refused).toContain("no Studio result has the file dnd-dland/kr.mp3");
+});
+
+test("review: Studio paths are told apart from local paths and URLs", () => {
+  expect(isStudioPath("dnd-dland/x.mp3")).toBe(true);
+  expect(isStudioPath("x.png [output]")).toBe(true);
+  expect(isStudioPath("/tmp/x.wav")).toBe(false);
+  expect(isStudioPath("~/x.wav")).toBe(false);
+  expect(isStudioPath("C:\\x.wav")).toBe(false);
+  expect(isStudioPath("https://x/y.png")).toBe(false);
 });

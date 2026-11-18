@@ -11,11 +11,13 @@ import { submitForPerson } from "./evening";
 import { createHost } from "../lib/host";
 import type { Platform } from "../lib/host";
 import { patchReview, readReview } from "../lib/state";
+import { studioCall } from "../lib/studio";
 import {
   Actions,
   Card,
   CardTitle,
   EmptyState,
+  ErrorState,
   ListRow,
   ProgressBlock,
   Sentence,
@@ -29,7 +31,7 @@ type InputEl = (props: Record<string, unknown>) => RenderElement;
 export const REVIEW_TOOL = "review";
 
 export const REVIEW_TOOL_DESCRIPTION =
-  "The review queue of the D&D pane (tab Prüfen): a person listens to new sounds and looks at new pictures/videos there and says ok or redo (with a note). action add + items puts new things in (each: name = what it is for, spoiler-free, e.g. 'Torknarren'; kind sound|image|video; source = local file path or http(s) URL from the Studio's results; meta = short facts like 'Geräusch · 4 s, Schleife'; agent = who redoes it, pnp-klang for sounds, pnp-maler for pictures; scene = optional, never shown before the person uncovers it). list (default) shows the queue with verdicts; clear empties it. The person's result arrives later as a prompt naming what passed and what to redo with which note.";
+  "The review queue of the D&D pane (tab Prüfen): a person listens to new sounds and looks at new pictures/videos there and says ok or redo (with a note). action add + items puts new things in (each: name = what it is for, spoiler-free, e.g. 'Torknarren'; kind sound|image|video; source = local file path, http(s) URL, or a Studio result's file as the Studio names it (e.g. 'dnd-dland/x.mp3': fetched to this computer with results save, refused when that fails); meta = short facts like 'Geräusch · 4 s, Schleife'; agent = who redoes it, pnp-klang for sounds, pnp-maler for pictures; scene = optional, never shown before the person uncovers it). list (default) shows the queue with verdicts; clear empties it. The person's result arrives later as a prompt naming what passed and what to redo with which note.";
 
 function str(v: unknown): string {
   return typeof v === "string"
@@ -87,6 +89,22 @@ export async function reviewTool(
       .filter((i) => i.name && i.source);
     if (!items.length)
       return "Give items: each with name, kind and source (file path or URL).";
+    // a Studio-relative file ("dnd-dland/x.mp3") is not on this computer: fetched now (results save), else refused
+    const refused: string[] = [];
+    for (const i of items) {
+      if (!isStudioPath(i.source)) continue;
+      try {
+        i.local = await fetchFromStudio($, i);
+      } catch (err) {
+        refused.push(`${i.name}: ${errLine(err)}`);
+      }
+    }
+    const kept = items.filter((i) => !isStudioPath(i.source) || i.local);
+    const why = refused.length
+      ? ` Refused (a Studio path, but its file could not be fetched to this computer; give a local path, or a result made through the Studio's tools): ${refused.join("; ")}.`
+      : "";
+    if (!kept.length) return `Nothing added.${why}`;
+    items.splice(0, items.length, ...kept);
     const r = await patchReview($, (s) => ({
       items: [
         ...s.items.filter((o) => !items.some((i) => i.source === o.source)),
@@ -94,7 +112,7 @@ export async function reviewTool(
       ],
     }));
     await autoOpen($, "build", "review");
-    return `${items.length} added; ${r.items.filter((i) => !i.verdict).length} waiting for the person in the D&D pane (tab Prüfen).`;
+    return `${items.length} added; ${r.items.filter((i) => !i.verdict).length} waiting for the person in the D&D pane (tab Prüfen).${why}`;
   }
   const r = await readReview($);
   return r.items.length
@@ -198,6 +216,7 @@ export async function noteMadeResults(
     kind: ReviewKind;
     name: string;
     meta: string;
+    resultId: string;
   }[] = [];
   walk(data, (o, job) => {
     const media = mediaOf(o);
@@ -224,6 +243,7 @@ export async function noteMadeResults(
         ...media,
         name: mine.name || baseName(media.source),
         meta: mine.meta,
+        resultId: id,
       });
   });
   if (!found.length) return 0;
@@ -251,6 +271,7 @@ export async function noteMadeResults(
           note: "",
           revealed: false,
           addedAt: now,
+          ...(f.resultId ? { resultId: f.resultId } : {}),
         })),
       ],
     };
@@ -301,6 +322,94 @@ async function resolvePath(
   };
 }
 
+function errLine(err: unknown): string {
+  return (err instanceof Error ? err.message : String(err)).split("\n")[0]!;
+}
+
+/**
+ * A path the Studio names relative to ComfyUI's folders ("dnd-dland/x.mp3", "x.png [output]"): not a file on this
+ * computer (ComfyUI may even run on another one), so it is fetched first.
+ */
+export function isStudioPath(source: string): boolean {
+  const s = source.trim();
+  return !!s && !isUrl(s) && !/^(~|\/|\\|[A-Za-z]:[\\/])/.test(s);
+}
+
+function studioFile(source: string): string {
+  return source
+    .trim()
+    .replace(/\s*\[(input|output|temp)\]$/, "")
+    .replace(/\\/g, "/");
+}
+
+/** The user's temp folder (TMPDIR, TEMP), for fetched review files. */
+async function tempDir($: EngineInterface): Promise<string> {
+  const tmp = await $.env.get("TMPDIR").catch(() => undefined);
+  const temp = tmp ? undefined : await $.env.get("TEMP").catch(() => undefined);
+  return `${(tmp || temp || "/tmp").replace(/[\\/]+$/, "")}/dnd-studio-review`;
+}
+
+/**
+ * Brings a Studio file to this computer: its result (by id, else found by file name in results list) saved with
+ * results save into the user's temp. Resolves the local path; throws why not (not a result made through the Studio's
+ * tools, no such result, save failed).
+ */
+export async function fetchFromStudio(
+  $: EngineInterface,
+  item: Pick<ReviewItem, "source" | "resultId" | "local">,
+): Promise<string> {
+  if (item.local) return item.local;
+  const file = studioFile(item.source);
+  let id = item.resultId ?? "";
+  if (!id) {
+    const list = await studioCall($, "results", {
+      action: "list",
+      name: baseName(file),
+      limit: 20,
+      brief: true,
+    });
+    walk(list, (o) => {
+      const f = studioFile(str(o.file ?? o.path));
+      if (!id && str(o.id) && f && (f === file || f.endsWith(`/${file}`)))
+        id = str(o.id);
+    });
+    if (!id) throw new Error(`no Studio result has the file ${file}`);
+  }
+  const answer = await studioCall($, "results", {
+    action: "save",
+    ids: [id],
+    folder: await tempDir($),
+  });
+  const saved = Array.isArray(answer.saved) ? (answer.saved as Obj[]) : [];
+  const path = str(saved[0]?.path ?? saved[0]?.file);
+  if (path) return path;
+  const failed = Array.isArray(answer.failed) ? (answer.failed as Obj[]) : [];
+  throw new Error(
+    str(failed[0]?.error) || str(answer.text) || "results save saved nothing",
+  );
+}
+
+/**
+ * The file to play or open on this computer: a local path or URL as it is, a Studio path fetched first (kept on the
+ * item). Undefined after a failed fetch, whose reason the card then shows.
+ */
+async function localSource(
+  $: EngineInterface,
+  item: ReviewItem,
+): Promise<string | undefined> {
+  if (!isStudioPath(item.source)) return item.source;
+  try {
+    const local = await fetchFromStudio($, item);
+    if (local !== item.local) await patchItem($, item.id, { local });
+    return local;
+  } catch (err) {
+    const error = `Nicht vom Studio geholt: ${errLine(err)}`;
+    await patchItem($, item.id, { error });
+    $.ui.toast(`✗ ${error}`);
+    return undefined;
+  }
+}
+
 export async function stopPlaying($: EngineInterface): Promise<void> {
   const p = player;
   player = null;
@@ -312,22 +421,27 @@ export async function stopPlaying($: EngineInterface): Promise<void> {
   await patchReview($, () => ({ playing: "" }));
 }
 
-/** Plays a sound locally (afplay & co.); a URL opens in the browser. One at a time. */
+/** Plays a sound locally (afplay & co.); a URL opens in the browser; a Studio path is fetched first. One at a time. */
 export async function playItem(
   $: EngineInterface,
   item: ReviewItem,
 ): Promise<void> {
   await stopPlaying($);
-  const { platform, path } = await resolvePath($, item.source);
+  const source = await localSource($, item);
+  if (source === undefined) return;
+  const { platform, path } = await resolvePath($, source);
   const argv = isUrl(path)
     ? openArgv(platform, path)
     : playArgv(platform, path);
   if (!argv) {
-    $.ui.toast(`Kann hier nicht abspielen: ${item.source}`);
+    await patchItem($, item.id, { error: `Kann hier nicht abspielen: ${source}` });
     return;
   }
+  await patchItem($, item.id, { heard: true, error: "" });
   if (isUrl(path)) {
-    void $.process.run(argv, {} as never).catch(() => undefined);
+    void $.process.run(argv, {} as never).catch((err: unknown) =>
+      patchItem($, item.id, { error: `Öffnen fehlgeschlagen: ${errLine(err)}` }),
+    );
     return;
   }
   const it = $.process.spawn({ argv })[Symbol.asyncIterator]();
@@ -339,7 +453,7 @@ export async function playItem(
         // drain the child's output until it ends
       }
     } catch (err) {
-      $.ui.toast(`✗ Abspielen: ${String(err).split("\n")[0]}`);
+      await patchItem($, item.id, { error: `Abspielen fehlgeschlagen: ${errLine(err)}` });
     }
     if (player === it) {
       player = null;
@@ -348,18 +462,23 @@ export async function playItem(
   })();
 }
 
-/** Opens an uncovered picture or video with the system viewer. */
+/** Opens an uncovered picture or video with the system viewer; a Studio path is fetched first. */
 export async function openItem(
   $: EngineInterface,
   item: ReviewItem,
 ): Promise<void> {
-  const { platform, path } = await resolvePath($, item.source);
+  const source = await localSource($, item);
+  if (source === undefined) return;
+  const { platform, path } = await resolvePath($, source);
   const argv = openArgv(platform, path);
   if (!argv) {
-    $.ui.toast(`Kann hier nicht öffnen: ${item.source}`);
+    await patchItem($, item.id, { error: `Kann hier nicht öffnen: ${source}` });
     return;
   }
-  void $.process.run(argv, {} as never).catch(() => undefined);
+  await patchItem($, item.id, { heard: true, error: "" });
+  void $.process.run(argv, {} as never).catch((err: unknown) =>
+    patchItem($, item.id, { error: `Öffnen fehlgeschlagen: ${errLine(err)}` }),
+  );
 }
 
 async function patchItem(
@@ -458,7 +577,7 @@ function itemRow(
       variant: "secondary",
       onPress: () => void openItem($, i),
     });
-  if (!covered) {
+  if (!covered && i.heard) {
     acts.push({
       key: `rv-ok-${i.id}`,
       label: "Passt",
@@ -489,6 +608,25 @@ function itemRow(
     }),
     Actions(k, `rv-acts-${i.id}`, acts, 3) as RenderElement,
   ];
+  if (i.error)
+    out.push(
+      ErrorState(k, {
+        key: `rv-err-${i.id}`,
+        message: i.error,
+        onRetry: () =>
+          void (i.kind === "sound" ? playItem($, i) : openItem($, i)),
+      }),
+    );
+  else if (!covered && !i.heard)
+    out.push(
+      Sentence(
+        k,
+        i.kind === "sound"
+          ? "Erst anhören, dann urteilen."
+          : "Erst ansehen, dann urteilen.",
+        { faint: true },
+      ),
+    );
   if (i.verdict === "redo")
     out.push(
       i.note

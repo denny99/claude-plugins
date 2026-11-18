@@ -1,3 +1,5 @@
+import type { EngineInterface } from 'claude-code'
+
 /**
  * D&D Studio brand assets for the pane header: the Houndsridge logo (2:1, never cropped square) as an SVG with the
  * webp inlined as a data URI. Draw it at 44x22.
@@ -9,5 +11,23 @@ export const HOUNDSRIDGE_ALT = 'Houndsridge Studios'
 export const LOGO_WIDTH = 44
 export const LOGO_HEIGHT = 22
 
-/** Shown in the Zustand tab; keep in step with .claude-plugin/plugin.json. */
-export const PLUGIN_VERSION = '0.3.0'
+let versionRead: Promise<string> | undefined
+
+/**
+ * The installed version, as this plugin's own manifest (.claude-plugin/plugin.json) states it; read once per load,
+ * "" when it cannot be read. Shown in the Zustand tab.
+ */
+export async function pluginVersion($: EngineInterface): Promise<string> {
+  versionRead ??= readManifestVersion($)
+  return versionRead
+}
+
+async function readManifestVersion($: EngineInterface): Promise<string> {
+  try {
+    const text = await $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`)
+    const v: unknown = (JSON.parse(String(text)) as { version?: unknown }).version
+    return typeof v === 'string' ? v : ''
+  } catch {
+    return ''
+  }
+}

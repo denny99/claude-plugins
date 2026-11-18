@@ -3,6 +3,7 @@
  * go through these functions.
  */
 import { atom, read, update } from "claude-code";
+import { isCampaign, studioCall } from "./studio";
 import type { EngineInterface } from "claude-code";
 
 import type {
@@ -147,6 +148,32 @@ export async function readCampaign(
   $: EngineInterface,
 ): Promise<CampaignInfo | null> {
   return read($, campaignAtom);
+}
+/**
+ * The open campaign's name: the one last read, else read once now (campaign get overview, small) and kept, so a run
+ * recorded before anyone pressed Check still names its campaign. "" when the Studio cannot say.
+ */
+export async function campaignName($: EngineInterface): Promise<string> {
+  const known = (await read($, campaignAtom))?.name;
+  if (known) return known;
+  try {
+    const c = await studioCall($, "campaign", { overview: true });
+    if (!isCampaign(c)) return "";
+    const name = typeof c.open === "string" ? c.open : String(c.name ?? "");
+    const n = (v: unknown) => (Array.isArray(v) ? v.length : 0);
+    const fetchedAt = await $.clock.now();
+    await update($, campaignAtom, () => ({
+      name,
+      scenes: n(c.scenes),
+      npcs: n(c.npcs),
+      places: n(c.places),
+      broken: n(c.brokenReferences),
+      fetchedAt,
+    }));
+    return name;
+  } catch {
+    return "";
+  }
 }
 export async function setCampaign(
   $: EngineInterface,

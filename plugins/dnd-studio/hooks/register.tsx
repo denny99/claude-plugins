@@ -15,6 +15,7 @@ import {
 } from "../features/build";
 import { refreshDiscord, registerEvening } from "../features/evening";
 import { clashText, healthText, probe, renderHealth } from "../features/health";
+import { pluginVersion } from "../lib/brand";
 import {
   loadLookOverrides,
   registerLook,
@@ -411,6 +412,7 @@ export const register: Register = (on, options) => {
                 clash: await readClash($),
                 view,
                 evening,
+                pluginVersion: await pluginVersion($),
               });
     const tableLive = isLive(view, ini);
     const waiting = openCount(review);

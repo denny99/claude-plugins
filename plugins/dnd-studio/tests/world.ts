@@ -201,6 +201,8 @@ export function world(on: On, answers: Record<string, unknown> = {}): World {
   on("fs.read", (_, e) => {
     if (e.path === "/Users/d/kampagne/plan.md")
       return { value: "# Bauplan\n- Szene 1" };
+    if (e.path.endsWith("/.claude-plugin/plugin.json"))
+      return { value: '{"name":"dnd-studio","version":"9.8.7"}' };
     throw new Error("missing");
   });
   on("prompt.submit", (_, e) => {
@@ -216,6 +218,16 @@ export function world(on: On, answers: Record<string, unknown> = {}): World {
   on("mcp.call", (_, e) => {
     w.calls.push({ tool: e.tool, args: e.args });
     const body = w.answers[e.tool] ?? { ok: true };
+    // a function answers with raw MCP content blocks (a cut answer, several blocks)
+    if (typeof body === "function")
+      return {
+        value: {
+          content: (body as (a: Record<string, unknown>) => unknown[])(
+            e.args,
+          ),
+          isError: false,
+        } as never,
+      };
     return {
       value: {
         content: [{ type: "text", text: JSON.stringify(body) }],

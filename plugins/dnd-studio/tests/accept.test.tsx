@@ -85,12 +85,18 @@ test("Build: Check reads campaign, maps and studio_status; rows show status and 
   const w = world(on);
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd", args: "build" } as never);
+  // the campaign in parts (overview, then each checked list), never one whole get
   expect(w.calls.map((c) => c.tool)).toEqual([
+    "campaign",
+    "campaign",
+    "campaign",
     "campaign",
     "map",
     "studio_status",
   ]);
-  expect(w.calls[1]?.args).toEqual({ action: "list" });
+  expect(w.calls[0]?.args).toEqual({ overview: true });
+  expect(w.calls[1]?.args).toEqual({ only: ["scenes"] });
+  expect(w.calls[4]?.args).toEqual({ action: "list" });
 
   const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
   expect((await findShown(ui, /GPU belegt/))?.text).toBe(
@@ -179,5 +185,60 @@ test("Build: two GPU agents at once are flagged", async ($, on) => {
   expect(
     await findShown(ui, /pnp-maler \+ pnp-klang teilen sich gerade die GPU/),
   ).toBeDefined();
+  await ui.unmount();
+});
+
+const CUT = {
+  type: "text",
+  text: "\n[OUTPUT TRUNCATED - exceeded 25000 token limit]\nThe tool output was truncated.",
+};
+
+test("Build: a list cut at the engine's output limit is read a few entries at a time by name", async ($, on) => {
+  const overview = {
+    ...CAMPAIGN,
+    scenes: [
+      { n: 1, title: "Das Tor", chars: 30, picture: true },
+      { n: 2, title: "Im Wald", chars: 0, picture: false },
+    ],
+  };
+  const w = world(on, {
+    campaign: (a: Record<string, unknown>) => {
+      if (a.overview)
+        return [{ type: "text", text: JSON.stringify(overview) }];
+      // the whole scene list is too big: cut JSON plus the engine's notice
+      if (a.only && !a.names && (a.only as string[])[0] === "scenes")
+        return [{ type: "text", text: JSON.stringify(CAMPAIGN).slice(0, 80) }, CUT];
+      // a secret-waiting note block after the answer still parses
+      return [
+        { type: "text", text: JSON.stringify(CAMPAIGN) },
+        { type: "text", text: '{"secret_waiting":1}' },
+      ];
+    },
+  });
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd", args: "build" } as never);
+  expect(
+    w.calls.some(
+      (c) =>
+        c.tool === "campaign" &&
+        JSON.stringify(c.args.names) === JSON.stringify(["Das Tor", "Im Wald"]),
+    ),
+  ).toBe(true);
+  const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
+  expect(
+    await findShown(ui, /Scenes: picture \+ text \+ recipe · 1\/2/),
+  ).toBeDefined();
+  await ui.unmount();
+});
+
+test("Build: an answer that is no campaign shows an error, not zero counts", async ($, on) => {
+  world(on, {
+    campaign: () => [{ type: "text", text: '{"open": "Breel' }, CUT],
+  });
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd", args: "build" } as never);
+  const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
+  expect(await findShown(ui, /cut at the output limit/)).toBeDefined();
+  expect(await findShown(ui, /Scenes: picture/)).toBeUndefined();
   await ui.unmount();
 });

@@ -12,7 +12,6 @@ import { applyLook } from "./look";
 import { createHost, startArgv, startHint, tidyError } from "../lib/host";
 import { readClash, readHealth, setHealth, toggleRule } from "../lib/state";
 import { SERVER_KEY } from "../lib/studio";
-import { PLUGIN_VERSION } from "../lib/brand";
 import { isListenerMode } from "../lib/model";
 import {
   Actions,
@@ -140,6 +139,8 @@ export function renderHealth(
     clash?: string | null;
     view?: TableView | null;
     evening?: EveningState;
+    /** The manifest's version (brand.ts pluginVersion). */
+    pluginVersion?: string;
   },
 ): RenderElement[] {
   const { health, rules } = d;
@@ -222,7 +223,12 @@ export function renderHealth(
               ),
             ]
           : [Sentence(k, "Noch nicht geprüft.", { faint: true })]),
-        row("h-plugin", "ok", "Plugin", `dnd-studio ${PLUGIN_VERSION}`),
+        row(
+          "h-plugin",
+          d.pluginVersion ? "ok" : "idle",
+          "Plugin",
+          `dnd-studio ${d.pluginVersion || "Version unbekannt"}`,
+        ),
         row(
           "h-discord",
           disc?.connected ? "ok" : "idle",

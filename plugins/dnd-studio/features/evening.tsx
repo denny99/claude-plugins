@@ -24,7 +24,7 @@ import {
   patchCheck,
   patchEvening,
   patchLive,
-  readCampaign,
+  campaignName,
   readEvening,
   readInitiative,
   readLive,
@@ -468,7 +468,7 @@ export async function recordInterjection(
   try {
     let file = s.notesFile;
     const title =
-      (await readCampaign($))?.name ||
+      (await campaignName($)) ||
       (await readTable($))?.scene?.title ||
       "evening";
     if (!file) {

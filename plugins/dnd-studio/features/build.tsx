@@ -25,9 +25,9 @@ import {
   stageState,
 } from "../lib/model";
 import {
+  campaignName,
   patchCheck,
   patchRuns,
-  readCampaign,
   readLive,
   readPreview,
   readRuns,
@@ -35,7 +35,7 @@ import {
   setPreview,
   toggleRule,
 } from "../lib/state";
-import { studioCall } from "../lib/studio";
+import { isCampaign, studioCall } from "../lib/studio";
 import {
   Actions,
   Card,
@@ -131,7 +131,7 @@ export async function recordSpawn(
 ): Promise<void> {
   const agent = pnpAgentOf(subagentType);
   if (!agent) return;
-  const campaign = (await readCampaign($))?.name ?? "";
+  const campaign = await campaignName($);
   const run: AgentRun = {
     id: agentId || `${agent}-${await $.clock.now()}`,
     agent,
@@ -193,6 +193,64 @@ function errText(err: unknown): string {
   return err instanceof Error ? err.message.split("\n")[0]! : String(err);
 }
 
+/** The lists the acceptance check reads in full (acceptanceOf: picture, text, notes, map, voice, sheet ...). */
+const CHECK_LISTS = [
+  ["scenes", "title"],
+  ["places", "name"],
+  ["npcs", "name"],
+] as const;
+/** At most this many entries per `names` read when a whole list is too big for one answer. */
+const NAMES_PER_READ = 8;
+
+/**
+ * The open campaign for the check, read in parts: one whole `campaign get` of a big campaign is hundreds of KB, which
+ * the engine cuts at its MCP output limit, so its JSON never parsed and every count read 0. The overview (names and
+ * sizes) gives the name, threads, party_at and references; each checked list is read on its own (`only`), and a list
+ * still too big is read a few entries at a time by name. Throws when the overview is no campaign; a list that cannot
+ * be read lands in `errors`.
+ */
+async function readWholeCampaign(
+  $: EngineInterface,
+  errors: string[],
+): Promise<Record<string, unknown>> {
+  const base = await studioCall($, "campaign", { overview: true });
+  if (!isCampaign(base))
+    throw new Error(
+      base.truncated
+        ? "the answer was cut at the output limit"
+        : `no campaign in the answer: ${String(base.text ?? "").slice(0, 120)}`,
+    );
+  const out: Record<string, unknown> = { ...base };
+  for (const [list, key] of CHECK_LISTS) {
+    const whole = await studioCall($, "campaign", { only: [list] });
+    if (Array.isArray(whole[list])) {
+      out[list] = whole[list];
+      continue;
+    }
+    const titles = (Array.isArray(base[list]) ? base[list] : [])
+      .map((e) => String((e as Record<string, unknown>)?.[key] ?? ""))
+      .filter(Boolean);
+    const rows = new Map<string, unknown>();
+    let failed = false;
+    for (let i = 0; i < titles.length && !failed; i += NAMES_PER_READ) {
+      const want = titles.slice(i, i + NAMES_PER_READ);
+      const part = await studioCall($, "campaign", { only: [list], names: want });
+      const got = part[list];
+      if (!Array.isArray(got)) failed = true;
+      else
+        for (const e of got) {
+          const row = e as Record<string, unknown>;
+          rows.set(String(row.n ?? row[key]), row);
+        }
+    }
+    if (failed) {
+      errors.push(`campaign ${list}: answer too big or not JSON`);
+      // the overview's rows still count; their details are unknown
+    } else out[list] = [...rows.values()];
+  }
+  return out;
+}
+
 /**
  * The acceptance check (a person's Check/Refresh): the open campaign, the map list and studio_status (GPU jobs), each
  * read once; the checklist rows come from pnp-kampagne §4.
@@ -200,12 +258,16 @@ function errText(err: unknown): string {
 export async function refreshCampaign($: EngineInterface): Promise<void> {
   const now = await $.clock.now();
   let campaign: Record<string, unknown>;
+  const errors: string[] = [];
   try {
-    campaign = await studioCall($, "campaign", {});
+    campaign = await readWholeCampaign($, errors);
   } catch (err) {
     $.ui.toast(`✗ campaign: ${errText(err)}`);
+    // no stale counts beside the error: what was read before is not this answer
+    await setCampaign($, null);
     await patchCheck($, () => ({
       error: `campaign: ${errText(err)}`,
+      items: [],
       checkedAt: now,
     }));
     return;
@@ -224,7 +286,6 @@ export async function refreshCampaign($: EngineInterface): Promise<void> {
     fetchedAt: now,
   };
   await setCampaign($, info);
-  const errors: string[] = [];
   let maps: Record<string, unknown> = {};
   try {
     maps = await studioCall($, "map", { action: "list" });
@@ -568,9 +629,15 @@ export async function renderBuild(
                 : null,
             ]
           : [
-              Sentence(k, "„Neu prüfen“ liest die offene Kampagne.", {
-                faint: true,
-              }),
+              check.error
+                ? ErrorState(k, {
+                    key: "check-err",
+                    message: check.error,
+                    onRetry: () => void refreshCampaign($),
+                  })
+                : Sentence(k, "„Neu prüfen“ liest die offene Kampagne.", {
+                    faint: true,
+                  }),
             ]),
         Actions(
           k,

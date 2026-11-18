@@ -57,7 +57,47 @@ export async function studioCall(
       `D&D Studio is not connected: ${link.message || link.reason}`,
     );
   const res = await $.mcp.call(link.server, tool, args);
-  const text = textOf(res.content);
-  if (res.isError) throw new Error(text || `${tool} failed`);
-  return jsonOf(text) ?? { text };
+  if (res.isError) throw new Error(textOf(res.content) || `${tool} failed`);
+  return answerOf(res);
+}
+
+/** The engine's notice when it cut an MCP answer at its output limit (MAX_MCP_OUTPUT_TOKENS, 25k tokens by default). */
+const TRUNCATED = /tool output was truncated|token limit\]/i;
+
+/**
+ * One Studio answer as an object: the server's structuredContent, else the JSON of its first text block (the Studio
+ * may append a note block: a secret waiting, "the same call again"), else all blocks run together; otherwise
+ * `{ text }`, with `truncated: true` when the engine cut it at its output limit (a big `campaign get` is cut at
+ * 100 000 characters and gets a notice block, so its JSON never parses).
+ */
+export function answerOf(res: {
+  content?: unknown;
+  structuredContent?: unknown;
+}): Record<string, unknown> {
+  const sc = res.structuredContent;
+  if (sc && typeof sc === "object" && !Array.isArray(sc))
+    return sc as Record<string, unknown>;
+  const blocks = Array.isArray(res.content)
+    ? res.content
+        .filter(
+          (b): b is { text: unknown } =>
+            !!b && typeof b === "object" && "text" in b,
+        )
+        .map((b) => String(b.text))
+    : [textOf(res.content)];
+  const parsed =
+    (blocks.length ? jsonOf(blocks[0]!) : undefined) ??
+    jsonOf(blocks.join("")) ??
+    jsonOf(blocks.join("\n"));
+  if (parsed) return parsed;
+  const text = blocks.join("\n");
+  return TRUNCATED.test(text) ? { text, truncated: true } : { text };
+}
+
+/** True when an answer of campaign get is a campaign (its name and lists), not a cut or plain-text answer. */
+export function isCampaign(c: Record<string, unknown>): boolean {
+  return (
+    (typeof c.open === "string" || typeof c.name === "string") &&
+    (Array.isArray(c.scenes) || Array.isArray(c.npcs) || Array.isArray(c.places))
+  );
 }

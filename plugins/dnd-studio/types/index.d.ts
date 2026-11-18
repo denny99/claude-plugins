@@ -268,6 +268,14 @@ export type ReviewItem = {
   note: string;
   revealed: boolean;
   addedAt: number;
+  /** The Studio's result id, when known (results made in this session): what results save fetches. */
+  resultId?: string;
+  /** Where a Studio-relative source was saved on this computer (results save into the user's temp). */
+  local?: string;
+  /** Played or opened once: only then can the person judge it (Passt / Nochmal). */
+  heard?: boolean;
+  /** Why the last play/open failed (shown on the card). */
+  error?: string;
 };
 export type ReviewState = { items: ReviewItem[]; playing: string; sentAt: number };
 

@@ -2,7 +2,8 @@ import { expect, test } from "claude-code/testing";
 
 import { clashText } from "../features/health";
 import { tidyError } from "../lib/host";
-import { world } from "./world";
+import { findShown } from "./shown";
+import { pane, world } from "./world";
 
 test("tidyError says a repeated error code once and drops the engine's wrapping", () => {
   expect(
@@ -47,4 +48,13 @@ test('the engine\'s clash message (2.1.326, user-level "dnd-studio" server) gets
     '(the session already has an MCP server named "dnd-studio"',
   );
   expect(clashText("refused")).not.toContain("claude mcp remove");
+});
+
+test("the Zustand tab's plugin version comes from the manifest, not a constant", async ($, on) => {
+  world(on);
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd", args: "health" } as never);
+  const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
+  expect(await findShown(ui, /dnd-studio 9\.8\.7/)).toBeDefined();
+  await ui.unmount();
 });
