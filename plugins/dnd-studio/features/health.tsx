@@ -102,15 +102,32 @@ async function healthLine($: EngineInterface): Promise<string> {
   return "D&D Studio is running and connected.";
 }
 
-const RULES: { key: keyof Rules; label: string }[] = [
-  { key: "annotate", label: "Hinweise zu Tisch-Aufrufen" },
+const RULES: { key: keyof Rules; label: string; text: string }[] = [
+  {
+    key: "annotate",
+    label: "Claude Tipps am Tisch geben",
+    text: "Nach Tisch-Befehlen bekommt Claude kurze Hinweise, etwa wenn Discord nicht verbunden ist oder ein Spieler noch wartet.",
+  },
   {
     key: "denyLeaks",
-    label: "Handouts/Geheimes nicht aufs gemeinsame Fenster",
+    label: "Geheimes nur privat zeigen",
+    text: "Handouts und Geheimnisse für einen Spieler landen nicht im gemeinsamen Fenster, sondern als Flüstern bei ihm.",
   },
-  { key: "denyTalkNpc", label: "talk_npc am laufenden Tisch sperren" },
-  { key: "denyFamily", label: "Schreiben im Profil „Meine Familie“ sperren" },
-  { key: "spoilerSafe", label: "Spoilerfrei (ich spiele mit)" },
+  {
+    key: "denyTalkNpc",
+    label: "NPCs am Tisch selbst sprechen lassen",
+    text: "Bei laufendem Tisch spricht Claude NPCs direkt mit ihrer Stimme, nicht über das Werkzeug für die Vorbereitung.",
+  },
+  {
+    key: "denyFamily",
+    label: "Profil „Meine Familie“ schützen",
+    text: "Solange dieses Profil im Studio offen ist, ändert Claude dort nichts.",
+  },
+  {
+    key: "spoilerSafe",
+    label: "Spoilerfrei (ich spiele mit)",
+    text: "Blendet Ziele, Notizen, Geheimnisse und Bilder aus, damit du als Mitspieler nichts vorher siehst.",
+  },
 ];
 
 export function renderHealth(
@@ -217,8 +234,8 @@ export function renderHealth(
         row(
           "h-clash",
           d.clash ? "failed" : "ok",
-          "Namenskollision",
-          d.clash ? "alter MCP-Server hält den Namen" : "keine",
+          "Alter Studio-Server",
+          d.clash ? "blockiert das Plugin" : "keiner im Weg",
         ),
         Actions(
           k,
@@ -233,7 +250,7 @@ export function renderHealth(
             },
             {
               key: "reconfigure",
-              label: "Plugin neu einrichten",
+              label: "Token eintragen",
               icon: "gear",
               variant: "secondary",
               onPress: () =>
@@ -278,6 +295,7 @@ export function renderHealth(
         Switch(k, {
           key: `toggle-${r.key}`,
           title: r.label,
+          text: r.text,
           on: rules[r.key],
           onPress: () => void toggleRule($, r.key).then(() => applyLook($)),
         }),
