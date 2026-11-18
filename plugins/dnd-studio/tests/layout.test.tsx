@@ -3,12 +3,12 @@ import { expect, test } from "claude-code/testing";
 
 import { bandEvening } from "../features/evening";
 import { fileName } from "../features/build";
-import { orderExample } from "../features/table";
+import { bandHint, orderExample } from "../features/table";
 import { BAND_HINT_MAX, BAND_STATUS_MAX } from "../hooks/register";
 import { toTableView } from "../lib/model";
 import { pillSvg } from "../lib/ui";
 import { findShown } from "./shown";
-import { band, pane, TABLE, world } from "./world";
+import { band, pane, PREFIX, TABLE, toolResult, world } from "./world";
 
 test("pill: text centred in its box with 8 px on each side", () => {
   const { source, width } = pillSvg("nicht verbunden", "#000000", "#ffffff");
@@ -61,7 +61,7 @@ test("the fight-order example comes from the real group", () => {
   expect(orderExample(view)).toBe("Reihenfolge, z. B. Ada, Borin, Wolf 1");
 });
 
-test("launcher: status and hints are cut with … at a short length", async ($, on) => {
+test("launcher: the D&D starter says only „Tisch läuft · Runde N“, the scene stays in the Table tab", async ($, on) => {
   world(on, {
     table_state: {
       ...TABLE,
@@ -74,14 +74,52 @@ test("launcher: status and hints are cut with … at a short length", async ($, 
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd", args: "table" } as never);
   const b = await $.ui.mount({ ...band(), surface: "desktop" });
-  const btn = await b.find({ type: "Button", key: "launch-dnd-table" });
-  expect([...(btn?.text ?? "")].length).toBeLessThanOrEqual(BAND_STATUS_MAX);
-  expect(btn?.text).toContain("…");
-  for (const t of (await b.findAll({ type: "Text" })).map((x) => x.text))
+  expect(await b.find({ type: "Button", key: "launch-dnd-table" })).toBeUndefined();
+  const texts = (await b.findAll({ type: "Text" })).map((x) => x.text);
+  expect(texts.join(" ")).toMatch(/· Tisch läuft/);
+  expect(texts.join(" ")).not.toContain("Krummen Krug");
+  // "· " prefix plus at most BAND_STATUS_MAX / BAND_HINT_MAX characters
+  for (const t of texts)
     expect([...t].length).toBeLessThanOrEqual(
-      Math.max(BAND_HINT_MAX, BAND_STATUS_MAX),
+      Math.max(BAND_HINT_MAX, BAND_STATUS_MAX) + 2,
     );
   await b.unmount();
+});
+
+test("launcher at a table with warn and bad hints: only the bad one in the band, status „Tisch läuft · Runde 2“; ok never", async ($, on) => {
+  world(on);
+  // bad: a whisper that did not reach its player (Discord DMs closed); warn: nobody listens to the players
+  on("tool.call", (_, e) =>
+    e.tool === `${PREFIX}discord`
+      ? (toolResult({ delivered: false, to: "Thorin", reason: "dms_closed" }) as never)
+      : (toolResult({ ok: true }) as never),
+  );
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd", args: "table" } as never);
+  await $.tool.call({ tool: "mcp__dnd-studio__initiative", action: "set", order: ["Thorin", "Mara"] } as never);
+  for (let n = 0; n < 3; n++)
+    await $.tool.call({ tool: "mcp__dnd-studio__initiative", action: "next" } as never);
+  await $.tool.call({
+    tool: `${PREFIX}discord`,
+    input: { action: "whisper", hero: "Thorin", text: "x" },
+  } as never);
+  const b = await $.ui.mount({ ...band(), surface: "desktop" });
+  const texts = (await b.findAll({ type: "Text" })).map((x) => x.text);
+  expect(texts).toContain("· Tisch läuft · Runde 2");
+  expect(texts).toContain("discord dms_closed");
+  expect(texts.join(" ")).not.toMatch(/Spieler ungehört/);
+  // the starter's status and one hint, nothing else
+  expect(texts.filter((t) => t !== "D&D")).toEqual(["· Tisch läuft · Runde 2", "discord dms_closed"]);
+  await b.unmount();
+  // pure: bad before warn, ok never
+  const hints = [
+    { text: "gehört", tone: "ok" as const },
+    { text: "still", tone: "warn" as const },
+    { text: "kaputt", tone: "bad" as const },
+  ];
+  expect(bandHint(hints)?.text).toBe("kaputt");
+  expect(bandHint(hints.slice(0, 2))?.text).toBe("still");
+  expect(bandHint(hints.slice(0, 1))).toBeUndefined();
 });
 
 test("a listener that woke the GM is the normal hand-over, not a warning", () => {

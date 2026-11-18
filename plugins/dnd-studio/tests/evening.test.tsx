@@ -157,7 +157,8 @@ test("the watcher: a background watch runs, ends with its task notification, and
   } as never);
   expect(JSON.stringify(ran)).toContain("bwatch1");
   b = await $.ui.mount({ ...band(), surface: "desktop" });
-  expect(await findShown(b, /Spieler werden gehört/)).toBeDefined();
+  // Band v3: a running watcher is fine (ok) and stays out of the band; the warning is gone
+  expect(await findShown(b, /Spieler ungehört/)).toBeUndefined();
   await b.unmount();
 
   // Another background task ending does not end the watch.
@@ -166,7 +167,8 @@ test("the watcher: a background watch runs, ends with its task notification, and
     origin: { kind: "task-notification" },
   } as never);
   b = await $.ui.mount({ ...band(), surface: "desktop" });
-  expect(await findShown(b, /Spieler werden gehört/)).toBeDefined();
+  // Band v3: a running watcher is fine (ok) and stays out of the band; the warning is gone
+  expect(await findShown(b, /Spieler ungehört/)).toBeUndefined();
   await b.unmount();
 
   // A turn ends while the watcher runs: no reminder.
@@ -262,7 +264,7 @@ test("a changed Studio version or a refused argument warns: MCP schemas stale", 
 
   const b = await $.ui.mount({ ...band(), surface: "desktop" });
   expect(
-    await findShown(b, /Studio aktualisiert – Claude neu starten/),
+    await findShown(b, /Claude neu starten/),
   ).toBeDefined();
   await b.unmount();
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });

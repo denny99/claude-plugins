@@ -22,6 +22,7 @@ import {
   renderLookPicker,
 } from "../features/look";
 import {
+  bandHint,
   bandStatus,
   endInitiative,
   nextTurn,
@@ -163,14 +164,15 @@ async function probeQuietly(
   }
 }
 
-/** Longest launcher status and hint on graphical surfaces (characters, "…" included). */
-export const BAND_STATUS_MAX = 40;
-export const BAND_HINT_MAX = 40;
+/** Longest launcher status and hint on graphical surfaces (characters, "…" included). Band v3: a few words. */
+export const BAND_STATUS_MAX = 24;
+export const BAND_HINT_MAX = 24;
 
 /**
- * The launcher row above the prompt (key `launchKey("dnd-studio")` = launch:dnd-studio@2, root `LAUNCH_ROW`: one line
- * that shrinks and cuts with "…"): the "D&D" chip while the Studio answers (or a table is live), and at a live table
- * its state as a button to the Table tab, hints after it. Null: nothing to show.
+ * The launcher row above the prompt (key `launchKey("dnd-studio")` = launch:dnd-studio@3, root `LAUNCH_ROW`, line 1 of
+ * the band): the "D&D" chip while the Studio answers (or a table is live). At a live table its status reads „Tisch
+ * läuft · Runde 3“ and the chip opens the Table tab, where the whole sentence stands; after it at most one hint, and
+ * only a warn/bad one. Null: nothing to show.
  */
 async function drawLauncher(
   $: EngineInterface,
@@ -181,57 +183,46 @@ async function drawLauncher(
   const health = await readHealth($);
   if (!table && health?.app !== "up") return null;
   const k = await kit($, e, { brand: "dnd", lang: "de" });
-  const { Button, Text } = k;
+  const { Text } = k;
   const chips: RenderElement[] = [
     LauncherChip(k, {
       key: "launch-dnd",
       icon: "dice",
       label: "D&D",
-      onPress: () => void openPane($),
+      status: table
+        ? truncate(
+            table.short,
+            k.graphical
+              ? BAND_STATUS_MAX
+              : Math.max(12, Math.floor(k.cols * 0.4)),
+          )
+        : undefined,
+      onPress: table
+        ? () => void openTable($, options)
+        : () => void openPane($),
     }),
   ];
-  if (table) {
-    // Desktop paints `label`, not the children: both carry the same text (kit v3.1). The band is shared with other
-    // mods: a short line with "…" (no tooltip exists for a Button; the whole line is in the Table tab it opens).
-    const tableText = truncate(
-      table.status,
-      k.graphical ? BAND_STATUS_MAX : Math.max(12, Math.floor(k.cols * 0.6)),
-    );
+  const hint = table ? bandHint(table.hints) : undefined;
+  if (hint)
     chips.push(
-      <Button
-        key="launch-dnd-table"
-        label={tableText}
-        plain
-        onPress={() => void openTable($, options)}
+      <Text
+        key="launch-dnd-hint"
+        size={k.graphical ? "footnote" : undefined}
+        color={
+          k.graphical
+            ? toneColor(k, hint.tone)
+            : hint.tone === "bad"
+              ? "red"
+              : "yellow"
+        }
+        wrap="truncate-end"
       >
-        {tableText}
-      </Button>,
+        {truncate(
+          hint.text,
+          k.graphical ? BAND_HINT_MAX : Math.max(12, Math.floor(k.cols * 0.3)),
+        )}
+      </Text>,
     );
-    for (const [n, hint] of table.hints.entries())
-      chips.push(
-        <Text
-          key={`launch-dnd-hint-${n}`}
-          size={k.graphical ? "footnote" : undefined}
-          color={
-            k.graphical
-              ? toneColor(k, hint.tone)
-              : hint.tone === "bad"
-                ? "red"
-                : hint.tone === "ok"
-                  ? "green"
-                  : "yellow"
-          }
-          wrap="truncate-end"
-        >
-          {truncate(
-            hint.text,
-            k.graphical
-              ? BAND_HINT_MAX
-              : Math.max(12, Math.floor(k.cols * 0.4)),
-          )}
-        </Text>,
-      );
-  }
   return LauncherRow(k, { plugin: "dnd-studio", chips });
 }
 

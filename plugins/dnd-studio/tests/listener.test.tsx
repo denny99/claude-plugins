@@ -72,10 +72,16 @@ test("listener mode: a running pnp-zuhoerer is the watcher, its return fills ban
     await b.unmount();
     return t;
   };
+  const tableText = async () => {
+    const p = await $.ui.mount({ ...pane(), surface: "desktop" });
+    const t = (await p.findAll({ type: "Text" })).map((x) => x.text).join(" ");
+    await p.unmount();
+    return t;
+  };
   expect(await bandText()).toContain("kein Zuhörer");
 
   await $.agent.spawn(spawn("z1"));
-  expect(await bandText()).toContain("Zuhörer wartet · 0 übersprungen");
+  expect(await tableText()).toContain("Zuhörer wartet · 0 übersprungen");
 
   // The listener's own foreground watch (a subagent's Bash) is no GM watcher.
   await $.tool.check({
@@ -118,7 +124,9 @@ test("listener mode: a running pnp-zuhoerer is the watcher, its return fills ban
 
   // A new listener carries the skipped count; two at once are flagged.
   await $.agent.spawn(spawn("z2"));
-  expect(await bandText()).toContain("Zuhörer wartet · 2 übersprungen");
+  // Band v3: a waiting listener is fine (ok) and stays out of the band; the Table tab says it.
+  expect(await bandText()).not.toContain("Zuhörer wartet");
+  expect(await tableText()).toContain("Zuhörer wartet · 2 übersprungen");
   await $.agent.spawn(spawn("z3"));
   expect(await bandText()).toContain("2 Zuhörer laufen");
   await $.turn.complete(done("z3", "kaputt, kein JSON", "z3t"));
@@ -131,8 +139,9 @@ test("listener mode: a running pnp-zuhoerer is the watcher, its return fills ban
       "z2t",
     ),
   );
-  // the band cuts long hints with … (BAND_HINT_MAX); the whole reason is in the Table tab
-  expect(await bandText()).toContain("Zuhörer hat geweckt: Frage an die Spiel…");
+  // woken is the normal hand-over (ok): not in the band, the whole reason is in the Table tab
+  expect(await bandText()).not.toContain("Zuhörer hat geweckt");
+  expect(await tableText()).toContain("Zuhörer hat geweckt: Frage an die Spielleitung");
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   for (const text of [
     /Zuletzt zurück: geweckt · Frage an die Spielleitung/,

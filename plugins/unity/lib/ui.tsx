@@ -1657,20 +1657,20 @@ export function Tabs<T extends string>(
   )
 }
 
-// --- launcher strip above the prompt (Band v2: one line) ---
+// --- launcher strip above the prompt (Band v3: two fixed lines) ---
 // Keep this section identical in every copy of the kit and in ds-usage-line's hooks/register.tsx (see README "Band").
 
 /** Key prefix that marks a plugin's band row as a launcher row (`launch:<plugin>@<version>`), so a merger can find it. */
 export const LAUNCH_PREFIX = 'launch:'
 /** The band layout this copy draws. A row keyed `…@<n>` with n above it hands the merge to a newer copy. */
-export const BAND_VERSION = 2
+export const BAND_VERSION = 3
 /** The root key of a plugin's launcher row. */
 export const launchKey = (plugin: string): string => `${LAUNCH_PREFIX}${plugin}@${BAND_VERSION}`
 
 /**
- * Root props of a starter row (`LauncherRow`): one line that shrinks and clips, its texts cut with "…". The merger
- * may not set these on its own boxes (the engine refuses `minWidth`/`overflow` on a Box holding another plugin's row),
- * so every row brings them.
+ * Root props of a starter row (`LauncherRow`, line 1): one line that shrinks and clips, its status cut with "…". The
+ * merger may not set these on its own boxes (the engine refuses `minWidth`/`overflow` on a Box holding another
+ * plugin's row), so every row brings them.
  */
 export const LAUNCH_ROW = {
   flexDirection: 'row',
@@ -1680,13 +1680,16 @@ export const LAUNCH_ROW = {
   minWidth: 0,
   overflow: 'hidden',
 } as const
-/** Root props of a trailing row (ds-usage-line's meters): takes the rest of the line, right-aligned, never shrinks. */
+/**
+ * Root props of a meter row (ds-usage-line, line 2): one line, right-aligned, never wraps. `justifyContent: 'flex-end'`
+ * is what marks it as the meter line (`isTrailing`), as in v2. It fits itself to `bodyColumns` (drops "bis …", then
+ * shortens its bars), so nothing on line 1 changes it.
+ */
 export const LAUNCH_END = {
   flexDirection: 'row',
   flexWrap: 'nowrap',
   alignItems: 'center',
   justifyContent: 'flex-end',
-  flexGrow: 1,
   flexShrink: 0,
 } as const
 
@@ -1696,20 +1699,24 @@ export type LauncherChipProps = {
   icon?: IconName
   label: string
   /**
-   * A short state next to the chip, **only when something needs the person** ("Tests rot", "Gerät fehlt", "Termin in
-   * 8 min"). Band v2: no steady details (device names, counts) — those belong in the pane. Cut with "…" when tight.
+   * A short state after the chip ("Gerät fehlt", "Freigabe wartet", "Call 15:30", "Runde 2"). Band v3: may stand
+   * always, keep it to a few words; it is the first thing cut with "…" when line 1 gets tight.
    */
   status?: string
-  /** Colors the status (state only: ok, warn, bad, info). */
+  /** Colors the status, `warn`/`bad` only; any other tone (and none) draws it quiet. */
   tone?: Tone
   /** The chip that matters now: `variant: 'primary'` (at most one per row). */
   primary?: boolean
   onPress: () => void
 }
 
+/** Whether a status tone is drawn in color: only what needs the person (warn, bad); the rest stays quiet. */
+const loud = (tone?: Tone): tone is 'warn' | 'bad' => tone === 'warn' || tone === 'bad'
+
 /**
- * One starter chip of the strip above the prompt: a native Button with the bare name (pressable as a whole, no glyph) and its
- * status after it. The terminal draws `[ label ]` and the status dim.
+ * One starter chip of line 1: a native Button with the bare name (pressable as a whole, no glyph) and its status
+ * after it ("Flutter · Gerät fehlt"). The button never shrinks; the status is cut with "…". The terminal draws
+ * `[ label ]` and the status dim.
  */
 export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
   const { Box, Text, Button } = k
@@ -1725,13 +1732,14 @@ export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
     </Button>
   )
   if (!c.status) return btn
+  const tone = loud(c.tone) ? c.tone : undefined
   const status = k.graphical ? (
-    <Text size="footnote" color={c.tone ? k.t.tones[c.tone].fg : k.t.faint} wrap="truncate-end">
-      {sanitize(c.status)}
+    <Text size="footnote" color={tone ? k.t.tones[tone].fg : k.t.faint} wrap="truncate-end">
+      {`· ${sanitize(c.status)}`}
     </Text>
   ) : (
-    <Text color={c.tone ? terminalColor(k.brand, c.tone) : undefined} dimColor={c.tone ? undefined : true} wrap="truncate-end">
-      {truncate(c.status, Math.max(6, Math.floor(k.cols / 3)))}
+    <Text color={tone ? terminalColor(k.brand, tone) : undefined} dimColor={tone ? undefined : true} wrap="truncate-end">
+      {`· ${truncate(c.status, Math.max(6, Math.floor(k.cols / 3)))}`}
     </Text>
   )
   return (
@@ -1745,7 +1753,9 @@ export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
       minWidth={0}
       overflow="hidden"
     >
-      {btn}
+      <Box key={`${c.key}-btn`} flexShrink={0}>
+        {btn}
+      </Box>
       {status}
     </Box>
   )
@@ -1753,7 +1763,7 @@ export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
 
 /**
  * A plugin's launcher row for its `AbovePrompt` hook: chips in one line that shrinks and clips (`LAUNCH_ROW`), keyed
- * `launch:<plugin>@2` so `mergeLauncherRows` (any installed plugin's) puts the rows of every plugin into one strip.
+ * `launch:<plugin>@3` so `mergeLauncherRows` (any installed plugin's) puts it on line 1 with every other starter.
  */
 export function LauncherRow(k: Kit, r: { plugin: string; chips: Kids }): RenderElement {
   const { Box } = k
@@ -1765,6 +1775,10 @@ export function LauncherRow(k: Kit, r: { plugin: string; chips: Kids }): RenderE
 }
 
 type BandRow = { plugin: string; tree: RenderElement }
+type BandNode = { type?: unknown; props?: Record<string, unknown>; children?: unknown; press?: unknown }
+/** A Button in a settled tree: its handler sits in `press` once drawn, in `props.onPress` before. */
+const isPressable = (n: BandNode): boolean =>
+  n.type === 'Button' || n.press !== undefined || typeof n.props?.onPress === 'function'
 const rootProps = (row: BandRow) =>
   (row.tree as { props?: { key?: unknown; justifyContent?: unknown } }).props
 
@@ -1775,8 +1789,8 @@ export function isLauncherRow(row: BandRow): boolean {
 }
 
 /**
- * Whether a launcher row stands at the end of the strip: its root Box carries `justifyContent: 'flex-end'` (e.g. the
- * usage row of ds-usage-line, `LAUNCH_END`).
+ * Whether a launcher row is the meter line (line 2): its root Box carries `justifyContent: 'flex-end'` (ds-usage-line,
+ * `LAUNCH_END`; v2 usage rows too).
  */
 export function isTrailing(row: BandRow): boolean {
   return rootProps(row)?.justifyContent === 'flex-end'
@@ -1788,16 +1802,90 @@ export function bandVersion(row: BandRow): number {
   return m ? Number(m[1]) : 1
 }
 
+const nodeKids = (n: BandNode): unknown[] => {
+  const c = n.children ?? n.props?.children
+  return Array.isArray(c) ? c.flat(8) : c === undefined || c === null || c === false ? [] : [c]
+}
+const plainText = (n: unknown): string =>
+  typeof n === 'string' || typeof n === 'number'
+    ? String(n)
+    : n && typeof n === 'object'
+      ? nodeKids(n as BandNode).map(plainText).join('')
+      : ''
+
+/** The names of a starter row's buttons (their `label`), in order. */
+export function starterLabels(row: BandRow): string[] {
+  const out: string[] = []
+  const walk = (n: unknown): void => {
+    if (!n || typeof n !== 'object') return
+    const p = (n as BandNode).props ?? {}
+    if (isPressable(n as BandNode)) {
+      out.push(String(p.label ?? plainText(n)))
+      return
+    }
+    for (const c of nodeKids(n as BandNode)) walk(c)
+  }
+  walk(row.tree)
+  return out
+}
+
+/** Cells a status keeps at least before its row moves into "+N": "Gerät…" (and the "· " before it). */
+const STATUS_MIN = 8
 /**
- * The `AbovePromptList` hook that lays every plugin's launcher row into **one line** on top of the band: starters
- * left, in their order (their roots shrink and clip, `LAUNCH_ROW`), trailing rows (`isTrailing`, `LAUNCH_END`) right,
- * never shrunk. No wrap. Other rows stay stacked under it, in their order. The engine lets a hook only reorder rows
- * and wrap what `next(e)` returns (never re-place another plugin's tree), so each launcher row goes through `next`
- * alone and the strip wraps those results; presses stay with the plugin that drew the chip.
+ * The fewest cells a starter row takes on line 1 (pure): every button whole (`[ label ]`, 4 for its frame), every
+ * status cut to `STATUS_MIN`, the row's gaps. An estimate from the tree: the row itself still shrinks and clips.
+ */
+export function starterMinWidth(row: BandRow): number {
+  let cells = 0
+  let parts = 0
+  const walk = (n: unknown): void => {
+    if (typeof n === 'string' || typeof n === 'number') {
+      cells += Math.min([...String(n)].length, STATUS_MIN) + 1
+      parts++
+      return
+    }
+    if (!n || typeof n !== 'object') return
+    const p = (n as BandNode).props ?? {}
+    if (isPressable(n as BandNode)) {
+      cells += [...String(p.label ?? plainText(n))].length + 4
+      parts++
+      return
+    }
+    for (const c of nodeKids(n as BandNode)) walk(c)
+  }
+  walk(row.tree)
+  return cells + Math.max(0, parts - 1) * 2
+}
+
+/**
+ * Which starters stand on line 1 and which go into "+N" (pure): all while their least widths fit `columns`, else the
+ * last ones move into "+N" until the rest and the "+N" chip fit; one starter always stays.
+ */
+export function fitStarters<T extends BandRow>(starters: readonly T[], columns: number): { shown: T[]; hidden: T[] } {
+  const gap = 2
+  const need = (rows: readonly T[]) => rows.reduce((sum, r) => sum + starterMinWidth(r), 0) + Math.max(0, rows.length - 1) * gap
+  const shown = [...starters]
+  const hidden: T[] = []
+  const more = () => (hidden.length ? gap + `+${hidden.length}`.length + 2 : 0)
+  while (shown.length > 1 && need(shown) + more() > columns) hidden.unshift(shown.pop()!)
+  return { shown, hidden }
+}
+
+/**
+ * The `AbovePromptList` hook that lays the band out in **two fixed lines**:
  *
- * Several plugins carry a copy: the outermost in the chain merges, the inner ones see single rows and pass. Which one
- * is outermost does not matter: a copy that finds a row keyed for a newer band version (`@<n>`) passes the rows
- * untouched, so the newest copy installed draws the band. Fewer than two launcher rows: passes.
+ * 1. **Starters** of every mod, in their order, one line that never wraps: each row shrinks and clips by itself
+ *    (`LAUNCH_ROW`), statuses go first with "…"; what does not fit at all moves into a quiet "+N" whose hover lists
+ *    the names.
+ * 2. a fine rule, then the **meter line** (`isTrailing`, ds-usage-line), which fits itself.
+ *
+ * Without meters only line 1; with fewer than two launcher rows the hook passes (a lone row draws itself). Other rows
+ * stay stacked under the two lines. Each launcher row goes through `next` alone (the engine lets a hook only reorder
+ * and leave out rows and wrap what `next(e)` returns), so presses stay with the plugin that drew the chip. A v2 row
+ * (`@2`) is drawn as it comes: a starter on line 1, a v2 usage row on line 2.
+ *
+ * Several plugins carry a copy: a copy that finds a row keyed for a newer band version (`@<n>`) passes the rows
+ * untouched, so the newest copy installed draws the band, whatever the chain's order.
  *
  *   on('ui.render', { component: 'AbovePromptList' }, ($, e, next) => mergeLauncherRows($, e, next))
  */
@@ -1810,23 +1898,69 @@ export async function mergeLauncherRows(
   const found = rows.filter(isLauncherRow)
   if (found.length < 2) return next(e)
   if (found.some(row => bandVersion(row) > BAND_VERSION)) return next(e)
-  const launch = [...found.filter(row => !isTrailing(row)), ...found.filter(isTrailing)]
-  const others = rows.filter(row => !isLauncherRow(row))
-  const only = (subset: readonly BandRow[]) => next({ ...e, props: { ...e.props, rows: subset } })
-  const parts: RenderElement[] = []
-  for (const row of launch) parts.push((await only([row])) as RenderElement)
-  const rest = others.length ? ((await only(others)) as RenderElement) : null
-  const { Box } = $.ui.resolve(e) as unknown as Els
-  // Only flex props here: the engine refuses `minWidth`/`overflow` on a Box that holds another plugin's row.
-  const strip = (
-    <Box key="launch-strip" flexDirection="row" flexWrap="nowrap" alignItems="center" columnGap={2}>
-      {parts}
-    </Box>
+  const columns = Number(e.props.bodyColumns) || 80
+  const { shown, hidden } = fitStarters(
+    found.filter(row => !isTrailing(row)),
+    columns,
   )
-  if (!rest) return strip
+  const meterRows = found.filter(isTrailing)
+  const others = rows.filter(row => !isLauncherRow(row))
+  const only = async (subset: readonly BandRow[]) =>
+    (await next({ ...e, props: { ...e.props, rows: subset } })) as RenderElement
+  const starters: RenderElement[] = []
+  for (const row of shown) starters.push(await only([row]))
+  const meters: RenderElement[] = []
+  for (const row of meterRows) meters.push(await only([row]))
+  const rest = others.length ? await only(others) : null
+  const { Box, Text } = $.ui.resolve(e) as unknown as Els
+  const graphical = String((e as { surface?: string }).surface ?? 'terminal') !== 'terminal'
+  const names = hidden.map(row => starterLabels(row)[0] ?? row.plugin)
+  const more = hidden.length ? (
+    <Box key="launch-more" flexDirection="row" flexShrink={0}>
+      <Text size="footnote" color={graphical ? 'inactive' : undefined} dimColor={graphical ? undefined : true}>
+        {`+${hidden.length}`}
+      </Text>
+      {graphical ? (
+        <Box
+          position="absolute"
+          top={0}
+          right={0}
+          width={names.join(' · ').length + 2}
+          display="none"
+          hover={{ display: 'flex' }}
+        >
+          <Text size="footnote" inverse wrap="truncate-end">
+            {` ${names.join(' · ')} `}
+          </Text>
+        </Box>
+      ) : null}
+    </Box>
+  ) : null
+  // Only flex props on boxes that hold other plugins' rows: the engine refuses `minWidth`/`overflow` there.
+  const line1 = starters.length ? (
+    <Box key="launch-strip" flexDirection="row" flexWrap="nowrap" alignItems="center" columnGap={2}>
+      {starters}
+      {more}
+    </Box>
+  ) : null
+  const rule =
+    line1 && meters.length ? (
+      <Box key="launch-rule" flexDirection="row">
+        <Text
+          size="footnote"
+          color={graphical ? 'inactive' : undefined}
+          dimColor={graphical ? undefined : true}
+          wrap="truncate-end"
+        >
+          {'─'.repeat(Math.max(1, columns))}
+        </Text>
+      </Box>
+    ) : null
   return (
     <Box key="launch-band" flexDirection="column">
-      {strip}
+      {line1}
+      {rule}
+      {meters}
       {rest}
     </Box>
   )

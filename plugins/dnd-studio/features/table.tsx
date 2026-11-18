@@ -13,7 +13,6 @@ import {
   renderDiscord,
   renderInterjections,
   renderListener,
-  BAND_STALE,
   STALE_TEXT,
 } from "./evening";
 import { autoOpen, Fold, noteTableEnded } from "./dnd-ui";
@@ -728,10 +727,13 @@ export function registerTable(on: On): void {
 }
 
 /**
- * What the launcher strip says about a live table (null: no live table): the status sentence ("Das Tor im Nebel ·
- * Runde 3 · Thorin ist dran") and the hints after it (watcher, silence, stale schemas, the Studio's warning).
+ * What the launcher strip says about a live table (null: no live table). Band v3: `short` is the starter's status
+ * ("Tisch läuft · Runde 3", without a fight "Tisch läuft"); `status` is the whole sentence ("Das Tor im Nebel · Runde 3
+ * · Thorin ist dran"), which the band no longer shows (the Table tab has scene, round and turn). `hints` are every hint (watcher, silence, stale schemas, the Studio's
+ * warning); the band shows only the most urgent warn/bad one (`bandHint`).
  */
 export async function bandStatus($: EngineInterface): Promise<{
+  short: string;
   status: string;
   hints: { text: string; tone: "ok" | "warn" | "bad" }[];
 } | null> {
@@ -746,9 +748,19 @@ export async function bandStatus($: EngineInterface): Promise<{
   if (band.silence > SILENCE_WARN_S)
     hints.push({ text: `${band.silence} s still – Füller?`, tone: "warn" });
   hints.push({ text: ev.watch, tone: ev.watching ? "ok" : "warn" });
-  if (ev.stale) hints.push({ text: BAND_STALE, tone: "bad" });
+  // the band has a few words: the step that helps; the Table tab says why (BAND_STALE)
+  if (ev.stale) hints.push({ text: "Claude neu starten", tone: "bad" });
   if (band.warning) hints.push({ text: band.warning, tone: "bad" });
-  return { status: band.text, hints };
+  const short = ini.isActive ? `Tisch läuft · Runde ${ini.round}` : "Tisch läuft";
+  return { short, status: band.text, hints };
+}
+
+/** The one hint the band shows (pure): the first `bad`, else the first `warn`; `ok` hints stay in the Table tab. */
+export function bandHint(
+  hints: readonly { text: string; tone: "ok" | "warn" | "bad" }[],
+): { text: string; tone: "warn" | "bad" } | undefined {
+  const hint = hints.find((h) => h.tone === "bad") ?? hints.find((h) => h.tone === "warn");
+  return hint ? { text: hint.text, tone: hint.tone as "warn" | "bad" } : undefined;
 }
 
 // --- the Table tab ------------------------------------------------------------------------------------------------

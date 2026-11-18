@@ -98,7 +98,7 @@ test("render check: every tab (and the band) on every surface, small and large, 
   for (const surface of SURFACES) {
     const b = await $.ui.mount({ ...band(40), surface });
     const texts = await b.findAll({ type: "Text" });
-    expect(texts.some((t) => /Spieler ungehört/.test(t.text))).toBe(true);
+    expect(texts.some((t) => /Tisch läuft/.test(t.text))).toBe(true);
     for (const t of texts)
       expect(t.text).not.toMatch(/[\x00-\x09\x0b-\x1f\x7f]/);
     await b.unmount();

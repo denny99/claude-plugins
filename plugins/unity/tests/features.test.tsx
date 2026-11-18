@@ -291,12 +291,12 @@ test('starter strip: chip "Unity" in a Unity project with the editor state; open
   await $.session.start(start)
   for (const surface of ['desktop', 'terminal'] as const) {
     const band = await $.ui.mount({ plugin: 'unity', surface, component: 'AbovePrompt', props: BAND })
-    expect(((await band.drawn()) as { props?: { key?: string } }).props?.key).toBe('launch:unity@2')
+    expect(((await band.drawn()) as { props?: { key?: string } }).props?.key).toBe('launch:unity@3')
     expect(await band.find({ type: 'Button', key: 'launch-unity' })).toBeDefined()
     await band.unmount()
   }
   expect(launcherStatus({ ...EMPTY_STATUS, bridge: { up: true, isPlaying: true } })).toEqual({
-    status: 'Play-Modus',
+    status: 'Play läuft',
     tone: 'info',
   })
   expect(
@@ -308,14 +308,41 @@ test('starter strip: chip "Unity" in a Unity project with the editor state; open
       ...EMPTY_STATUS,
       compile: { seq: 1, at: 0, source: 'bridge', messages: [{ severity: 'error', message: 'x' }] },
     }),
-  ).toEqual({ status: '1 Kompilierfehler', tone: 'bad' })
+  ).toEqual({ status: '1 Fehler', tone: 'bad' })
   // Befund 16: no editor shows in the chip, in the warn color; ready says nothing.
   expect(launcherStatus({ ...EMPTY_STATUS, bridge: { up: false } })).toEqual({
     status: 'nicht verbunden',
     tone: 'warn',
   })
-  expect(launcherStatus({ ...EMPTY_STATUS })).toEqual({})
+  expect(launcherStatus({ ...EMPTY_STATUS })).toEqual({ status: 'Editor bereit', tone: 'ok' })
   const band = await $.ui.mount({ plugin: 'unity', surface: 'desktop', component: 'AbovePrompt', props: BAND })
   await settle(world, band.press({ key: 'launch-unity' }))
   await band.unmount()
+})
+
+test('starter status (Band v3): the editor state in a few words, colour only for warn/bad', () => {
+  const errs = (n: number): UnityModel => ({
+    ...EMPTY_STATUS,
+    compile: {
+      seq: 1,
+      at: 0,
+      source: 'bridge',
+      messages: Array.from({ length: n }, () => ({ severity: 'error' as const, message: 'x' })),
+    },
+  })
+  expect(launcherStatus(errs(3))).toEqual({ status: '3 Fehler', tone: 'bad' })
+  expect(launcherStatus({ ...EMPTY_STATUS, bridge: { up: true, isCompiling: true } })).toEqual({
+    status: 'kompiliert …',
+    tone: 'info',
+  })
+  expect(launcherStatus({ ...EMPTY_STATUS, bridge: { up: true, isPlaying: true, isPaused: true } }).status).toBe(
+    'Play pausiert',
+  )
+  expect(
+    launcherStatus({ ...EMPTY_STATUS, tests: { state: 'running', results: [] }, bridge: { up: true, isCompiling: true } }),
+  ).toEqual({ status: 'Tests laufen', tone: 'info' })
+  // errors beat everything; every status stays short for line 1
+  expect(launcherStatus({ ...errs(1), bridge: { up: false } }).tone).toBe('bad')
+  for (const m of [errs(12), EMPTY_STATUS, { ...EMPTY_STATUS, bridge: { up: false } }])
+    expect([...(launcherStatus(m).status ?? '')].length).toBeLessThanOrEqual(16)
 })
