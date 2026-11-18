@@ -6,6 +6,7 @@ import type { EngineInterface, RenderElement } from 'claude-code'
 
 import type { ModelPerf, UnityModel } from '../../types'
 import { isPlayError } from '../../lib/play'
+import { schemeSvg } from '../../lib/theme'
 import { Actions, Card, CardTitle, ProblemCard, Sentence, sanitize, truncate, type Kit } from '../../lib/ui'
 import { gotoSpot, patchModel, type Options } from '../state'
 import { bridgeUpdateAction, clockTime, dec, thousands } from './common'
@@ -38,11 +39,11 @@ function chartSvg(k: Kit, p: ModelPerf): string {
   const line = pts.map((v, i) => `${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join(' ')
   const by = yOf(p.budgetMs).toFixed(1)
   const stroke = p.hitches ? k.t.tones.warn.fg : k.t.tones.ok.fg
-  return (
+  return schemeSvg(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" preserveAspectRatio="none">` +
     `<line x1="0" y1="${by}" x2="${W}" y2="${by}" stroke="${k.t.faint}" stroke-width="1" stroke-dasharray="4 4"/>` +
     `<polyline points="${line}" fill="none" stroke="${stroke}" stroke-width="1.5" stroke-linejoin="round"/>` +
-    `</svg>`
+    `</svg>`,
   )
 }
 

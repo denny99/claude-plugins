@@ -1,4 +1,4 @@
-/** The `unity` pane (kit v2, brand neutral, German): header, tabs Übersicht · Tests · Review · Leistung (+ Konsole, Ziel). */
+/** The `unity` pane (kit v2, brand neutral, German): header, fixed tabs Übersicht · Tests · Review · Leistung · Konsole · Ziel. */
 import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
 import type { UnityModel, UnityTab } from '../types'
@@ -113,7 +113,7 @@ export async function renderPane($: EngineInterface, e: RenderInput<'Pane'>, opt
     ],
     active: tab,
     onSelect: id => void patchModel($, { tab: id }),
-    maxVisible: k.narrow ? 4 : 5,
+    // fixed order; the kit puts behind "Mehr" only what does not fit the body width
     moreLabel: 'Mehr',
   })
   const body = await tabBody($, e, k, x, m, options, tab)

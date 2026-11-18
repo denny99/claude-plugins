@@ -84,6 +84,8 @@ export const ICONS = {
   info: '<circle cx="12" cy="12" r="9"></circle><path d="M12 11v5M12 8h.01"></path>',
 } as const
 
+import { schemeSvg } from './theme'
+
 /** Name of a kit icon. */
 export type IconName = keyof typeof ICONS
 
@@ -149,9 +151,9 @@ export function glyphLabel(icon: IconName | undefined, label: string): string {
 /** The `<svg>` markup of an icon in one color (`currentColor` replaced), sized `size` CSS pixels. */
 export function iconSvg(name: IconName, color: string, size = 16): string {
   const body = (ICONS[name] ?? '').replace(/currentColor/g, color)
-  return (
+  return schemeSvg(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" ` +
-    `stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`
+    `stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`,
   )
 }
 
@@ -178,5 +180,5 @@ export function svgDocument(source: string): string {
   const hgt = vb?.[2]
   if (w && !/\swidth\s*=/.test(attrs)) attrs = `${attrs} width="${w}"`
   if (hgt && !/\sheight\s*=/.test(attrs)) attrs = `${attrs} height="${hgt}"`
-  return `<svg${attrs}>${src.slice(m[0].length)}`
+  return schemeSvg(`<svg${attrs}>${src.slice(m[0].length)}`)
 }

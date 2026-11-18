@@ -349,3 +349,30 @@ test('Problem melden from Übersicht switches to Review; measuring runs detached
   expect(world.prompts.at(-1)).toContain('Leistung: 10 s, 3 Bilder')
   await ui.unmount()
 })
+
+test('schmales Panel: Entscheidungs-Optionen ganz lesbar, keine „Entscheiden“-Pill, alle Unter-Tabs erreichbar', async ($, on) => {
+  const world = reviewWorld(on)
+  await openReview($, world)
+  const ui = await $.ui.mount({
+    ...PANE,
+    surface: 'desktop',
+    viewport: { columns: 40, rows: 30 },
+    props: { ...PANE.props, bodyColumns: 40, scroll: { offset: 0, bodyRows: 30 } },
+  })
+  if (!(await ui.find({ type: 'Button', key: 'tab-review' }))) await settle(world, ui.press({ key: 'tab-more' }))
+  await settle(world, ui.press({ key: 'tab-review' }))
+  const subs = async () =>
+    (await ui.findAll({ type: 'Button' })).map(b => String(b.props.key ?? '')).filter(k => /^rv-tab-/.test(k))
+  if ((await subs()).includes('rv-tab-more')) await settle(world, ui.press({ key: 'rv-tab-more' }))
+  for (const k of ['rv-tab-look', 'rv-tab-decide', 'rv-tab-pictures', 'rv-tab-sounds', 'rv-tab-ideas', 'rv-tab-running'])
+    expect(await subs()).toContain(k)
+  await settle(world, ui.press({ key: 'rv-tab-decide' }))
+  expect((await subs()).includes('rv-tab-look')).toBe(true) // menu closed again, strip keeps its order
+  // the option is a wrapping text beside a short letter button; the button's label is the whole option
+  expect((await findShown(ui, 'warmes Orange'))?.text).toBeDefined()
+  const a = await ui.find({ type: 'Button', key: 'rv-choice-fackel-0' })
+  expect(a?.props.label).toBe('A · warmes Orange')
+  const alts = (await ui.findAll({ type: 'Svg' })).map(s => String(s.props.alt ?? ''))
+  expect(alts.includes('Entscheiden')).toBe(false)
+  await ui.unmount()
+})

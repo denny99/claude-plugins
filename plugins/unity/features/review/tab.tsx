@@ -303,11 +303,15 @@ function questionCard(
       CardTitle(k, {
         icon,
         title: q.title,
-        pill: q.kind === 'entscheiden' ? { text: 'Entscheiden', tone: 'info', glyph: false } : undefined,
+        // no "Entscheiden" pill: the sub tab says it already, and the title gets the room
       }),
       q.text ? Sentence(k, q.text) : null,
       acts.length ? Actions(k, `rv-acts-${q.id}`, acts, 3) : null,
-      choices.length
+      choices.length && q.kind === 'entscheiden'
+        ? decisionChoices(k, q.id, choices, c => () =>
+            void answerItem($, options, q.id, 'kommentar', c, draft, s.attachShot),
+          )
+        : choices.length
         ? Actions(
             k,
             `rv-choices-${q.id}`,
@@ -1001,7 +1005,6 @@ export async function reviewTab(
       tabs: SUBS.map(x => ({ id: x.id, label: x.label, icon: x.icon, count: counts[x.id] || undefined })),
       active: sub,
       keyPrefix: 'rv-tab-',
-      maxVisible: k.narrow ? 3 : 6,
       moreLabel: 'Mehr',
       onSelect: id => void patchReview($, { sub: id, open: undefined, notice: undefined }),
     }),
@@ -1015,6 +1018,37 @@ export async function reviewTab(
   return (
     <Box key="rv" flexDirection="column" gap={1}>
       {parts.filter(Boolean)}
+    </Box>
+  )
+}
+
+/**
+ * The options of a decision, one per row: a short letter button ("A") and the whole option as wrapping text beside it,
+ * so a long option is read in full before it is chosen (a native Button cuts its label). The button's accessible
+ * label carries the whole option.
+ */
+function decisionChoices(
+  k: Kit,
+  id: string,
+  choices: string[],
+  choose: (c: string) => () => void,
+): RenderElement {
+  const { Box, Button } = k
+  return (
+    <Box key={`rv-choices-${id}`} flexDirection="column" gap={k.graphical ? 'xs' : 0}>
+      {choices.map((c, i) => {
+        const letter = String.fromCharCode(65 + i)
+        return (
+          <Box key={`rv-choice-row-${id}-${i}`} flexDirection="row" alignItems="center" gap={1}>
+            <Box flexShrink={0}>
+              <Button key={`rv-choice-${id}-${i}`} label={`${letter} · ${c}`} variant="secondary" onPress={choose(c)}>
+                {letter}
+              </Button>
+            </Box>
+            {Sentence(k, c)}
+          </Box>
+        )
+      })}
     </Box>
   )
 }

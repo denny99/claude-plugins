@@ -25,7 +25,17 @@ import type { RenderInput, EngineInterface, RenderElement } from 'claude-code'
 
 import type { UiKitState } from '../types'
 import { glyphLabel, ICON_GLYPHS, ICONS, iconSvg, svgDocument, TERM_GLYPHS, type IconName } from './icons'
-import { modeFromTheme, terminalColor, themeTokens, type Brand, type Mode, type Tokens, type Tone } from './theme'
+import {
+  boxPaint,
+  modeFromTheme,
+  terminalColor,
+  themeTokens,
+  windowTokens,
+  type Brand,
+  type Mode,
+  type Tokens,
+  type Tone,
+} from './theme'
 
 export { glyphLabel, ICON_GLYPHS, ICONS, iconSvg, isIconName, svgDocument, TERM_GLYPHS, type IconName } from './icons'
 export {
@@ -289,7 +299,8 @@ export async function kit(
     graphical,
     brand,
     mode,
-    t: themeTokens(brand, mode),
+    // Graphical surfaces follow the app window (the engine `theme` can stay dark on a light window): theme keys, no fills.
+    t: graphical && opts.mode !== 'dark' && opts.mode !== 'light' ? windowTokens(brand) : themeTokens(brand, mode),
     s: KIT_STRINGS[opts.lang ?? 'en'],
     state,
     isOpen: (key, defaultOpen = true) => (state.toggled.includes(key) ? !defaultOpen : defaultOpen),
@@ -399,7 +410,7 @@ function xmlText(text: string): string {
 }
 
 /** Pill geometry (CSS px): height, font size, side padding, icon size, estimated advance per character. */
-const PILL = { h: 20, font: 12, pad: 7, icon: 12, gap: 4, radius: 4 } as const
+const PILL = { h: 20, font: 12, pad: 8, icon: 12, gap: 4, radius: 4 } as const
 
 /** Estimated advance of one character at 12 px semibold system font (narrow, digits, capitals, rest). */
 function charWidth(c: string): number {
@@ -408,7 +419,7 @@ function charWidth(c: string): number {
   if (/[0-9]/.test(c)) return 6.9
   if (/[mwMW]/.test(c)) return 9.6
   if (/[A-ZÄÖÜ]/.test(c)) return 7.8
-  return 6.6
+  return 7.1
 }
 
 /**
@@ -417,7 +428,8 @@ function charWidth(c: string): number {
  */
 export function pillSvg(text: string, fg: string, bg: string, icon?: IconName): { source: string; width: number } {
   const iconW = icon ? PILL.icon + PILL.gap : 0
-  const width = Math.ceil(PILL.pad * 2 + iconW + [...text].reduce((w, c) => w + charWidth(c), 0))
+  const textW = [...text].reduce((w, c) => w + charWidth(c), 0)
+  const width = Math.ceil(PILL.pad * 2 + iconW + textW)
   const scale = PILL.icon / 24
   const top = (PILL.h - PILL.icon) / 2
   const mark = icon
@@ -426,8 +438,8 @@ export function pillSvg(text: string, fg: string, bg: string, icon?: IconName): 
     : ''
   const source = svgDocument(
     `<svg viewBox="0 0 ${width} ${PILL.h}"><rect width="${width}" height="${PILL.h}" rx="${PILL.radius}" ` +
-      `fill="${bg}"></rect>${mark}<text x="${PILL.pad + iconW}" y="${PILL.h / 2 + PILL.font * 0.35}" ` +
-      `font-family="-apple-system, Segoe UI, sans-serif" font-size="${PILL.font}" font-weight="600" ` +
+      `fill="${bg}"></rect>${mark}<text x="${PILL.pad + iconW + textW / 2}" y="${PILL.h / 2 + PILL.font * 0.35}" ` +
+      `text-anchor="middle" font-family="-apple-system, Segoe UI, sans-serif" font-size="${PILL.font}" font-weight="600" ` +
       `fill="${fg}">${xmlText(text)}</text></svg>`,
   )
   return { source, width }
@@ -480,7 +492,9 @@ export function Card(k: Kit, c: { key?: string; tone?: Tone; gap?: number; child
       flexDirection="column"
       gap={c.gap ?? 1}
       padding={1}
-      backgroundColor={fill}
+      minWidth={0}
+      flexShrink={1}
+      backgroundColor={boxPaint(fill)}
       borderStyle="round"
       borderColor={border}
     >
@@ -512,7 +526,7 @@ export function CardTitle(
     <Box flexDirection="row" alignItems="center" gap={1}>
       {c.icon ? Icon(k, c.icon, { tone: c.tone, color: c.tone ? undefined : k.t.faint }) : null}
       <Box flexGrow={1} flexShrink={1} minWidth={0}>
-        <Text weight="bold" color={c.tone ? k.t.tones[c.tone].fg : k.t.text} wrap="truncate-end">
+        <Text weight="bold" color={c.tone ? k.t.tones[c.tone].fg : k.t.text} wrap="wrap">
           {sanitize(c.title)}
         </Text>
       </Box>
@@ -521,7 +535,11 @@ export function CardTitle(
           {sanitize(count)}
         </Text>
       ) : null}
-      {c.pill ? Pill(k, c.pill) : null}
+      {c.pill ? (
+        <Box paddingRight={1} flexShrink={0} alignSelf="center">
+          {Pill(k, c.pill)}
+        </Box>
+      ) : null}
     </Box>
   )
 }
@@ -539,14 +557,18 @@ export function Sentence(
         {wrapText(text, k.cols).join('\n')}
       </Text>
     )
+  // The Box keeps a long sentence inside the card: without minWidth 0 a flex child may grow past the pane.
+  const { Box } = k
   return (
-    <Text
-      size="footnote"
-      color={opts.tone ? k.t.tones[opts.tone].fg : ink(k, opts.faint ? 'faint' : 'muted')}
-      wrap={opts.wrap ?? 'wrap'}
-    >
-      {sanitize(text)}
-    </Text>
+    <Box flexDirection="column" flexShrink={1} minWidth={0}>
+      <Text
+        size="footnote"
+        color={opts.tone ? k.t.tones[opts.tone].fg : ink(k, opts.faint ? 'faint' : 'muted')}
+        wrap={opts.wrap ?? 'wrap'}
+      >
+        {sanitize(text)}
+      </Text>
+    </Box>
   )
 }
 
@@ -635,7 +657,11 @@ export function PaneHeader(
           {sanitize(hd.title)}
         </Text>
       </Box>
-      {hd.pill ? Pill(k, { ...hd.pill, shrink: true }) : null}
+      {hd.pill ? (
+        <Box flexShrink={0} paddingRight={1}>
+          {Pill(k, hd.pill)}
+        </Box>
+      ) : null}
       <Box flexGrow={1} />
       {knobs}
     </Box>
@@ -648,7 +674,9 @@ function Rule(k: Kit): RenderElement | null {
   if (!Svg) return null
   return (
     <Svg
-      source={`<svg xmlns="http://www.w3.org/2000/svg" width="4000" height="1" viewBox="0 0 4000 1" preserveAspectRatio="none"><rect width="4000" height="1" fill="${k.t.line}"/></svg>`}
+      source={svgDocument(
+        `<svg width="4000" height="1" viewBox="0 0 4000 1" preserveAspectRatio="none"><rect width="4000" height="1" fill="${k.t.line}"/></svg>`,
+      )}
       alt="divider"
       height={1}
     />
@@ -781,7 +809,7 @@ export function Stepper(k: Kit, s: { key?: string; steps: Step[] }): RenderEleme
               {mark}
             </Text>
           )}
-          {!last ? <Text color={k.t.line}>│</Text> : null}
+          {!last ? <Text color={k.t.faint}>│</Text> : null}
         </Box>
         <Box flexDirection="column" flexGrow={1} flexShrink={1} gap={0} paddingBottom={last ? 0 : 1}>
           <Text
@@ -861,7 +889,11 @@ export function ListRow(
             </Text>
           </Box>
         ) : null}
-        {r.pill ? Pill(k, r.pill) : null}
+        {r.pill ? (
+          <Box paddingRight={1} flexShrink={0} alignSelf="center">
+            {Pill(k, r.pill)}
+          </Box>
+        ) : null}
         {acts && !k.narrow ? acts : null}
       </Box>
       {acts && k.narrow ? acts : null}
@@ -1036,8 +1068,13 @@ export function ConfirmButton(
   a: { key: string; label: string; confirmLabel?: string; onConfirm: () => void },
 ): RenderElement {
   const { Box, Button } = k
+  // Graphical: a real (secondary) button like its neighbours, not bare text; the terminal keeps the plain one.
   if (!k.isConfirming(a.key))
-    return (
+    return k.graphical ? (
+      <Button key={a.key} label={a.label} variant="secondary" onPress={() => k.askConfirm(a.key)}>
+        {a.label}
+      </Button>
+    ) : (
       <Button key={a.key} plain onPress={() => k.askConfirm(a.key)}>
         {a.label}
       </Button>
@@ -1301,7 +1338,7 @@ export function LoadingState(k: Kit, info: string | { text?: string; shape?: num
           key={`sk-${i}-${j}`}
           height={1}
           width={BAR_WIDTHS[(i + j) % BAR_WIDTHS.length]}
-          backgroundColor={k.t.line}
+          backgroundColor={boxPaint(k.t.line)}
         />
       )),
     }),
@@ -1483,8 +1520,9 @@ export type TabItem<T extends string> = {
 /**
  * Tab bar: one Button per tab keyed `${keyPrefix ?? 'tab-'}${id}`, the active one primary; wraps on narrow bodies (v1).
  * v2 (any `icon` or `maxVisible`): one row of native Buttons, the active one `variant: 'primary'`, the rest plain, each
- * "<label> · <count>" (no glyph); past `maxVisible` the rest sit behind a "More" tab (`${prefix}more`) whose menu lists them
- * under the strip (same keys); the active tab always stays in the strip. Narrow bodies keep the strip on one line.
+ * "<label> · <count>" (no glyph), in a fixed order. Only what does not fit the body width (estimated, `maxVisible` an
+ * upper bound) sits behind a "More ▾" tab (`${prefix}more`, primary while the active tab is in it) whose menu lists
+ * the rest as a framed, indented submenu (same keys) and closes after a choice. The strip wraps rather than clips.
  */
 export function Tabs<T extends string>(
   k: Kit,
@@ -1517,21 +1555,36 @@ export function Tabs<T extends string>(
         ))}
       </Box>
     )
-  const max = Math.max(2, t.maxVisible ?? t.tabs.length)
+  // The strip keeps its order whatever is active (no tab jumps in or out); only what does not fit goes behind "More".
+  // Width estimate in body columns: label + 3 for the button's padding, 1 gap; `maxVisible` is an upper bound only.
+  const width = (label: string) => [...label].length + 3
+  const moreName = t.moreLabel ?? k.s.more
+  const activeTab = t.tabs.find(tab => tab.id === t.active)
+  const max = Math.max(1, Math.min(t.maxVisible ?? t.tabs.length, t.tabs.length))
+  const total = t.tabs.reduce((w, tab) => w + width(text(tab)) + 1, -1)
   let strip = t.tabs
   let rest: TabItem<T>[] = []
-  if (t.tabs.length > max) {
-    strip = t.tabs.slice(0, max - 1)
-    const active = t.tabs.find(tab => tab.id === t.active)
-    if (active && !strip.includes(active)) strip = [...strip.slice(0, -1), active]
-    rest = t.tabs.filter(tab => !strip.includes(tab))
+  if (t.tabs.length > max || total > k.cols) {
+    const moreRoom = width(`${moreName} ▾`) + 1
+    let used = 0
+    let n = 0
+    for (const tab of t.tabs) {
+      const w = width(text(tab)) + (n ? 1 : 0)
+      if (n >= max - 1 || (n > 0 && used + w + moreRoom > k.cols)) break
+      used += w
+      n++
+    }
+    strip = t.tabs.slice(0, Math.max(1, n))
+    rest = t.tabs.slice(strip.length)
   }
   const menuKey = `${prefix}menu`
   const menuOpen = rest.length > 0 && k.isMore(menuKey)
-  const one = (tab: TabItem<T>, inMenu = false) => {
+  const activeInRest = !!activeTab && rest.includes(activeTab)
+  const one = (tab: TabItem<T>) => {
     const on = tab.id === t.active
     const press = () => {
-      if (inMenu) k.toggleMore(menuKey)
+      // a choice closes the menu (also one from the strip while it is open)
+      if (menuOpen) k.toggleMore(menuKey)
       t.onSelect(tab.id)
     }
     if (k.graphical)
@@ -1557,9 +1610,16 @@ export function Tabs<T extends string>(
       </Button>
     )
   }
-  const moreText = `${t.moreLabel ?? k.s.more}${menuOpen ? ' ▴' : ' ▾'}`
+  // The arrow sits in the shown label too (the desktop draws `label`); an active tab behind "More" marks it primary.
+  const moreText = `${moreName}${menuOpen ? ' ▴' : ' ▾'}`
   const moreTab = !rest.length ? null : k.graphical ? (
-    <Button key={`${prefix}more`} label={t.moreLabel ?? k.s.more} plain onPress={() => k.toggleMore(menuKey)}>
+    <Button
+      key={`${prefix}more`}
+      label={moreText}
+      plain={activeInRest ? undefined : true}
+      variant={activeInRest ? 'primary' : undefined}
+      onPress={() => k.toggleMore(menuKey)}
+    >
       {moreText}
     </Button>
   ) : (
@@ -1569,35 +1629,28 @@ export function Tabs<T extends string>(
       </Button>
     </Box>
   )
-  const bar = k.graphical ? (
-    <Box
-      flexDirection="row"
-      alignItems="center"
-      gap={1}
-      flexWrap={k.narrow ? 'nowrap' : 'wrap'}
-      overflow={k.narrow ? 'hidden' : undefined}
-    >
-      {strip.map(tab => one(tab))}
-      {moreTab}
-    </Box>
-  ) : (
-    <Box flexDirection="row" gap={1} flexWrap="wrap">
+  // Wraps rather than clips: every tab stays reachable even when the estimate is off.
+  const bar = (
+    <Box flexDirection="row" alignItems="center" gap={1} flexWrap="wrap">
       {strip.map(tab => one(tab))}
       {moreTab}
     </Box>
   )
   if (!menuOpen) return bar
+  // The menu reads as a submenu of "More": its own framed, indented list, one entry per row.
   const menu = k.graphical ? (
-    <Box flexDirection="row" gap={1} flexWrap="wrap">
-      {rest.map(tab => one(tab, true))}
+    <Box key={`${prefix}menu-list`} flexDirection="column" paddingLeft={2}>
+      <Box flexDirection="column" padding={1} borderStyle="round" borderColor={k.t.border}>
+        {rest.map(tab => one(tab))}
+      </Box>
     </Box>
   ) : (
     <Box flexDirection="column" paddingLeft={2}>
-      {rest.map(tab => one(tab, true))}
+      {rest.map(tab => one(tab))}
     </Box>
   )
   return (
-    <Box flexDirection="column" gap={k.graphical ? 1 : 0}>
+    <Box flexDirection="column" gap={k.graphical ? 'xs' : 0}>
       {bar}
       {menu}
     </Box>
