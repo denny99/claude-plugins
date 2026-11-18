@@ -1,4 +1,5 @@
 import { expect, test } from "claude-code/testing";
+import { findShown } from "./shown";
 
 import {
   discordOf,
@@ -92,7 +93,9 @@ test("interjections at a live table go to the debrief list and file; other promp
   } as never);
 
   const file = w.writes.at(-1);
-  expect(file?.path).toBe("/var/tmp/dnd-studio/s-1/debrief-das-tor-2023-11-14.md");
+  expect(file?.path).toBe(
+    "/var/tmp/dnd-studio/s-1/debrief-das-tor-2023-11-14.md",
+  );
   expect(file?.text).toContain("Mara war heute still");
   expect(file?.text).toContain("Tempo höher");
   expect(file?.text).not.toContain("vorher");
@@ -101,12 +104,9 @@ test("interjections at a live table go to the debrief list and file; other promp
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   await ui.press({ key: "sec-evening" });
   expect(
-    (await ui.find({ type: "Text", text: /Einwürfe für die Nachbesprechung/ }))
-      ?.text,
+    (await findShown(ui, /Einwürfe für die Nachbesprechung/))?.text,
   ).toBeDefined();
-  expect(
-    await ui.find({ type: "Text", text: /Mara war heute still/ }),
-  ).toBeDefined();
+  expect(await findShown(ui, /Mara war heute still/)).toBeDefined();
   await ui.unmount();
 });
 
@@ -136,7 +136,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
   await $.command.run({ command: "dnd", args: "table" } as never);
 
   let b = await $.ui.mount({ ...band(), surface: "desktop" });
-  expect(await b.find({ type: "Text", text: /kein Wächter/ })).toBeDefined();
+  expect(await findShown(b, /kein Wächter/)).toBeDefined();
   await b.unmount();
 
   // A permission query (no call) is not a watch.
@@ -145,7 +145,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
     input: { command: WATCH, run_in_background: true },
   } as never);
   b = await $.ui.mount({ ...band(), surface: "desktop" });
-  expect(await b.find({ type: "Text", text: /kein Wächter/ })).toBeDefined();
+  expect(await findShown(b, /kein Wächter/)).toBeDefined();
   await b.unmount();
 
   // The real call, seen at tool.check: its answer comes back untouched (no tool.call hook on Bash).
@@ -157,7 +157,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
   } as never);
   expect(JSON.stringify(ran)).toContain("bwatch1");
   b = await $.ui.mount({ ...band(), surface: "desktop" });
-  expect(await b.find({ type: "Text", text: /Wächter läuft/ })).toBeDefined();
+  expect(await findShown(b, /Wächter läuft/)).toBeDefined();
   await b.unmount();
 
   // Another background task ending does not end the watch.
@@ -166,7 +166,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
     origin: { kind: "task-notification" },
   } as never);
   b = await $.ui.mount({ ...band(), surface: "desktop" });
-  expect(await b.find({ type: "Text", text: /Wächter läuft/ })).toBeDefined();
+  expect(await findShown(b, /Wächter läuft/)).toBeDefined();
   await b.unmount();
 
   // A turn ends while the watcher runs: no reminder.
@@ -185,7 +185,7 @@ test("the watcher: a background watch runs, ends with its task notification, and
     origin: { kind: "task-notification" },
   } as never);
   b = await $.ui.mount({ ...band(), surface: "desktop" });
-  expect(await b.find({ type: "Text", text: /kein Wächter/ })).toBeDefined();
+  expect(await findShown(b, /kein Wächter/)).toBeDefined();
   await b.unmount();
 
   // A subagent's turn is not the table's; the main thread's is.
@@ -262,13 +262,13 @@ test("a changed Studio version or a refused argument warns: MCP schemas stale", 
 
   const b = await $.ui.mount({ ...band(), surface: "desktop" });
   expect(
-    await b.find({ type: "Text", text: /Studio aktualisiert – Claude neu starten/ }),
+    await findShown(b, /Studio aktualisiert – Claude neu starten/),
   ).toBeDefined();
   await b.unmount();
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
-  expect(
-    (await ui.find({ type: "Text", text: /3\.20\.0 → 3\.21\.0/ }))?.text,
-  ).toContain("restart Claude");
+  expect((await findShown(ui, /3\.20\.0 → 3\.21\.0/))?.text).toContain(
+    "restart Claude",
+  );
   await ui.unmount();
 
   const refused = await $.tool.call({
@@ -322,23 +322,17 @@ test("Discord: players, rooms, last whisper with its reason, screen-share warnin
   } as never);
 
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
-  expect(await ui.find({ type: "Text", text: /Mara · anna/ })).toBeDefined();
+  expect(await findShown(ui, /Mara · anna/)).toBeDefined();
+  expect(await findShown(ui, /bob · nicht zugeordnet/)).toBeDefined();
+  expect(await findShown(ui, /Thorin: kein Spieler da/)).toBeDefined();
+  expect(await findShown(ui, /▶ Tisch: Mara/)).toBeDefined();
   expect(
-    await ui.find({ type: "Text", text: /bob · nicht zugeordnet/ }),
+    await findShown(
+      ui,
+      /Letztes Flüstern an Thorin: nicht zugestellt \(not_mapped\)/,
+    ),
   ).toBeDefined();
-  expect(
-    await ui.find({ type: "Text", text: /Thorin: kein Spieler da/ }),
-  ).toBeDefined();
-  expect(await ui.find({ type: "Text", text: /▶ Tisch: Mara/ })).toBeDefined();
-  expect(
-    await ui.find({
-      type: "Text",
-      text: /Letztes Flüstern an Thorin: nicht zugestellt \(not_mapped\)/,
-    }),
-  ).toBeDefined();
-  expect(
-    await ui.find({ type: "Text", text: /Bildschirmfreigabe beendet: Mara/ }),
-  ).toBeDefined();
+  expect(await findShown(ui, /Bildschirmfreigabe beendet: Mara/)).toBeDefined();
   expect(
     await ui.find({ type: "Button", key: "discord-join" }),
   ).toBeUndefined();
@@ -354,7 +348,7 @@ test("Discord: players, rooms, last whisper with its reason, screen-share warnin
   await ui.unmount();
 
   const b = await $.ui.mount({ ...band(), surface: "desktop" });
-  expect(await b.find({ type: "Text", text: /stream_ended/ })).toBeDefined();
+  expect(await findShown(b, /stream_ended/)).toBeDefined();
   await b.unmount();
 });
 

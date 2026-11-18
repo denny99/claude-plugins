@@ -1,4 +1,5 @@
 import { expect, mock, test } from "claude-code/testing";
+import { findShown } from "./shown";
 import type { TestBody } from "claude-code/testing";
 
 const PANE = {
@@ -123,15 +124,15 @@ test("the GM screen shows scene, party, NPCs and sounds on every surface", async
 
   for (const surface of ["terminal", "desktop", "vscode", "mobile"] as const) {
     const ui = await $.ui.mount({ ...PANE, surface });
-    expect(
-      (await ui.find({ type: "Text", text: /Thorin · Ausdauer 18\/22/ }))?.text,
-    ).toContain("Thorin");
+    expect((await findShown(ui, /Thorin · Ausdauer 18\/22/))?.text).toContain(
+      "Thorin",
+    );
     expect(
       await ui.find({ type: "Button", key: "npc-Bartel-0" }),
     ).toBeDefined();
     expect(await ui.find({ type: "Button", key: "snd-0" })).toBeDefined();
     // spoiler-safe by default: the whisper's words are not drawn
-    expect(await ui.find({ type: "Text", text: /Flüstern/ })).toBeUndefined();
+    expect(await findShown(ui, /Flüstern/)).toBeUndefined();
     await ui.unmount();
   }
   // Opening the pane only read.

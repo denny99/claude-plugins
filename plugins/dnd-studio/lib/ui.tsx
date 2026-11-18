@@ -24,7 +24,7 @@ import { atom, read, update } from 'claude-code'
 import type { RenderInput, EngineInterface, RenderElement } from 'claude-code'
 
 import type { UiKitState } from '../types'
-import { glyphLabel, ICON_GLYPHS, iconSvg, svgDocument, TERM_GLYPHS, type IconName } from './icons'
+import { glyphLabel, ICON_GLYPHS, ICONS, iconSvg, svgDocument, TERM_GLYPHS, type IconName } from './icons'
 import { modeFromTheme, terminalColor, themeTokens, type Brand, type Mode, type Tokens, type Tone } from './theme'
 
 export { glyphLabel, ICON_GLYPHS, ICONS, iconSvg, isIconName, svgDocument, TERM_GLYPHS, type IconName } from './icons'
@@ -393,16 +393,58 @@ export type PillProps = {
   icon?: IconName
 }
 
+/** Escapes text for SVG markup. */
+function xmlText(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+/** Pill geometry (CSS px): height, font size, side padding, icon size, estimated advance per character. */
+const PILL = { h: 20, font: 12, pad: 7, icon: 12, gap: 4, radius: 4 } as const
+
+/** Estimated advance of one character at 12 px semibold system font (narrow, digits, capitals, rest). */
+function charWidth(c: string): number {
+  if (/[ilIj.,:;'!|·\s]/.test(c)) return 3.4
+  if (/[ft()\[\]r]/.test(c)) return 4.4
+  if (/[0-9]/.test(c)) return 6.9
+  if (/[mwMW]/.test(c)) return 9.6
+  if (/[A-ZÄÖÜ]/.test(c)) return 7.8
+  return 6.6
+}
+
 /**
- * A state pill: tinted chip with a mark (✓ ◷ ↑ ⚠ ✕) and a short sentence ("3 rot · 2 neu"). Graphical: no border (a
- * desktop draws a bordered Box a full cell row taller at the top and bottom, which made pills three rows high), one
- * row high, and wrapped in a centering row so it neither stretches to a row's height nor to a column's width.
+ * The `<svg>` document of a graphical pill: a slightly rounded tinted rect (`rx` = PILL.radius), an optional icon at
+ * the left and the text in the system font, both in the tone color. Width estimated from the text length.
+ */
+export function pillSvg(text: string, fg: string, bg: string, icon?: IconName): { source: string; width: number } {
+  const iconW = icon ? PILL.icon + PILL.gap : 0
+  const width = Math.ceil(PILL.pad * 2 + iconW + [...text].reduce((w, c) => w + charWidth(c), 0))
+  const scale = PILL.icon / 24
+  const top = (PILL.h - PILL.icon) / 2
+  const mark = icon
+    ? `<g transform="translate(${PILL.pad} ${top}) scale(${scale})" fill="none" stroke="${fg}" stroke-width="2" ` +
+      `stroke-linecap="round" stroke-linejoin="round">${(ICONS[icon] ?? '').replace(/currentColor/g, fg)}</g>`
+    : ''
+  const source = svgDocument(
+    `<svg viewBox="0 0 ${width} ${PILL.h}"><rect width="${width}" height="${PILL.h}" rx="${PILL.radius}" ` +
+      `fill="${bg}"></rect>${mark}<text x="${PILL.pad + iconW}" y="${PILL.h / 2 + PILL.font * 0.35}" ` +
+      `font-family="-apple-system, Segoe UI, sans-serif" font-size="${PILL.font}" font-weight="600" ` +
+      `fill="${fg}">${xmlText(text)}</text></svg>`,
+  )
+  return { source, width }
+}
+
+/**
+ * A state pill: tinted chip with a mark (✓ ◷ ↑ ⚠ ✕) and a short sentence ("3 rot · 2 neu"). Graphical: one
+ * non-pressable `Svg` (a rounded rect, `rx` = half height; a Box has no corner radius without a border, and a bordered
+ * Box grows to three rows on a desktop), `alt` = the text; `shrink` cuts the text beforehand (an image does not
+ * shrink). Terminal: a colored Text.
  */
 export function Pill(k: Kit, p: PillProps & { shrink?: boolean }): RenderElement {
   const { Box, Text } = k
   const tone = p.tone ?? 'neutral'
   const glyph = p.glyph === false ? '' : (p.glyph ?? TONE_GLYPH[tone])
-  if (!k.graphical) {
+  const Svg = k.Svg
+  if (!k.graphical || !Svg) {
     return (
       <Text color={terminalColor(k.brand, tone)} dimColor={tone === 'neutral' ? true : undefined}>
         {truncate(glyph ? `${glyph} ${p.text}` : p.text, Math.max(4, Math.floor(k.cols / 2)))}
@@ -411,25 +453,12 @@ export function Pill(k: Kit, p: PillProps & { shrink?: boolean }): RenderElement
   }
   const c = k.t.tones[tone]
   const iconName = p.icon ?? (p.glyph === undefined ? TONE_ICON[tone] : undefined)
-  const icon = iconName ? Icon(k, iconName, { size: 12, color: c.fg }) : null
+  const raw = sanitize(!iconName && glyph ? `${glyph} ${p.text}` : p.text).split('\n')[0] ?? ''
+  const text = p.shrink ? truncate(raw, Math.max(6, Math.floor(k.cols / 3))) : raw
+  const pic = pillSvg(text, c.fg, c.bg, iconName)
   return (
     <Box flexDirection="row" alignItems="center" flexShrink={p.shrink ? 1 : 0} minWidth={p.shrink ? 0 : undefined}>
-      <Box
-        flexDirection="row"
-        alignItems="center"
-        alignSelf="center"
-        gap={1}
-        paddingX={1}
-        paddingY={0}
-        backgroundColor={c.bg}
-        flexShrink={p.shrink ? 1 : 0}
-        minWidth={p.shrink ? 0 : undefined}
-      >
-        {icon}
-        <Text size="caption" weight="bold" color={c.fg} wrap="truncate-end">
-          {sanitize(!icon && glyph ? `${glyph} ${p.text}` : p.text)}
-        </Text>
-      </Box>
+      <Svg source={pic.source} alt={text} width={pic.width} height={PILL.h} />
     </Box>
   )
 }
@@ -1430,7 +1459,7 @@ export type TabItem<T extends string> = {
   id: T
   label: string
   badge?: string
-  /** v2: icon left of the label (graphical, not narrow). */
+  /** v2 marker (switches to the one-row strip); tabs draw no glyph since Kit v3.2, text only. */
   icon?: IconName
   /** v2: a count after the label ("Review · 2"). */
   count?: number | string
@@ -1439,9 +1468,8 @@ export type TabItem<T extends string> = {
 /**
  * Tab bar: one Button per tab keyed `${keyPrefix ?? 'tab-'}${id}`, the active one primary; wraps on narrow bodies (v1).
  * v2 (any `icon` or `maxVisible`): one row of native Buttons, the active one `variant: 'primary'`, the rest plain, each
- * "<glyph> <label> · <count>"; past `maxVisible` the rest sit behind a "More" tab (`${prefix}more`) whose menu lists them
- * under the strip (same keys); the active tab always stays in the strip. Narrow bodies drop the glyphs and keep the
- * strip on one line.
+ * "<label> · <count>" (no glyph); past `maxVisible` the rest sit behind a "More" tab (`${prefix}more`) whose menu lists them
+ * under the strip (same keys); the active tab always stays in the strip. Narrow bodies keep the strip on one line.
  */
 export function Tabs<T extends string>(
   k: Kit,
@@ -1495,12 +1523,12 @@ export function Tabs<T extends string>(
       return (
         <Button
           key={`${prefix}${tab.id}`}
-          label={glyphLabel(tab.icon && (!k.narrow || inMenu) ? tab.icon : undefined, text(tab))}
+          label={text(tab)}
           plain={on ? undefined : true}
           variant={on ? 'primary' : undefined}
           onPress={press}
         >
-          {glyphLabel(tab.icon && (!k.narrow || inMenu) ? tab.icon : undefined, text(tab))}
+          {text(tab)}
         </Button>
       )
     return (
@@ -1568,6 +1596,7 @@ export const LAUNCH_PREFIX = 'launch:'
 
 export type LauncherChipProps = {
   key: string
+  /** Unused since Kit v3.2 (launcher chips carry no glyph: "Solutions", not "▦ Solutions"); kept for callers. */
   icon?: IconName
   label: string
   /** A short state next to the chip ("Termin in 8 min", "Tests laufen", "Tisch aktiv"). */
@@ -1580,7 +1609,7 @@ export type LauncherChipProps = {
 }
 
 /**
- * One starter chip of the strip above the prompt: a native Button "<glyph> <label>" (pressable as a whole) and its
+ * One starter chip of the strip above the prompt: a native Button with the bare name (pressable as a whole, no glyph) and its
  * status after it. The terminal draws `[ label ]` and the status dim.
  */
 export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
@@ -1588,12 +1617,12 @@ export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
   const btn = (
     <Button
       key={c.key}
-      label={k.graphical ? glyphLabel(c.icon, c.label) : c.label}
+      label={c.label}
       variant={c.primary ? 'primary' : undefined}
       plain={c.primary ? undefined : true}
       onPress={c.onPress}
     >
-      {k.graphical ? glyphLabel(c.icon, c.label) : c.label}
+      {c.label}
     </Button>
   )
   if (!c.status) return btn
@@ -1642,10 +1671,20 @@ export function isLauncherRow(row: BandRow): boolean {
 }
 
 /**
+ * Whether a launcher row stands at the end of the strip: its root Box carries `justifyContent: 'flex-end'` (e.g. the
+ * usage row of ds-usage-line, which grows and must push no starter).
+ */
+export function isTrailing(row: BandRow): boolean {
+  const props = (row.tree as { props?: { justifyContent?: unknown } }).props
+  return props?.justifyContent === 'flex-end'
+}
+
+/**
  * The `AbovePromptList` hook that lays every plugin's launcher row side by side in one wrapping strip on top of the
  * band; other rows stay stacked under it, in their order. The engine lets a hook only reorder rows and wrap what
  * `next(e)` returns (never re-place another plugin's tree), so each launcher row goes through `next` alone and the
- * strip wraps those results; presses stay with the plugin that drew the chip. Fewer than two launcher rows: passes.
+ * strip wraps those results; presses stay with the plugin that drew the chip. Trailing rows (`isTrailing`) go last,
+ * the others keep their order. Fewer than two launcher rows: passes.
  * Safe when several plugins install it (an inner one sees single rows and passes).
  *
  *   on('ui.render', { component: 'AbovePromptList' }, ($, e, next) => mergeLauncherRows($, e, next))
@@ -1656,8 +1695,9 @@ export async function mergeLauncherRows(
   next: (e: RenderInput<'AbovePromptList'>) => Promise<unknown>,
 ): Promise<unknown> {
   const rows = e.props.rows
-  const launch = rows.filter(isLauncherRow)
-  if (launch.length < 2) return next(e)
+  const found = rows.filter(isLauncherRow)
+  if (found.length < 2) return next(e)
+  const launch = [...found.filter(row => !isTrailing(row)), ...found.filter(isTrailing)]
   const others = rows.filter(row => !isLauncherRow(row))
   const only = (subset: readonly BandRow[]) => next({ ...e, props: { ...e.props, rows: subset } })
   const parts: RenderElement[] = []

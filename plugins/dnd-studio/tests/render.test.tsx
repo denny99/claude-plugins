@@ -1,4 +1,5 @@
 import { expect, test } from "claude-code/testing";
+import { findShown } from "./shown";
 
 import { band, pane, PREFIX, toolResult, world } from "./world";
 
@@ -66,24 +67,15 @@ test("render check: every tab (and the band) on every surface, small and large, 
         }
         if (tab === "table" && cols === 120) {
           expect(
-            await ui.find({
-              type: "Text",
-              text: /Einwürfe für die Nachbesprechung/,
-            }),
+            await findShown(ui, /Einwürfe für die Nachbesprechung/),
           ).toBeDefined();
           expect(
-            await ui.find({
-              type: "Text",
-              text: /nicht zugestellt \(dms_closed\)/,
-            }),
+            await findShown(ui, /nicht zugestellt \(dms_closed\)/),
           ).toBeDefined();
         }
         if (tab === "build" && cols === 120)
           expect(
-            await ui.find({
-              type: "Text",
-              text: /Bauplan wartet auf deine Freigabe/,
-            }),
+            await findShown(ui, /Bauplan wartet auf deine Freigabe/),
           ).toBeDefined();
         const texts = await ui.findAll({ type: "Text" });
         expect(texts.length).toBeGreaterThan(1);

@@ -2,19 +2,19 @@
 import { expect, test } from "claude-code/testing";
 
 import { resetAutoOpen, SWITCH_OFF } from "../features/dnd-ui";
-import { ICON_GLYPHS } from "../lib/icons";
+import { glyphLabel } from "../lib/icons";
 import { pane, PREFIX, toolResult, world } from "./world";
 
-test("kit v3: buttons are native with their glyph in front, the switch is one pressable button", async ($, on) => {
+test("kit v3: buttons are native with their glyph in front (if the action has one), the switch is one pressable button", async ($, on) => {
   world(on);
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd", args: "table" } as never);
   let ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
   expect((await ui.find({ type: "Button", key: "listener-on" }))?.text).toBe(
-    `${ICON_GLYPHS.mic} Zuhörer an`,
+    glyphLabel("mic", "Zuhörer an"),
   );
   expect((await ui.find({ type: "Button", key: "discord-status" }))?.text).toBe(
-    `${ICON_GLYPHS.refresh} Stand lesen`,
+    glyphLabel("refresh", "Stand lesen"),
   );
   // nothing graphical inside or beside a button: the engine drops a Svg in a Button
   expect(

@@ -1,5 +1,6 @@
 import type { On } from "claude-code";
 import { expect, test } from "claude-code/testing";
+import { findShown } from "./shown";
 import type { Engine } from "claude-code/testing";
 
 import { listenerReturnOf } from "../lib/model";
@@ -148,7 +149,7 @@ test("listener mode: a running pnp-zuhoerer is the watcher, its return fills ban
   // The listener is no build run.
   await $.command.run({ command: "dnd", args: "build" } as never);
   const b = await $.ui.mount({ ...pane(), surface: "desktop" });
-  expect(await b.find({ type: "Text", text: /pnp-zuhoerer/ })).toBeUndefined();
+  expect(await findShown(b, /pnp-zuhoerer/)).toBeUndefined();
   await b.unmount();
 });
 

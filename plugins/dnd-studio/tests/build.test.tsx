@@ -1,5 +1,6 @@
 import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
+import { findShown } from './shown'
 
 import { checkColors } from '../lib/make-colors.js'
 import { LOOKS, moodFor, phaseLook } from '../lib/looks'
@@ -53,12 +54,12 @@ test('the build cockpit tracks pnp agents and counts the reviewers’ findings',
 
   await $.command.run({ command: 'dnd', args: 'build' } as never).catch(() => undefined)
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect((await ui.find({ type: 'Text', text: /pnp-review-technik/ }))?.text).toContain('pnp-review-technik')
+  expect((await findShown(ui, /pnp-review-technik/))?.text).toContain('pnp-review-technik')
   await ui.unmount()
 
   await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 'x', agentId: 'a1', reason: 'answer' } as never)
   const ui2 = await $.ui.mount({ ...PANE, surface: 'mobile' })
-  expect((await ui2.find({ type: 'Text', text: /2 Mängel/ }))?.text).toContain('2 Mängel')
+  expect((await findShown(ui2, /2 Mängel/))?.text).toContain('2 Mängel')
   await ui2.unmount()
   // The build ended: the look the plugin set is cleared.
   expect(themes).toEqual(['dnd-inspect', 'clear'])

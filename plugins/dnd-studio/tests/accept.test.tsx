@@ -1,5 +1,7 @@
 import { expect, test } from "claude-code/testing";
 
+import { findShown } from "./shown";
+
 import { acceptanceOf, gpuOf } from "../lib/model";
 import { CAMPAIGN, MAPS, pane, STATUS, world } from "./world";
 
@@ -91,36 +93,22 @@ test("Build: Check reads campaign, maps and studio_status; rows show status and 
   expect(w.calls[1]?.args).toEqual({ action: "list" });
 
   const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
-  expect((await ui.find({ type: "Text", text: /GPU belegt/ }))?.text).toBe(
+  expect((await findShown(ui, /GPU belegt/))?.text).toBe(
     "● GPU belegt · 1 läuft, 1 warten · KSampler 40%",
   );
   expect(
-    await ui.find({
-      type: "Text",
-      text: /Scenes: picture \+ text \+ recipe · 1\/2/,
-    }),
+    await findShown(ui, /Scenes: picture \+ text \+ recipe · 1\/2/),
   ).toBeDefined();
-  expect(await ui.find({ type: "Text", text: /Maps painted/ })).toBeDefined();
+  expect(await findShown(ui, /Maps painted/)).toBeDefined();
   expect(
-    await ui.find({
-      type: "Text",
-      text: /Start squares in scene notes · 1\/1/,
-    }),
+    await findShown(ui, /Start squares in scene notes · 1\/1/),
   ).toBeDefined();
-  expect(
-    await ui.find({ type: "Text", text: /Threads and party_at set/ }),
-  ).toBeDefined();
-  expect(
-    await ui.find({ type: "Text", text: /prepare_table · not run yet/ }),
-  ).toBeDefined();
-  expect(
-    await ui.find({ type: "Text", text: /fix: pnp-maler, pnp-texter/ }),
-  ).toBeDefined();
-  expect(
-    await ui.find({ type: "Text", text: /fix: pnp-tischbereit/ }),
-  ).toBeDefined();
+  expect(await findShown(ui, /Threads and party_at set/)).toBeDefined();
+  expect(await findShown(ui, /prepare_table · not run yet/)).toBeDefined();
+  expect(await findShown(ui, /fix: pnp-maler, pnp-texter/)).toBeDefined();
+  expect(await findShown(ui, /fix: pnp-tischbereit/)).toBeDefined();
   // spoiler-safe by default: counts, no names
-  expect(await ui.find({ type: "Text", text: /Im Wald/ })).toBeUndefined();
+  expect(await findShown(ui, /Im Wald/)).toBeUndefined();
   await ui.unmount();
 });
 
@@ -136,9 +124,7 @@ test("Build: the plan is signed off by a press, recorded, and the main thread is
   } as never);
   await $.command.run({ command: "dnd", args: "build" } as never);
   let ui = await $.ui.mount({ ...pane(), surface: "desktop" });
-  expect(
-    await ui.find({ type: "Text", text: /schreibt den Bauplan/ }),
-  ).toBeDefined();
+  expect(await findShown(ui, /schreibt den Bauplan/)).toBeDefined();
   expect(
     await ui.find({ type: "Button", key: "plan-approve" }),
   ).toBeUndefined();
@@ -154,7 +140,7 @@ test("Build: the plan is signed off by a press, recorded, and the main thread is
   } as never);
   ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   expect(
-    await ui.find({ type: "Text", text: /Bauplan wartet auf deine Freigabe/ }),
+    await findShown(ui, /Bauplan wartet auf deine Freigabe/),
   ).toBeDefined();
   expect(w.submitted).toEqual([]);
   await ui.press({ key: "plan-approve" });
@@ -167,9 +153,7 @@ test("Build: the plan is signed off by a press, recorded, and the main thread is
   await ui.unmount();
 
   ui = await $.ui.mount({ ...pane(), surface: "desktop" });
-  expect(
-    await ui.find({ type: "Text", text: /✓ Bauplan abgesegnet/ }),
-  ).toBeDefined();
+  expect(await findShown(ui, /✓ Bauplan abgesegnet/)).toBeDefined();
   expect(
     await ui.find({ type: "Button", key: "plan-approve" }),
   ).toBeUndefined();
@@ -193,10 +177,7 @@ test("Build: two GPU agents at once are flagged", async ($, on) => {
   await $.command.run({ command: "dnd", args: "build" } as never);
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   expect(
-    await ui.find({
-      type: "Text",
-      text: /pnp-maler \+ pnp-klang teilen sich gerade die GPU/,
-    }),
+    await findShown(ui, /pnp-maler \+ pnp-klang teilen sich gerade die GPU/),
   ).toBeDefined();
   await ui.unmount();
 });

@@ -1,4 +1,5 @@
 import { expect, test } from "claude-code/testing";
+import { findShown } from "./shown";
 
 import { resetAutoOpen } from "../features/dnd-ui";
 import { openArgv, playArgv, resultPrompt } from "../features/review";
@@ -43,16 +44,10 @@ test("review: Claude fills the queue, the tab opens itself once, pictures stay c
 
   for (const surface of ["desktop", "terminal"] as const) {
     const ui = await $.ui.mount({ ...pane(90, 60), surface });
-    expect(
-      await ui.find({ type: "Text", text: /Neue Klänge prüfen/ }),
-    ).toBeDefined();
-    expect(
-      await ui.find({ type: "Text", text: /Brann am Tor/ }),
-    ).toBeUndefined();
-    expect(await ui.find({ type: "Text", text: /Szene 4/ })).toBeUndefined();
-    expect(
-      await ui.find({ type: "Text", text: /Szene verdeckt/ }),
-    ).toBeDefined();
+    expect(await findShown(ui, /Neue Klänge prüfen/)).toBeDefined();
+    expect(await findShown(ui, /Brann am Tor/)).toBeUndefined();
+    expect(await findShown(ui, /Szene 4/)).toBeUndefined();
+    expect(await findShown(ui, /Szene verdeckt/)).toBeDefined();
     await ui.unmount();
   }
 
