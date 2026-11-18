@@ -320,7 +320,8 @@ test('Problem melden: capture + spot, kind and note, "Nur merken" lists it, send
   const shots = Object.keys(world.files).filter(p =>
     /\.claude\/unity-review\/report-\d{8}-\d{6}(-klein)?\.png$/.test(p),
   )
-  expect(shots).toHaveLength(2)
+  // one picture per report in the reports folder; the pane's small copy sits in the bridge's temp shots
+  expect(shots).toHaveLength(1)
   await settle(world, ui.press({ key: 'rv-kind-sieht-falsch-aus' }))
   await settle(world, ui.input({ key: 'rv-report-note', text: 'Baum schwebt', kind: 'change' } as never))
   await settle(world, ui.press({ key: 'rv-report-keep' }))

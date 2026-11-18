@@ -114,7 +114,7 @@ export type UnityModel = {
   configFound: boolean
   /** `.claude/unity.json` as parsed (lib/unity.ts ProjectConfig). */
   config: Record<string, unknown>
-  presets: { name: string; filter: string; source: 'config' | 'docs'; paths?: string[] }[]
+  presets: { name: string; filter: string; source: 'config' | 'docs'; note?: string; paths?: string[] }[]
   lock: 'free' | 'held' | 'stale'
   bridge: {
     up: boolean
@@ -140,6 +140,8 @@ export type UnityModel = {
   editorElsewhere?: { project: string; checkout: string; name: string; main: boolean; here: string; hereMain: boolean }
   /** Tests tab: "Alle Tests" chosen on purpose (no filter, no area). */
   testScope?: 'all'
+  /** Tests tab: the area chosen in "Bereich" (its normalized filter runs; the free-text field stays as typed). */
+  testArea?: string
   compile?: { seq: number; at: number; source: 'bridge' | 'log'; messages: ModelCompilerMessage[] }
   console: ModelConsoleEntry[]
   tests?: ModelTestRun
@@ -200,6 +202,8 @@ export type ReviewViewState = {
   note: string
 }
 export type ReviewReportState = {
+  /** The report's time stamp (file names, note draft); absent on an error card. */
+  stamp?: string
   shot?: string
   preview?: string
   spot?: unknown

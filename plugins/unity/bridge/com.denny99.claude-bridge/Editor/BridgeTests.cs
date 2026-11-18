@@ -155,7 +155,7 @@ namespace Denny99.ClaudeBridge
             if (current.state == "running" && SessionState.GetString(RunKey, "") != current.runId)
             {
                 current.state = "error";
-                current.error = "The editor was closed or crashed during the run; results are incomplete.";
+                current.error = "Der Editor wurde während des Laufs geschlossen oder ist abgestürzt; die Ergebnisse sind unvollständig.";
                 current.finishedAt = ClaudeBridge.Now();
                 Save();
             }
@@ -166,7 +166,7 @@ namespace Denny99.ClaudeBridge
         /// <summary>Starts a run; `filter` holds regexes on full test names separated by ';'. Returns the run id.</summary>
         public static string Run(string mode, string filter)
         {
-            if (current.state == "running") throw new InvalidOperationException("A test run is already going (" + current.runId + ").");
+            if (current.state == "running") throw new InvalidOperationException("Es läuft schon ein Testlauf (" + current.runId + "). Warten oder ihn abbrechen.");
             var testMode = mode == "PlayMode" ? TestMode.PlayMode : TestMode.EditMode;
             current = new TestRun
             {
@@ -231,7 +231,7 @@ namespace Denny99.ClaudeBridge
         /// </summary>
         public static string Cancel()
         {
-            if (current.state != "running") throw new BridgeError("bad-input", "No test run is going.");
+            if (current.state != "running") throw new BridgeError("bad-input", "Es läuft kein Testlauf.");
             var type = typeof(TestRunnerApi);
             const BindingFlags flags = BindingFlags.Public | BindingFlags.Static;
             var cancelled = false;
@@ -256,11 +256,11 @@ namespace Denny99.ClaudeBridge
             }
             catch (TargetInvocationException e) when (e.InnerException != null)
             {
-                throw new BridgeError("cancel-failed", "Cancelling failed: " + e.InnerException.Message);
+                throw new BridgeError("cancel-failed", "Abbrechen fehlgeschlagen: " + e.InnerException.Message);
             }
             if (!cancelled)
                 throw new BridgeError("unsupported",
-                    "This Test Framework version cannot cancel a run. Wait for it to finish, or update com.unity.test-framework to 1.4 or newer.");
+                    "Diese Test-Framework-Version kann keinen Lauf abbrechen. Warten, bis er fertig ist, oder com.unity.test-framework auf 1.4 oder neuer aktualisieren.");
             current.state = "error";
             current.error = "Cancelled";
             current.current = "";

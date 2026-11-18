@@ -1,9 +1,12 @@
-// Runde 2 aus dem Live-Test: Klangliste friert die App ein (a), Bridge-Version (b), Testfortschritt (c).
+// Runde 2 aus dem Live-Test: Klangliste friert die App ein (a), Bridge-Version (b), Testfortschritt (c),
+// Screenshot ohne Fokus + deutsche Fehler (d), Problem melden verliert die Notiz (e), Bereichsfilter als Kommandozeile (f).
 import { expect, test } from 'claude-code/testing'
 
 import { parseSounds } from '../lib/play'
 import { keptSound, SOUND_PAGE, soundGroups } from '../features/review/tab'
-import { BRIDGE_VERSION } from '../lib/bridge'
+import { BRIDGE_VERSION, germanBridgeError } from '../lib/bridge'
+import { staleShot } from '../lib/play'
+import { normalizeFilter, testReport, unmatchedParts } from '../lib/unity'
 import { BRIDGE_GIT_URL_TAGGED, testsProgress } from '../features/pane/common'
 import { bridgeOutdated } from '../features/state'
 import { findShown } from './shown'
@@ -147,5 +150,151 @@ test('(c) progress: "x von N" only with a plausible N, else "x Tests fertig"; no
   await settle(world, ui.press({ key: 'tab-tests' }))
   expect((await findShown(ui, /EditMode läuft · 2 Tests fertig/))?.text).toBeDefined()
   expect(await findShown(ui, /^Gerade:/)).toBeUndefined()
+  await ui.unmount()
+})
+
+// --- (d) Screenshot ohne Fokus: deutsche Fehler mit Weg, kein altes Bild als neues ---
+
+test('(d) bridge errors in German with the way out; English texts of old bridges are mapped', () => {
+  const shot = germanBridgeError('The Game view wrote no screenshot (is it visible?).')
+  expect(shot).toContain('Unity hat kein Bild geschrieben')
+  expect(shot).toContain('Game-Tab sichtbar')
+  expect(germanBridgeError('No camera in the open scene.')).toContain('keine Kamera')
+  expect(germanBridgeError('perf_record needs Play mode.')).toBe('Das geht nur im Play-Modus. Erst Play starten.')
+  // already German or unknown: unchanged
+  expect(germanBridgeError('Unity nimmt gerade auf.')).toBe('Unity nimmt gerade auf.')
+})
+
+test('(d) a picture that is not the one asked for does not pass as new', () => {
+  expect(staleShot({ path: '/p/Temp/ClaudeBridge/shots/shot-1.png' }, '/p/Temp/ClaudeBridge/shots/shot-1.png', 5000)).toBeUndefined()
+  expect(staleShot({ path: 'C:/p/shot-1.png' }, 'C:\\p\\shot-1.png', 5000)).toBeUndefined()
+  expect(staleShot({ path: '/p/shots/shot-0.png' }, '/p/shots/shot-1.png', 5000)).toContain('anderes Bild')
+  expect(staleShot({ path: '/p/a.png', takenAt: 1000 }, '/p/a.png', 9000)).toContain('altes Bild')
+  expect(staleShot({ path: '/p/a.png', takenAt: 8500 }, '/p/a.png', 9000)).toBeUndefined()
+})
+
+test('(d) overview screenshot: Game-view error comes in German with the way; an old picture is refused', async ($, on) => {
+  const world = fakeWorld(on)
+  world.bridge.isPlaying = true
+  world.bridge.shotError = 'The Game view wrote no screenshot (is it visible?).'
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await settle(world, ui.press({ key: 'refresh' }))
+  await settle(world, ui.press({ key: 'editor-acts-more' }))
+  await settle(world, ui.press({ key: 'shot' }))
+  const last = () => world.toasts.at(-1) ?? ''
+  expect(last()).toMatch(/^Screenshot fehlgeschlagen: Unity hat kein Bild geschrieben\. Unity-Fenster nach vorn holen/)
+  expect(world.toasts.join('\n')).not.toContain('Game view wrote')
+  world.bridge.shotError = undefined
+  world.bridge.shotPath = `${BRIDGE}/shots/shot-alt.png`
+  const before = world.prompts.length
+  await settle(world, ui.press({ key: 'shot' }))
+  expect(last()).toContain('anderes Bild geliefert')
+  expect(world.prompts.length).toBe(before)
+  await ui.unmount()
+})
+
+// --- (e) Problem melden: Art und Notiz bleiben, ein Bild je Meldung ---
+
+test('(e) kind and note chosen while Unity is still capturing survive; a second press makes no second picture', async ($, on) => {
+  const world = fakeWorld(on, { config: {} })
+  world.bridge.isPlaying = true
+  world.bridge.holdCaptures = true
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
+  await settle(world, $.command.run({ command: 'unity', args: '' } as never))
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await settle(world, ui.press({ key: 'tab-review' }))
+  const opening = ui.press({ key: 'rv-report-open' })
+  for (let i = 0; i < 4; i++) await world.clock.advance(250)
+  // the card is there while Unity captures: the sentence wraps and says what can be done meanwhile
+  expect((await findShown(ui, 'Art und Notiz kannst du schon eintragen.'))?.text).toBeDefined()
+  await settle(world, ui.press({ key: 'rv-kind-sieht-falsch-aus' }))
+  await settle(world, ui.input({ key: 'rv-report-note', text: 'Baum schwebt', kind: 'change' } as never))
+  // impatient second press (header button of the overview) while the first capture runs
+  await settle(world, ui.press({ key: 'tab-overview' }))
+  void ui.press({ key: 'report' }).catch(() => undefined)
+  for (let i = 0; i < 4; i++) await world.clock.advance(250)
+  const captures = () => Object.values(world.files).filter(t => t.includes('"cmd":"capture"')).length
+  expect(captures()).toBe(1)
+  for (let i = 0; i < 40 && world.held.length + 1; i++) {
+    world.held.splice(0).forEach(f => f())
+    await world.clock.advance(250)
+  }
+  await settle(world, opening)
+  await settle(world, ui.press({ key: 'tab-review' }))
+  expect(captures()).toBe(2) // the full picture + the pane's small copy, both for one report
+  const inReports = Object.keys(world.files).filter(p => /\.claude\/unity-review\/.*\.png$/.test(p))
+  expect(inReports).toHaveLength(1)
+  await settle(world, ui.press({ key: 'rv-report-send' }))
+  const prompt = world.prompts.at(-1) ?? ''
+  expect(prompt).toContain('Problem gemeldet im Unity-Spiel: Sieht falsch aus.')
+  expect(prompt).toContain('Notiz: Baum schwebt')
+  const log = JSON.parse((world.files[`${ROOT}/.claude/unity-review/reports.jsonl`] ?? '').trim())
+  expect(log).toMatchObject({ kind: 'Sieht falsch aus', note: 'Baum schwebt', sent: true })
+  expect(log.screenshot).toBe(inReports[0])
+  await ui.unmount()
+})
+
+test('(e) a note typed and sent at once (no pause, no Enter) still reaches the prompt', async ($, on) => {
+  const world = fakeWorld(on, { config: {} })
+  world.bridge.isPlaying = true
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
+  await settle(world, $.command.run({ command: 'unity', args: '' } as never))
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await settle(world, ui.press({ key: 'tab-review' }))
+  await settle(world, ui.press({ key: 'rv-report-open' }))
+  await ui.input({ key: 'rv-report-note', text: 'Wasser flackert', kind: 'change' } as never)
+  await settle(world, ui.press({ key: 'rv-report-send' }))
+  expect(world.prompts.at(-1)).toContain('Notiz: Wasser flackert')
+  // the next report starts empty
+  await settle(world, ui.press({ key: 'rv-report-open' }))
+  const note = (await ui.find({ key: 'rv-report-note' } as never)) as { props: { value?: string } } | undefined
+  expect(note?.props.value ?? '').toBe('')
+  await ui.unmount()
+})
+
+// --- (f) Bereichsfilter in Kommandozeilen-Syntax ---
+
+test('(f) area filters written as a command line are cleaned; empty parts and quotes go', () => {
+  const raw = '-testFilter "Cozy.Presentation.Tests.ClaudeProvidersTests;Cozy.Presentation.Tests.ReviewSpotTests"'
+  expect(normalizeFilter(raw)).toMatchObject({
+    filter: 'Cozy.Presentation.Tests.ClaudeProvidersTests;Cozy.Presentation.Tests.ReviewSpotTests',
+    changed: true,
+  })
+  expect(normalizeFilter(raw).note).toContain('-testFilter')
+  expect(normalizeFilter('--testFilter=A.B').filter).toBe('A.B')
+  expect(normalizeFilter("-testFilter='A; ;B;'").filter).toBe('A;B')
+  expect(normalizeFilter(' "A" ; "B" ').filter).toBe('A;B')
+  expect(normalizeFilter('Game.Tests.Core')).toMatchObject({ filter: 'Game.Tests.Core', changed: false })
+  expect(unmatchedParts('A\\.X;B', ['A.X.T1', 'C.T2'])).toEqual(['B'])
+  expect(unmatchedParts('Game[', ['Game[1]'])).toEqual([]) // no valid regex: taken literally
+  const report = testReport(
+    { state: 'done', mode: 'EditMode', filter: 'A;B', results: [{ fullName: 'A.T', name: 'T', status: 'Passed' }] } as never,
+    {},
+  )
+  expect(report).toContain('WARNING: filter part(s) matched no test in this run: B.')
+})
+
+test('(f) area choice: field stays free, the cleaned filter runs, the run card names the area and warns about a miss', async ($, on) => {
+  const area = '18b. Prüfliste und Claude-Panel'
+  const world = fakeWorld(on, {
+    config: { tests: { areas: { [area]: '-testFilter "Game.Tests.Core;Game.Tests.Fehlt"' } } },
+  })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await settle(world, ui.press({ key: 'refresh' }))
+  await settle(world, ui.press({ key: 'tab-tests' }))
+  await ui.select({ key: 'preset', value: area } as never)
+  await world.clock.advance(100)
+  const field = (await ui.find({ key: 'filter' } as never)) as { props: { value?: string } } | undefined
+  expect(field?.props.value ?? '').toBe('')
+  expect((await findShown(ui, /als Kommandozeile geschrieben/))?.text).toBeDefined()
+  await settle(world, ui.press({ key: 'edit-tests' }))
+  const cmd = Object.entries(world.files).find(([f, t]) => f.includes('/cmd-') && t.includes('run-tests'))
+  expect(JSON.parse(cmd?.[1] ?? '{}').filter).toBe('Game.Tests.Core;Game.Tests.Fehlt')
+  await settle(world, ui.press({ key: 'refresh' }))
+  expect((await findShown(ui, `Bereich ${area}`))?.text).toBeDefined()
+  expect(await findShown(ui, /-testFilter "/)).toBeUndefined()
+  expect((await findShown(ui, /Bereich trifft Game\.Tests\.Fehlt nicht/))?.text).toBeDefined()
   await ui.unmount()
 })

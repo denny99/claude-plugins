@@ -10,7 +10,8 @@ import { Actions, Card, CardTitle, ProblemCard, Sentence, type Action, type Kit 
 import type { IconName } from '../../lib/icons'
 import { join } from '../../lib/path'
 import * as play from '../../lib/play'
-import { perfRecord, type Options } from '../state'
+import { perfRecord, readModel, type Options } from '../state'
+import { bridgeDir } from '../../lib/bridge'
 import { spotFacts, spotText, type Report } from './data'
 import {
   appendReport,
@@ -54,15 +55,33 @@ export function captureFacts(shot: play.CaptureResult): string[] {
   return out
 }
 
+/**
+ * The note as typed. Every keystroke into the atom redrew the whole tab and handed the Input a new value each time
+ * (its frame flickered), so keystrokes land here and reach the atom once typing pauses ({@link NOTE_FLUSH_MS}), on
+ * Enter, on a kind press and before the report is finished. `report` is the open report's stamp, so a draft never
+ * leaks into the next report.
+ */
+let noteDraft: { report: string; text: string; seq: number } | undefined
+export const NOTE_FLUSH_MS = 700
+
 /** Header button: capture now (full picture for Claude + a small one the pane can draw), open the report card. */
 export async function openReport($: EngineInterface, options: Options): Promise<void> {
+  // One report at a time: a second press while the first capture runs made a second picture (live: two per report).
+  if ((await readReview($)).report?.busy) return
   const { root, cfg } = await reviewRoot($)
   const dir = reportsDir(root, cfg)
   await ensureReportsIgnored($, root, cfg)
   const t = await nowStamp($)
   const full = join(dir, `report-${t.file}.png`)
-  const small = join(dir, `report-${t.file}-klein.png`)
-  await patchReview($, { report: { facts: [], note: '', measure: false, busy: 'Screenshot …' }, notice: undefined })
+  // The small picture is only for the pane: it goes to the bridge's temp shots (cleaned there), so the reports folder
+  // holds one picture per report.
+  const project = (await readModel($)).project?.root
+  const small = project ? join(bridgeDir(project), 'shots', `shot-report-${t.file}-klein.png`) : join(dir, `report-${t.file}-klein.png`)
+  noteDraft = undefined
+  await patchReview($, {
+    report: { stamp: t.file, facts: [], note: '', measure: false, busy: 'Screenshot …' },
+    notice: undefined,
+  })
   const shot = await captureTo($, options, full)
   if (play.isPlayError(shot)) {
     await patchReview($, { report: { facts: [], note: '', measure: false, error: shot.error }, view: undefined })
@@ -70,20 +89,42 @@ export async function openReport($: EngineInterface, options: Options): Promise<
   }
   const preview = await captureTo($, options, small, { width: 384, height: 216 })
   const shown = play.isPlayError(preview) ? full : small
-  const report: ReviewReportState = {
-    shot: full,
-    preview: shown,
-    spot: shot.spot ?? null,
-    spotLine: spotText(shot.spot),
-    facts: captureFacts(shot),
-    note: '',
-    measure: false,
-  }
-  await patchReview($, {
-    report,
+  // The capture can take seconds (Unity in the background): kind and note chosen meanwhile stay (live they were lost
+  // here, the prompt said "ohne Art" without the note).
+  await patchReview($, s => ({
+    report: {
+      stamp: t.file,
+      shot: full,
+      preview: shown,
+      spot: shot.spot ?? null,
+      spotLine: spotText(shot.spot),
+      facts: captureFacts(shot),
+      note: s.report?.note ?? '',
+      measure: s.report?.measure ?? false,
+      ...(s.report?.kind ? { kind: s.report.kind } : {}),
+    } satisfies ReviewReportState,
     view: newView('report', `report-${t.file}`, 'Screenshot von eben', undefined, [
       { label: 'Screenshot', frames: [shown] },
     ]),
+  }))
+}
+
+/** Writes the typed note into the open report (no-op when nothing new was typed). */
+async function flushNote($: EngineInterface): Promise<void> {
+  const d = noteDraft
+  if (!d) return
+  await patchReview($, s =>
+    s.report && (s.report.stamp ?? '') === d.report && s.report.note !== d.text
+      ? { report: { ...s.report, note: d.text } }
+      : {},
+  )
+}
+
+function typeNote($: EngineInterface, report: string, text: string): void {
+  const seq = (noteDraft?.seq ?? 0) + 1
+  noteDraft = { report, text, seq }
+  $.clock.after(NOTE_FLUSH_MS, () => {
+    if (noteDraft?.seq === seq) void flushNote($)
   })
 }
 
@@ -127,6 +168,7 @@ function perfLine(p: play.PerfResult): string {
  * button's hook returns at once and the card shows "Messe 10 s Leistung …" until the report is sent or kept.
  */
 export async function finishReport($: EngineInterface, options: Options, send: boolean): Promise<void> {
+  await flushNote($)
   const r = (await readReview($)).report
   if (!r || r.busy) return
   if (!(r.measure || r.kind === 'Ruckelt')) return completeReport($, options, send, undefined)
@@ -174,6 +216,7 @@ async function completeReport(
     time: (await nowStamp($)).iso,
     sent: send,
   }
+  noteDraft = undefined
   await appendReport($, report)
   const text = reportText(report, marks, saved.svg)
   await patchReview($, {
@@ -234,7 +277,10 @@ export async function reportCard(
     label: x.id,
     icon: r.kind === x.id ? 'check' : x.icon,
     variant: 'secondary',
-    onPress: () => void patchReport($, () => ({ kind: x.id })),
+    onPress: () => void (async () => {
+      await flushNote($)
+      await patchReport($, () => ({ kind: x.id }))
+    })(),
   }))
   const forced = r.kind === 'Ruckelt'
   return Card(k, {
@@ -252,17 +298,25 @@ export async function reportCard(
         ? Input({
             key: 'rv-report-note',
             placeholder: 'Notiz',
-            value: r.note,
+            // the draft while typing (a redraw between two flushes keeps what was typed)
+            value: noteDraft && noteDraft.report === (r.stamp ?? '') ? noteDraft.text : r.note,
             submitLabel: 'Notiz',
-            onInput: (t: string) => void patchReport($, () => ({ note: t })),
-            onSubmit: (t: string) => void patchReport($, () => ({ note: t })),
+            onInput: (t: string) => typeNote($, r.stamp ?? '', t),
+            onSubmit: (t: string) => {
+              noteDraft = { report: r.stamp ?? '', text: t, seq: (noteDraft?.seq ?? 0) + 1 }
+              void flushNote($)
+            },
           })
         : null,
+      // Two short sentences that wrap, not one long line (live it was cut: "Danach wird der Ber…").
+      r.busy ? Sentence(k, r.busy, { faint: true, wrap: 'wrap' }) : null,
       r.busy
         ? Sentence(
             k,
-            `${r.busy} Danach wird der Bericht ${r.pending === 'keep' ? 'gemerkt' : 'an Claude geschickt'}.`,
-            { faint: true },
+            r.pending
+              ? `Danach wird der Bericht ${r.pending === 'keep' ? 'gemerkt' : 'an Claude geschickt'}.`
+              : 'Art und Notiz kannst du schon eintragen.',
+            { faint: true, wrap: 'wrap' },
           )
         : null,
       r.busy

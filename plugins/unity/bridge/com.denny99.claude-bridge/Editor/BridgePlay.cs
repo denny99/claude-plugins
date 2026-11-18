@@ -85,8 +85,8 @@ namespace Denny99.ClaudeBridge
                 case "goto":
                 {
                     var spot = ClaudeProviders.Get<IClaudeSpotProvider>();
-                    if (spot == null) throw new BridgeError("no-provider", "This project offers no jump to a spot (no IClaudeSpotProvider registered).");
-                    if (string.IsNullOrEmpty(c.spot)) throw new BridgeError("bad-input", "goto needs a spot.");
+                    if (spot == null) throw new BridgeError("no-provider", "Dieses Projekt kann nicht zu einer Stelle springen (kein IClaudeSpotProvider registriert).");
+                    if (string.IsNullOrEmpty(c.spot)) throw new BridgeError("bad-input", "goto braucht eine Stelle.");
                     spot.GoTo(c.spot);
                     AnswerJson(c.id, new JsonOut().Raw("spot", SpotJson(spot)));
                     return true;
@@ -111,7 +111,7 @@ namespace Denny99.ClaudeBridge
                 }
                 case "sound_play":
                 {
-                    if (string.IsNullOrEmpty(c.sound)) throw new BridgeError("bad-input", "sound_play needs a sound id.");
+                    if (string.IsNullOrEmpty(c.sound)) throw new BridgeError("bad-input", "sound_play braucht eine Klang-Id.");
                     var mode = string.Equals(c.mode, "flat", StringComparison.OrdinalIgnoreCase) ? ClaudeSoundMode.Flat : ClaudeSoundMode.Near;
                     Board().Play(c.sound, mode);
                     AnswerJson(c.id, new JsonOut().Str("sound", c.sound).Str("mode", mode == ClaudeSoundMode.Flat ? "flat" : "near"));
@@ -126,7 +126,7 @@ namespace Denny99.ClaudeBridge
                     return true;
                 case "mix_set":
                 {
-                    if (string.IsNullOrEmpty(c.group)) throw new BridgeError("bad-input", "mix_set needs a group.");
+                    if (string.IsNullOrEmpty(c.group)) throw new BridgeError("bad-input", "mix_set braucht eine Gruppe.");
                     var board = Board();
                     board.SetMix(c.group, c.db);
                     AnswerJson(c.id, new JsonOut().Raw("groups", MixJson(board)));
@@ -145,7 +145,7 @@ namespace Denny99.ClaudeBridge
         static IClaudeSoundBoard Board()
         {
             var b = ClaudeProviders.Get<IClaudeSoundBoard>();
-            if (b == null) throw new BridgeError("no-provider", "This project offers no sound board (no IClaudeSoundBoard registered).");
+            if (b == null) throw new BridgeError("no-provider", "Dieses Projekt hat kein Klangbrett (kein IClaudeSoundBoard registriert).");
             return b;
         }
 
@@ -192,7 +192,7 @@ namespace Denny99.ClaudeBridge
             var scene = SceneManager.GetActiveScene().path;
             var playing = EditorApplication.isPlaying;
             TakeShot(c.path, c.width, c.height,
-                path => AnswerJson(c.id, new JsonOut().Str("path", path).Bool("playing", playing).Str("scene", scene)
+                path => AnswerJson(c.id, new JsonOut().Str("path", path).Raw("takenAt", lastShotAt.ToString(System.Globalization.CultureInfo.InvariantCulture)).Bool("playing", playing).Str("scene", scene)
                     .Bool("provider", provider != null).Raw("camera", camera).Raw("spot", spot)),
                 err => Answer(new Result { id = c.id, ok = false, error = err }));
         }
@@ -240,8 +240,8 @@ namespace Denny99.ClaudeBridge
 
         static void StartPerf(Command c)
         {
-            if (!EditorApplication.isPlaying) throw new BridgeError("not-playing", "perf_record needs Play mode.");
-            if (perf != null) throw new BridgeError("busy", "A perf recording is already running.");
+            if (!EditorApplication.isPlaying) throw new BridgeError("not-playing", "Das geht nur im Play-Modus. Erst Play starten.");
+            if (perf != null) throw new BridgeError("busy", "Es läuft schon eine Leistungsmessung.");
             var seconds = c.seconds > 0 ? Mathf.Min(c.seconds, 120f) : 5f;
             perf = new PerfRun
             {
@@ -340,7 +340,7 @@ namespace Denny99.ClaudeBridge
             if (run.frames.Count == 0)
             {
                 Answer(new Result { id = run.id, ok = false, code = abortReason != null ? "aborted" : "no-frames",
-                    error = abortReason ?? "No frames arrived (paused, or the editor is throttled in the background)." });
+                    error = abortReason ?? "Es kamen keine Bilder an: Spiel pausiert, oder Unity läuft gedrosselt im Hintergrund. Unity-Fenster nach vorn holen." });
                 return;
             }
             AnswerJson(run.id, new JsonOut().Raw("perf", PerfJson(run, abortReason)).Raw("spot", run.spot));

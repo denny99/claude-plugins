@@ -215,6 +215,8 @@ namespace Denny99.ClaudeBridge
             public string runId;
             public string path;
             public int compileSeq;
+            /// <summary>Screenshot: when the picture was written (Unix ms), so the plugin can refuse an old one.</summary>
+            public long takenAt;
             /// <summary>Machine-readable error kind (e.g. "no-provider", "not-playing"); empty when none.</summary>
             public string code;
         }
@@ -265,7 +267,7 @@ namespace Denny99.ClaudeBridge
                     break;
                 case "play":
                     // Unity refuses Play mode silently (a console line only) while scripts do not compile.
-                    if (EditorUtility.scriptCompilationFailed) throw new InvalidOperationException("Scripts have compile errors; fix them before entering Play mode.");
+                    if (EditorUtility.scriptCompilationFailed) throw new InvalidOperationException("Die Skripte haben Compile-Fehler. Erst beheben, dann Play starten.");
                     Answer(new Result { id = c.id, ok = true });
                     EditorApplication.isPlaying = true;
                     break;
@@ -287,14 +289,14 @@ namespace Denny99.ClaudeBridge
                     Screenshot(c);
                     break;
                 case "open-scene":
-                    if (EditorApplication.isPlaying) throw new InvalidOperationException("Stop Play mode first.");
-                    if (SceneManager.GetActiveScene().isDirty) throw new InvalidOperationException("The open scene has unsaved changes.");
+                    if (EditorApplication.isPlaying) throw new InvalidOperationException("Erst den Play-Modus stoppen.");
+                    if (SceneManager.GetActiveScene().isDirty) throw new InvalidOperationException("Die offene Szene hat ungespeicherte Änderungen. Erst speichern.");
                     UnityEditor.SceneManagement.EditorSceneManager.OpenScene(c.path);
                     Answer(new Result { id = c.id, ok = true, path = c.path });
                     break;
                 case "select":
                     var obj = AssetDatabase.LoadMainAssetAtPath(c.path);
-                    if (obj == null) throw new FileNotFoundException("No asset at " + c.path);
+                    if (obj == null) throw new FileNotFoundException("Kein Asset unter " + c.path);
                     Selection.activeObject = obj;
                     EditorGUIUtility.PingObject(obj);
                     Answer(new Result { id = c.id, ok = true, path = c.path });
@@ -323,8 +325,89 @@ namespace Denny99.ClaudeBridge
         static void Screenshot(Command c)
         {
             TakeShot(c.path, c.width, c.height,
-                p => Answer(new Result { id = c.id, ok = true, path = p }),
+                p => Answer(new Result { id = c.id, ok = true, path = p, takenAt = lastShotAt }),
                 err => Answer(new Result { id = c.id, ok = false, error = err }));
+        }
+
+        /// <summary>Unix ms at which the last picture was written (sent back as takenAt).</summary>
+        internal static long lastShotAt;
+
+        /// <summary>
+        /// Play mode without the Game view: renders every enabled camera that draws to the screen, lowest depth first,
+        /// into one texture of the Game view's size (scaled down to fit width x height), and writes it as PNG.
+        /// Works while Unity is in the background: Camera.Render is synchronous and needs no window, no focus and no
+        /// player-loop frame (ScreenCapture needs all three and, unfocused, writes nothing or the last drawn frame).
+        /// Screen Space - Overlay canvases are drawn by no camera: for the shot they are hung on the top camera.
+        /// Returns false when there is no camera to render (the caller falls back to the Game view).
+        /// IM EDITOR NACHZUTESTEN (URP/HDRP, Overlay-UI, Editor im Hintergrund).
+        /// </summary>
+        internal static bool RenderCameras(string path, int width, int height)
+        {
+            var cams = Camera.allCameras.Where(x => x != null && x.enabled && x.targetTexture == null).OrderBy(x => x.depth).ToList();
+            if (cams.Count == 0) return false;
+            var size = Handles.GetMainGameViewSize();
+            int gw = size.x >= 16 ? Mathf.RoundToInt(size.x) : 1920, gh = size.y >= 16 ? Mathf.RoundToInt(size.y) : 1080;
+            float scale = width > 0 && height > 0 ? Mathf.Min(1f, Mathf.Min(width / (float)gw, height / (float)gh)) : 1f;
+            int w = Mathf.Max(1, Mathf.RoundToInt(gw * scale)), h = Mathf.Max(1, Mathf.RoundToInt(gh * scale));
+            var rt = RenderTexture.GetTemporary(w, h, 24, RenderTextureFormat.ARGB32);
+            var prevActive = RenderTexture.active;
+            var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
+            var top = cams[cams.Count - 1];
+            var overlays = new List<Canvas>();
+            try
+            {
+                try
+                {
+#pragma warning disable 0618
+                    foreach (var cv in UnityEngine.Object.FindObjectsOfType<Canvas>())
+#pragma warning restore 0618
+                        if (cv.isRootCanvas && cv.enabled && cv.renderMode == RenderMode.ScreenSpaceOverlay) overlays.Add(cv);
+                    foreach (var cv in overlays)
+                    {
+                        cv.renderMode = RenderMode.ScreenSpaceCamera;
+                        cv.worldCamera = top;
+                        cv.planeDistance = top.nearClipPlane + 0.05f;
+                    }
+                    if (overlays.Count > 0) Canvas.ForceUpdateCanvases();
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning("[ClaudeBridge] Overlay-UI nicht im Bild: " + e.Message);
+                }
+                RenderTexture.active = rt;
+                GL.Clear(true, true, Color.black);
+                foreach (var cam in cams)
+                {
+                    var prev = cam.targetTexture;
+                    try
+                    {
+                        cam.targetTexture = rt;
+                        cam.Render();
+                    }
+                    finally
+                    {
+                        cam.targetTexture = prev;
+                    }
+                }
+                RenderTexture.active = rt;
+                tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                tex.Apply();
+                File.WriteAllBytes(path, tex.EncodeToPNG());
+                lastShotAt = Now();
+                return true;
+            }
+            finally
+            {
+                foreach (var cv in overlays)
+                {
+                    if (cv == null) continue;
+                    cv.renderMode = RenderMode.ScreenSpaceOverlay;
+                    cv.worldCamera = null;
+                }
+                RenderTexture.active = prevActive;
+                RenderTexture.ReleaseTemporary(rt);
+                UnityEngine.Object.DestroyImmediate(tex);
+            }
         }
 
         /// <summary>The camera a shot renders in Edit mode (and whose pose capture reports): Camera.main, else any.</summary>
@@ -347,12 +430,30 @@ namespace Denny99.ClaudeBridge
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             if (File.Exists(path)) File.Delete(path);
             if (EditorApplication.isPlaying && Application.isBatchMode)
-                throw new BridgeError("batchmode", "Play-mode screenshots need a visible editor window (not batchmode).");
-            if (shotPath != null) throw new BridgeError("busy", "Another screenshot is still being written.");
+                throw new BridgeError("batchmode", "Bilder im Play-Modus brauchen ein sichtbares Editor-Fenster (kein Hintergrund-Lauf).");
+            if (shotPath != null) throw new BridgeError("busy", "Unity schreibt noch ein anderes Bild. Kurz warten und nochmal versuchen.");
             if (EditorApplication.isPlaying)
             {
-                // The Game view as the player sees it (UI included); written at the end of the frame.
+                // First choice: the cameras directly, synchronous and without focus (a click in Claude sends Unity to
+                // the background, the Game view then draws no frame).
+                try
+                {
+                    if (RenderCameras(path, width, height))
+                    {
+                        done(path.Replace('\\', '/'));
+                        return;
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning("[ClaudeBridge] Kamera-Bild fehlgeschlagen, nehme den Game-Tab: " + e.Message);
+                    if (File.Exists(path)) File.Delete(path);
+                }
+                // Fallback: the Game view as the player sees it; written at the end of a frame. Ask for that frame
+                // even when the editor is in the background.
                 ScreenCapture.CaptureScreenshot(path);
+                EditorApplication.QueuePlayerLoopUpdate();
+                UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
                 shotPath = path;
                 shotDone = done;
                 shotFailed = failed;
@@ -364,7 +465,7 @@ namespace Denny99.ClaudeBridge
             }
             // Edit mode: render the main camera into a texture (no overlay UI).
             var cam = ShotCamera();
-            if (cam == null) throw new InvalidOperationException("No camera in the open scene.");
+            if (cam == null) throw new BridgeError("no-camera", "In der offenen Szene ist keine Kamera. Eine Kamera anlegen oder eine Szene mit Kamera öffnen.");
             int w = width > 0 ? width : 1280, h = height > 0 ? height : 720;
             var rt = new RenderTexture(w, h, 24);
             var prevTarget = cam.targetTexture;
@@ -378,6 +479,7 @@ namespace Denny99.ClaudeBridge
                 tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
                 tex.Apply();
                 File.WriteAllBytes(path, tex.EncodeToPNG());
+                lastShotAt = Now();
             }
             finally
             {
@@ -436,12 +538,13 @@ namespace Denny99.ClaudeBridge
             {
                 shotPath = null;
                 if (shotWidth > 0 && shotHeight > 0) ScaleShot(path, shotWidth, shotHeight);
+                lastShotAt = Now();
                 done(path.Replace('\\', '/'));
             }
             else if (EditorApplication.timeSinceStartup > shotDeadline)
             {
                 shotPath = null;
-                failed("The Game view wrote no screenshot (is it visible?).");
+                failed("Unity hat kein Bild geschrieben. Unity-Fenster nach vorn holen und den Game-Tab sichtbar lassen, dann nochmal versuchen.");
             }
         }
 

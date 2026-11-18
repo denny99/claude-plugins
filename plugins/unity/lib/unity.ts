@@ -3,6 +3,7 @@
  * per-project test filters. No `$` here: everything takes the Host slices it reads from, so tests hand in fakes.
  */
 import type { HostEnv, HostFs } from './host'
+import { germanBridgeError } from './messages'
 import { join, norm } from './path'
 
 // --- project detection ---
@@ -334,9 +335,9 @@ export function abortedIfBridgeDown<T extends Pick<TestRun, 'state' | 'runId' | 
 /** The run's error as one line: "aborted — …" or "failed to start: …". */
 export function testErrorLine(run: Pick<TestRun, 'error'>): string {
   if (run.error === TESTS_CANCELLED) return 'Testlauf abgebrochen'
-  return run.error === TESTS_ABORTED
-    ? `Tests ${TESTS_ABORTED}`
-    : `Test run failed to start: ${run.error ?? 'unknown error'}`
+  return run.error === TESTS_ABORTED || /closed or crashed|geschlossen oder ist abgestürzt/.test(run.error ?? '')
+    ? 'Testlauf abgebrochen: Editor geschlossen oder abgestürzt'
+    : `Testlauf nicht gestartet: ${germanBridgeError(run.error ?? 'unbekannter Fehler')}`
 }
 
 /** Normalizes the bridge's `/tests` JSON (or Library/ClaudeBridge/tests.json). */
@@ -471,6 +472,10 @@ export function testReport(run: TestRun, previous: Record<string, TestStatus>, m
     if (top) lines.push(`  at ${top.trim().replace(/^at\s+/, '')}`)
   }
   if (failed.length > maxFailures) lines.push(`… ${failed.length - maxFailures} more failures.`)
+  if (run.state === 'done' && run.results.length) {
+    const missed = unmatchedParts(run.filter, run.results.map(r => r.fullName))
+    if (missed.length) lines.push(`WARNING: filter part(s) matched no test in this run: ${missed.join(', ')}.`)
+  }
   return lines.join('\n')
 }
 
@@ -481,6 +486,8 @@ export interface TestFilterPreset {
   /** Unity test filter: a regex the TestRunnerApi matches against full test names (`groupNames`). */
   filter: string
   source: 'config' | 'docs'
+  /** Set when the filter as written was rewritten (command-line syntax, quotes, empty parts): the panel says so. */
+  note?: string
   /** Paths/globs (project- or session-relative) this area's tests cover: narrow-test picker. */
   paths?: string[]
 }
@@ -634,23 +641,68 @@ export async function loadProjectConfig(
   const cfgFile = join(sessionRoot, '.claude', 'unity.json')
   const configFound = await fs.exists(cfgFile)
   const config = configFound ? parseProjectConfig(await fs.read(cfgFile)) : {}
-  const presets: TestFilterPreset[] = Object.entries(config.areas ?? {}).map(([name, filter]) => ({
-    name,
-    filter,
-    source: 'config' as const,
-    ...(config.areaPaths?.[name] ? { paths: config.areaPaths[name] } : {}),
-  }))
+  const presets: TestFilterPreset[] = Object.entries(config.areas ?? {}).map(([name, raw]) => {
+    const n = normalizeFilter(raw)
+    return {
+      name,
+      filter: n.filter,
+      source: 'config' as const,
+      ...(n.changed ? { note: n.note } : {}),
+      ...(config.areaPaths?.[name] ? { paths: config.areaPaths[name] } : {}),
+    }
+  })
   // Docs are read only when the config names none of its own areas (best effort for unconfigured projects).
   if (!presets.length)
     for (const doc of config.filterDocs ?? ['docs/code-map.md']) {
       const file = join(sessionRoot, doc)
       try {
-        if (await fs.exists(file)) presets.push(...filtersFromDoc(await fs.read(file)))
+        if (await fs.exists(file))
+          for (const p of filtersFromDoc(await fs.read(file))) {
+            const n = normalizeFilter(p.filter)
+            presets.push({ ...p, filter: n.filter, ...(n.changed ? { note: n.note } : {}) })
+          }
       } catch {
         // unreadable doc: no presets from it
       }
     }
   return { presets, config, configFound }
+}
+
+/**
+ * Cleans an area filter written like a command line (`-testFilter "A;B"`, `--testFilter=A`, quotes, empty `;` parts)
+ * into what the bridge takes: regexes on full test names joined by `;`. `changed` when anything was rewritten.
+ */
+export function normalizeFilter(raw: string): { filter: string; parts: string[]; changed: boolean; note: string } {
+  const unquote = (x: string): string => x.trim().replace(/^["'`]+|["'`]+$/g, '').trim()
+  let s = raw.trim()
+  const flag = /(^|\s)--?testFilter(\s*=\s*|\s+)/i
+  const hadFlag = flag.test(s)
+  s = s.replace(new RegExp(flag.source, 'gi'), ' ')
+  const parts = unquote(s)
+    .split(';')
+    .map(unquote)
+    .filter(Boolean)
+  const filter = parts.join(';')
+  const changed = filter !== raw
+  const note = changed
+    ? hadFlag
+      ? 'Bereich in .claude/unity.json war als Kommandozeile geschrieben (-testFilter …); bereinigt.'
+      : 'Bereich in .claude/unity.json bereinigt (Anführungszeichen, leere Teile).'
+    : ''
+  return { filter, parts, changed, note }
+}
+
+/** Filter parts (of a finished run) that matched none of its results: the area misses them. */
+export function unmatchedParts(filter: string | undefined, fullNames: string[]): string[] {
+  return splitFilter(filter).filter(part => {
+    let re: RegExp
+    try {
+      re = new RegExp(part)
+    } catch {
+      re = new RegExp(part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    }
+    return !fullNames.some(n => re.test(n))
+  })
 }
 
 /** Splits a filter into the names/regexes Unity takes (`;`-separated, blanks dropped). */

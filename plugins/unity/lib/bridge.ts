@@ -18,6 +18,7 @@
  */
 import type { Host, HostFs } from './host'
 import { join } from './path'
+import { germanBridgeError } from './messages'
 import { parseBridgeTests, type CompilerMessage, type TestRun } from './unity'
 
 export const STALE_MS = 10000
@@ -191,6 +192,8 @@ export type BridgeResult = { ok: true; data: Record<string, unknown> } | { ok: f
 
 let counter = 0
 
+export { germanBridgeError, SHOT_WAY } from './messages'
+
 /** Sleeps on the host clock (no setTimeout in a mod). */
 export function sleep(host: Pick<Host, 'after'>, ms: number): Promise<void> {
   return new Promise<void>(resolve => {
@@ -223,7 +226,7 @@ export async function sendCommand(
     if (raw) {
       if (raw.ok === true) return { ok: true, data: raw }
       const code = typeof raw.code === 'string' && raw.code ? { code: raw.code } : {}
-      return { ok: false, error: String(raw.error ?? 'the bridge reported a failure'), ...code }
+      return { ok: false, error: germanBridgeError(String(raw.error ?? 'Der Editor meldet einen Fehler ohne Text.')), ...code }
     }
     if ((await host.now()) >= deadline)
       return { ok: false, code: 'timeout', error: `Der Editor hat nicht innerhalb von ${Math.round(timeoutMs / 1000)} s geantwortet` }

@@ -7,7 +7,7 @@
  * What the data means comes from the project: a spot is whatever its IClaudeSpotProvider writes (free-form JSON), sound
  * ids and mix groups are its IClaudeSoundBoard's. Without a provider the bridge answers `code: 'no-provider'`.
  */
-import { BRIDGE_VERSION, type BridgeCommand, type BridgeResult } from './bridge'
+import { BRIDGE_VERSION, SHOT_WAY, type BridgeCommand, type BridgeResult } from './bridge'
 
 export type Send = (command: BridgeCommand, timeoutMs: number) => Promise<BridgeResult>
 
@@ -239,12 +239,30 @@ export function perfTimeoutMs(seconds: number): number {
 
 export async function capture(
   send: Send,
-  opts: { path?: string; width?: number; height?: number } = {},
+  opts: { path?: string; width?: number; height?: number; askedAt?: number } = {},
 ): Promise<CaptureResult | PlayError> {
-  const res = await send({ cmd: 'capture', ...opts }, CAPTURE_TIMEOUT_MS)
+  const { askedAt, ...cmd } = opts
+  const res = await send({ cmd: 'capture', ...cmd }, CAPTURE_TIMEOUT_MS)
   if (!res.ok) return playError(res, 'die Ansicht aufnehmen')
   const out = parseCapture(res.data)
-  return out.path ? out : { error: 'Der Editor hat aufgenommen, aber keinen Bildpfad gemeldet.' }
+  if (!out.path) return { error: 'Der Editor hat aufgenommen, aber keinen Bildpfad gemeldet.' }
+  const stale = staleShot(res.data, cmd.path ?? out.path, askedAt ?? 0)
+  return stale ? { code: 'stale', error: stale } : out
+}
+
+/**
+ * A picture that is not the one just asked for: another path than the fresh one sent, or (bridge 0.3.1+, `takenAt`)
+ * taken before the request. Such a picture must not pass as new (live: an old picture came back while Unity was in
+ * the background). `askedAt` 0 skips the time check.
+ */
+export function staleShot(data: Record<string, unknown>, asked: string, askedAt: number): string | undefined {
+  const norm = (x: string): string => x.replace(/\\/g, '/').toLowerCase()
+  const got = typeof data.path === 'string' ? data.path : ''
+  if (got && norm(got) !== norm(asked)) return `Unity hat ein anderes Bild geliefert als angefragt (${got}). ${SHOT_WAY}`
+  // the bridge's clock is the same machine's; 2 s slack for file times
+  if (askedAt > 0 && typeof data.takenAt === 'number' && data.takenAt > 0 && data.takenAt < askedAt - 2000)
+    return `Unity hat ein altes Bild geliefert (aufgenommen vor der Anfrage). ${SHOT_WAY}`
+  return undefined
 }
 
 /** Jumps to a spot from an earlier capture (object or its JSON text). Answers with the spot reached, if any. */

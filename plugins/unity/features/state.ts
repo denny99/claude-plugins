@@ -1061,10 +1061,13 @@ export async function screenshot(
   const host = await createHost($)
   const path = join(m.project.root, 'Temp', 'ClaudeBridge', 'shots', `shot-${await host.now()}.png`)
   if (m.bridge.up && m.bridge.batchmode && m.bridge.isPlaying) return { error: BATCHMODE_SHOT }
+  const askedAt = await host.now()
   const res = await bridgeCommand($, options, { cmd: 'screenshot', path, ...size }, 20000)
   if (!res.ok)
-    return { error: m.bridge.batchmode && /no screenshot|visible/i.test(res.error) ? BATCHMODE_SHOT : res.error }
-  const written = typeof res.data.path === 'string' && res.data.path ? res.data.path : path
+    return { error: m.bridge.batchmode && /kein Bild geschrieben|sichtbares Editor-Fenster/i.test(res.error) ? BATCHMODE_SHOT : res.error }
+  const stale = play.staleShot(res.data, path, askedAt)
+  if (stale) return { error: stale }
+  const written = path
   try {
     const base64 = await host.fs.readBase64(written)
     await patchModel($, { lastShot: written })
@@ -1092,7 +1095,7 @@ export async function capture(
   if (m.bridge.up && m.bridge.batchmode && m.bridge.isPlaying) return { code: 'batchmode', error: BATCHMODE_SHOT }
   const host = await createHost($)
   const path = join(m.project.root, 'Temp', 'ClaudeBridge', 'shots', `capture-${await host.now()}.png`)
-  const res = await play.capture(playSend($, options), { path, ...size })
+  const res = await play.capture(playSend($, options), { path, ...size, askedAt: await host.now() })
   if (play.isPlayError(res)) return res
   try {
     const base64 = await host.fs.readBase64(res.path)
