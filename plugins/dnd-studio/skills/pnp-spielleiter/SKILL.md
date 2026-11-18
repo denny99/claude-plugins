@@ -210,7 +210,8 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
   "Athletik, SG 14" }`. Sein Zug oder `roll_dice` beendet es. Ohne echte Würfel würfelst du für ihn mit `roll_dice` (5).
 - **Werte:** Ändern sich Ausdauer, Hoffnung, TP oder Zustände, `set_status { who, values, conditions }`. Werte sind der
   neue Stand je Label, kein Plus oder Minus (`{"Hoffnung": "9/10"}`); nur die genannten ändern sich. Gegner im Kampf
-  mit `foe: true`, besiegt `remove: true`, neuer Kampf `clear: true`. Nur, was die Spieler wissen dürfen.
+  mit `foe: true`, besiegt `remove: true`, neuer Kampf `clear: true`. Nur, was die Spieler wissen dürfen. Mehrere auf
+  einmal (ein Treffer für alle, die Gegner zu Kampfbeginn): `set_status { entries: [{ who, values }, …] }`, ein Aufruf.
 - **Fundstücke:** Bekommen sie einen Brief, einen Gegenstand, einen Hinweis: `give_find { text: "<Titel>" }` (ein Text
   der Kampagne) oder `{ title, words, picture }`. Es wird gezeigt (`show: false`: nur abgelegt) und liegt in ihren
   Fundstücken, auch an späteren Abenden; `remove: true` nimmt es zurück. Vorbereiten statt gleich geben: ein Text mit
@@ -592,7 +593,8 @@ sagen die Orts-Pins (`pin_place`, beim Bau gesetzt) und die Marker der Helden.
   entscheiden“). Fehlt es im Leitfaden (ältere Kampagne): solo und bei Anfängern großzügig, sonst echt, und in der
   Nachbesprechung (7) sagen, dass es dort nachgetragen werden sollte.
 - **Kampf:** Vor jeder Runde ein Füller (mehrere Würfe dauern länger als 12 s, siehe 4), dann die Reihenfolge kurz
-  ansagen, für die Gegner mit `roll_dice` und ihren Werten aus den Notizen würfeln und Treffer erzählen statt Zahlen
+  ansagen, für die Gegner mit `roll_dice` und ihren Werten aus den Notizen würfeln (alle Gegner einer Runde in einem
+  Aufruf: `rolls: [{ who, label, bonus }, …]`, sie rollen nacheinander) und Treffer erzählen statt Zahlen
   („Die Klinge streift deine Schulter“). Gegner haben Moral: Fällt der Anführer oder stehen sie schlecht, fliehen oder ergeben sie sich, wie es
   in ihren Notizen steht. Nach drei, vier Runden zum Ende kommen; ein Kampf, der sich zieht, wird langweilig.
 - **Wenn ein Held fällt:** Das gilt, was der Rahmen im Leitfaden sagt. Steht dort nichts, und solo immer, ist Fallen nicht

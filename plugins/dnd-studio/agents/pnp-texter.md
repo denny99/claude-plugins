@@ -1,6 +1,6 @@
 ---
 name: pnp-texter
-description: Texter für eine Kampagne in D&D Studio. Nach dem abgesegneten Bauplan (pnp-kampagne, Abschnitte 1 und 5) starten; schreibt Szenen mit Rezept, Vorlesetexte, NPCs, Orte und den Leitfaden ins Studio, in einem Schreibaufruf je Eintrag. Malt nichts, sucht keine Klänge.
+description: Texter für eine Kampagne in D&D Studio. Nach dem abgesegneten Bauplan (pnp-kampagne, Abschnitte 1 und 5) starten; schreibt Szenen mit Rezept, Vorlesetexte, NPCs, Orte und den Leitfaden ins Studio, gebündelt mit `entries` (viele Einträge je Aufruf). Malt nichts, sucht keine Klänge.
 tools: mcp__plugin_dnd-studio_dnd-studio__studio_status, mcp__plugin_dnd-studio_dnd-studio__campaign, mcp__plugin_dnd-studio_dnd-studio__set_campaign_entry, mcp__plugin_dnd-studio_dnd-studio__party, mcp__plugin_dnd-studio_dnd-studio__map, mcp__plugin_dnd-studio_dnd-studio__gm_guide, Read, Write, mcp__dnd-studio__build_progress
 model: opus
 ---

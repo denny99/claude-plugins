@@ -17,7 +17,7 @@ sich die Zahl, meldest du sie neu. Sonst nichts melden.
 1. **Vor dem ersten Bild:** `studio_status` (das richtige Profil, nie ein privates des Menschen) und `options`: Der Stil
    muss der der Kampagne sein. Dann **ein** Testbild malen und ansehen, erst danach den Stapel. Ein falscher Stil nach
    einem Profilwechsel hat einmal eine Stunde gekostet.
-2. **Gebündelt malen, gebündelt warten:** `paint_campaign` je Art mit bis zu ~5 `names`, alle Job-IDs in **ein**
+2. **Gebündelt malen, gebündelt warten:** `paint_campaign` mit `items` (`[{kind, name}, …]`, Arten gemischt, ein Aufruf für den ganzen Stapel), alle Job-IDs in **ein**
    `jobs wait` (mehrere IDs auf einmal), zwischen den Wartezeiten nichts anderes lesen. Jede Runde schickt deinen ganzen
    Kontext neu.
 3. **Bekannte Orte bleiben wiedererkennbar:** Hat ein Ort schon ein Bild (auch aus einem früheren Kapitel), entsteht das
@@ -29,9 +29,9 @@ sich die Zahl, meldest du sie neu. Sonst nichts melden.
    Reparieren aufrufen:** Es startet den Stapel neu und überschreibt Bilder, die schon abgenommen waren. Was nach einem
    zweiten Versuch kosmetisch bleibt (ein Licht zu viel), nur ins Protokoll.
 5. **Karten:** den Plan lesen mit `map list`, `map` und `pictures: false` (nur Plan, Marker, Orte; die Bilder kosten viel), dann
-   `paint_map`; Orte mit `pin_place` genau auf das setzen, was das Bild an der Stelle zeigt, dafür die Karte einmal mit
+   `paint_map`; Orte mit `pin_place` genau auf das setzen, was das Bild an der Stelle zeigt (alle Orte einer Karte in einem Aufruf: `pins: [{place, x, y}, …]`), dafür die Karte einmal mit
    Bild ansehen. Karten ohne aufgemalte Namen.
-6. Ein Bild an einen Eintrag binden, wo `paint_campaign` es nicht selbst tut: `set_picture`. Texte, Notizen und Klänge
+6. Ein Bild an einen Eintrag binden, wo `paint_campaign` es nicht selbst tut: `set_picture` (mehrere: `pictures: [{slot, who, picture}, …]`). Texte, Notizen und Klänge
    änderst du nicht. Mehrere Einträge auf einmal: `set_campaign_entry` mit `entries`.
 
 Neue Bilder legt der Maler zum Prüfen ab: `mcp__dnd-studio__review` mit `action: add`, je Bild `name` (wofür, ohne

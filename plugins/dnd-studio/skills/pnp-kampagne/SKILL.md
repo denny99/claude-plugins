@@ -195,7 +195,7 @@ Fäden, mit denen es beginnt, und den Ort, an dem der Abend anfängt.
 
 ## 2. Stimmen und Standardsätze
 
-- `set_voice` für Erzähler und jeden sprechenden NPC: `from: "description"` macht aus `voice` eine Stimme (etwa eine
+- `set_voice` für Erzähler und jeden sprechenden NPC (alle in einem Aufruf: `voices: [{who, from, description}, …]`): `from: "description"` macht aus `voice` eine Stimme (etwa eine
   Minute je Stimme), `ready` nimmt eine fertige, `creature` legt einen Klang darüber (Drache, Geist …). **Ohne eigene
   Stimmprobe keine Standardsätze:** Für eine Figur ohne `set_voice` werden keine erzeugt (die Engine erfände sonst eine
   fremde Stimme, Spieltest 2026-10-28), und ihre Füller fehlen am Tisch.
@@ -208,8 +208,8 @@ Fäden, mit denen es beginnt, und den Ort, an dem der Abend anfängt.
 
 Bilder belegen die GPU minutenlang. Deshalb erst wenn der Text steht, gebündelt, und mit `jobs wait` abwarten statt
 einzeln:
-- `paint_campaign`: ein Aufruf je Art (`kind` npc, place, scene, text oder world), je bis ~5 `names`: NPC-Porträts, Orte,
-  Szenen. Jede Szene braucht ein Bild, das die
+- `paint_campaign`: ein Aufruf für alles, mit `items` (`[{kind, name}, …]`, Arten gemischt; je Art werden die Bildworte
+  erst alle geschrieben, dann gemalt): NPC-Porträts, Orte, Szenen. Jede Szene braucht ein Bild, das die
   Spieler beim Vorlesen sehen. Jeder sprechende NPC braucht ein Porträt: Es erscheint im Spielerfenster, während er
   spricht, und ist sein Marker auf der Karte. Mit `results get` prüfen; Schlechtes neu malen. Ein Handout
   (`handout: true`, ein Gegenstand wie Horn oder Laterne) wird mit `kind: "text"` ein Close-up des Gegenstands, keine
@@ -238,14 +238,15 @@ einzeln:
   - `map list` zeigt den Stand (gemalte und geplante Felder); `paint_map seams` glättet Kanten zwischen Kacheln.
     Passt der `look` einer Karte nicht zum gemalten Bild, korrigiert ihn `map set` mit `look`.
   - **Marker statt Beschriftung.** Karten bekommen keine aufgemalten Namen; was was ist, sagen die Orts-Marker. Darum
-    jeden Ort mit `pin_place` genau auf das setzen, was das gemalte Bild an dieser Stelle zeigt (die Mauer auf die
+    jeden Ort mit `pin_place` genau auf das setzen (alle Orte einer Karte in einem Aufruf: `pins: [{place, x, y}, …]`), was das gemalte Bild an dieser Stelle zeigt (die Mauer auf die
     gemalte Talsperre, nicht daneben): die Karte mit `map list` und `map` ansehen und die Lage prüfen. Ein Ort, der
     erst entdeckt werden soll, bekommt seinen Marker trotzdem: im Spielerfenster erscheint ein Ort erst, wenn die
     Spielleitung ihn aufdeckt (`show_players reveal_places`). Was die Helden zu Beginn schon kennen (Heimatort, das
     Ziel des Auftrags), mit `set_campaign_entry known: true` vormerken, sonst nichts. Ohne Marker versteht am Tisch
     niemand die Karte (Ödland-Abend 2026-10-30, Denny: „i did not understand what what was and
     there were no map markers placed“).
-- Geräusche und Musik macht **das Studio mit `make_sound`** (Stable Audio 3, seit 2026-11-17 deutlich besser; Denny).
+- Geräusche und Musik macht **das Studio mit `make_sound`** (Stable Audio 3, seit 2026-11-17 deutlich besser; Denny),
+  alle Klänge eines Kapitels in einem Aufruf: `sounds: [{name, kind, idea, seconds}, …]`.
   Echte Aufnahmen, z. B. von Pixabay (pixabay.com/sound-effects, /music) oder Freesound, nur wenn das Erzeugte nach
   Versuchen nicht gut genug ist. Herunterladen nur mit Freigabe des Menschen; dann mit `add_file` ins Studio.
   Suchen mit kurzen Worten wie auf Freesound, eine Quelle je Klang („goat bleating, close“, „fire whoosh“), für eine
@@ -321,7 +322,12 @@ App, kein Claude Code), bekommt ein allgemeiner Agent die Prüfliste seines Bere
 - Vor einem langen Agenten mit einem Probeaufruf prüfen, ob sein Weg geht (ist die Ergebnisliste überhaupt gefüllt?).
 - **Jeden Eintrag einmal schreiben:** alles zu einem Eintrag sammeln, dann ein `set_campaign_entry` mit allen Feldern;
   viele Einträge in einem Aufruf mit `entries`. Jeder Aufruf ist eine volle Runde (ein Bau schrieb 190-mal, ein
-  Nachbesserer 72-mal für 11 Einträge).
+  Nachbesserer 72-mal für 11 Einträge, ein Maler setzte 64 Orts-Marker mit 64 Aufrufen).
+- **Listen statt Einzelaufrufe:** Fast jedes Werkzeug nimmt mehrere Dinge auf einmal: `pin_place pins`, `set_picture
+  pictures`, `set_voice voices`, `write_text texts`, `party set players`, `map plan patches`, `paint_map tiles`,
+  `picture`/`picture_tool pictures`, `make_3d`/`model_tool models`, `make_sound sounds`, `add_file paths`, `results get
+  ids`. Ein Feld neben der Liste gilt für jeden Eintrag; ein Fehler hält den Rest nicht auf (`failed`, je Eintrag
+  `error`). Job-Werkzeuge geben alle `job_ids` zurück: die in einem `jobs wait` abwarten.
 - Karten-Plan lesen ohne Bilder: `map list` mit `map` und `pictures: false`.
 - Mechanische Arbeit (aufräumen, zählen) auf einem kleinen Modell. Prüfen nur, was sich geändert hat; ab Runde 2 nur
   die offenen Punkte.
