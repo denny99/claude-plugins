@@ -8,7 +8,7 @@ export type UiKitState = {
   logMore: string[];
 };
 
-export type Tab = "table" | "build" | "health";
+export type Tab = "table" | "build" | "review" | "health";
 
 export type Hero = {
   name: string;
@@ -91,6 +91,8 @@ export type Rules = {
   denyFamily: boolean;
   spoilerSafe: boolean;
   looks: boolean;
+  /** Build looks: the backdrop follows the build phase (scene looks are `looks`). */
+  buildLooks: boolean;
 };
 
 export type AgentRun = {
@@ -246,6 +248,29 @@ export type LookState = {
   foreign?: boolean;
 };
 
+/** What a person reviews in the Review tab: a new sound, picture or video, spoiler-free until revealed. */
+export type ReviewKind = "sound" | "image" | "video";
+export type ReviewVerdict = "" | "ok" | "redo";
+export type ReviewItem = {
+  id: string;
+  kind: ReviewKind;
+  /** What it is for ("Torknarren"); for pictures and videos hidden until revealed. */
+  name: string;
+  /** Short facts ("Geräusch · 4 s, Schleife"). */
+  meta: string;
+  /** A local file path or an http(s) URL from the Studio. */
+  source: string;
+  /** Who redoes it on "nochmal machen" (pnp-klang, pnp-maler). */
+  agent: string;
+  /** The scene it belongs to (never shown before reveal; it may spoil). */
+  scene: string;
+  verdict: ReviewVerdict;
+  note: string;
+  revealed: boolean;
+  addedAt: number;
+};
+export type ReviewState = { items: ReviewItem[]; playing: string; sentAt: number };
+
 declare module "claude-code" {
   interface PluginState {
     "dnd-studio": {
@@ -263,6 +288,7 @@ declare module "claude-code" {
       look: ShapedState<LookState>;
       evening: ShapedState<EveningState>;
       check: ShapedState<BuildCheck>;
+      review: ShapedState<ReviewState>;
     };
   }
 }

@@ -12,6 +12,7 @@ import {
   noteTurnEnd,
   submitForPerson,
 } from "./evening";
+import { autoOpen } from "./dnd-ui";
 import { applyLook } from "./look";
 import { createHost } from "../lib/host";
 import {
@@ -32,11 +33,26 @@ import {
   readRuns,
   setCampaign,
   setPreview,
+  toggleRule,
 } from "../lib/state";
 import { studioCall } from "../lib/studio";
-import { EmptyState, ErrorState, Line, LogBox, Row, Section } from "../lib/ui";
-import type { Kit } from "../lib/ui";
+import {
+  Actions,
+  Card,
+  CardTitle,
+  EmptyState,
+  ErrorState,
+  ListRow,
+  LogBox,
+  Row,
+  Section,
+  Sentence,
+  Stepper,
+} from "../lib/ui";
+import type { Kit, StepState } from "../lib/ui";
+import { Switch } from "./dnd-ui";
 import type {
+  AcceptItem,
   AgentRun,
   BuildCheck,
   CampaignInfo,
@@ -129,6 +145,8 @@ export async function recordSpawn(
   };
   await saveRuns($, await patchRuns($, (runs) => [...runs, run]));
   await applyLook($);
+  if (PIPELINE.some((p) => p.agents.includes(agent)))
+    await autoOpen($, "build");
 }
 
 /** Marks an agent's run finished and counts its findings file. */
@@ -280,6 +298,24 @@ export function registerBuild(on: On): void {
   });
 }
 
+/** "Offene Punkte beheben lassen": asks Claude to start the named agent for every open item. */
+export function fixPrompt(open: AcceptItem[]): string {
+  const lines = open
+    .filter((it) => it.fix)
+    .map(
+      (it) =>
+        `- ${it.label} (${it.counts})${it.detail ? `: ${it.detail}` : ""} → ${it.fix}`,
+    );
+  return [
+    "Abnahme-Check im D&D-Panel: diese Punkte sind offen. Starte für jeden den genannten Agenten (pnp-kampagne, Abschnitt Nachbessern) und prüfe danach neu:",
+    ...lines,
+  ].join("\n");
+}
+
+async function fixOpen($: EngineInterface, open: AcceptItem[]): Promise<void> {
+  await submitForPerson($, fixPrompt(open));
+}
+
 export async function renderBuild(
   $: EngineInterface,
   k: Kit,
@@ -307,13 +343,12 @@ export async function renderBuild(
       key: "gpu",
       status: !gpu ? "idle" : gpu.running || gpu.queued ? "running" : "ok",
       primary: !gpu
-        ? "GPU: not checked yet"
+        ? "GPU: noch nicht geprüft"
         : gpu.running || gpu.queued
-          ? `GPU busy · ${gpu.running} running, ${gpu.queued} queued${gpu.step ? ` · ${gpu.step}` : ""}${gpu.progress !== null ? ` ${gpu.progress}%` : ""}`
-          : "GPU free",
+          ? `GPU belegt · ${gpu.running} läuft, ${gpu.queued} warten${gpu.step ? ` · ${gpu.step}` : ""}${gpu.progress !== null ? ` ${gpu.progress}%` : ""}`
+          : "GPU frei",
       secondary:
-        gpu?.busyNote ||
-        "GPU agents (maler, klang, tischbereit) one after another",
+        gpu?.busyNote || "GPU-Agenten (maler, klang, tischbereit) nacheinander",
     }),
   );
   if (gpuRunning.length > 1)
@@ -321,35 +356,55 @@ export async function renderBuild(
       Row(k, {
         key: "gpu-clash",
         status: "warning",
-        primary: `${gpuRunning.map((r) => r.agent).join(" + ")} share the GPU at once`,
-        secondary: "let one finish before the next starts",
+        primary: `${gpuRunning.map((r) => r.agent).join(" + ")} teilen sich gerade die GPU`,
+        secondary: "erst einen fertig werden lassen",
       }),
     );
+  const STAGE_DE: Record<string, string> = {
+    Lore: "Lore abgleichen",
+    Plan: "Bauplan",
+    Texts: "Texte",
+    Pictures: "Bilder",
+    Sounds: "Klänge",
+    Voices: "Stimmen vorbereiten",
+    Review: "Abnahme und drei Reviews",
+    Fixes: "Nachbessern",
+  };
+  const steps = PIPELINE.map((p) => {
+    const st = stageState(mine, p.agents);
+    const findings = mine
+      .filter((r) => p.agents.includes(r.agent) && r.findings !== undefined)
+      .slice(-p.agents.length)
+      .reduce((n, r) => n + (r.findings ?? 0), 0);
+    const running = mine.filter(
+      (r) => p.agents.includes(r.agent) && r.state === "running",
+    );
+    return {
+      key: `stage-${p.stage}`,
+      title: `${STAGE_DE[p.stage] ?? p.stage}${p.stage === "Review" && st !== "idle" ? ` · ${findings} Mängel` : ""}`,
+      detail: running.length
+        ? `${running.map((r) => r.agent).join(", ")} arbeitet`
+        : p.agents.join(", "),
+      state: (st === "idle"
+        ? "todo"
+        : st === "running"
+          ? "active"
+          : st === "failed"
+            ? "failed"
+            : "done") as StepState,
+    };
+  });
   out.push(
-    Section(k, {
+    Card(k, {
       key: "pipeline",
-      title: "Pipeline",
-      count: `review round ${reviewRounds(mine)}/3`,
-      children: PIPELINE.map((p) => {
-        const st = stageState(mine, p.agents);
-        const findings = mine
-          .filter((r) => p.agents.includes(r.agent) && r.findings !== undefined)
-          .slice(-p.agents.length)
-          .reduce((n, r) => n + (r.findings ?? 0), 0);
-        return Row(k, {
-          key: `stage-${p.stage}`,
-          status:
-            st === "idle"
-              ? "idle"
-              : st === "running"
-                ? "running"
-                : st === "failed"
-                  ? "failed"
-                  : "ok",
-          primary: `${p.stage}${p.stage === "Review" && st !== "idle" ? ` · ${findings} findings` : ""}`,
-          secondary: p.agents.join(", "),
-        });
-      }),
+      children: [
+        CardTitle(k, {
+          icon: "hammer",
+          title: "Bau-Abschnitte",
+          count: `${steps.filter((x) => x.state === "done").length} von ${steps.length} · Review-Runde ${reviewRounds(mine)}/3`,
+        }),
+        Stepper(k, { key: "stages", steps }),
+      ],
     }),
   );
   const planRun = latestPlanRun(mine);
@@ -358,11 +413,11 @@ export async function renderBuild(
     out.push(
       Section(k, {
         key: "plan",
-        title: "Plan",
+        title: "Bauplan",
         count: approved
-          ? "approved"
+          ? "abgesegnet"
           : planRun.state === "running"
-            ? "drafting"
+            ? "entsteht"
             : "",
         children: [
           Row(k, {
@@ -377,19 +432,19 @@ export async function renderBuild(
                     : "warning",
             primary:
               planRun.state === "running"
-                ? "pnp-architekt is drafting the plan…"
+                ? "pnp-architekt schreibt den Bauplan …"
                 : planRun.state === "failed"
-                  ? "pnp-architekt failed: start it again"
+                  ? "pnp-architekt ist gescheitert: neu starten"
                   : approved
-                    ? `Plan approved${check.plan?.at ? ` ${new Date(check.plan.at).toISOString().slice(0, 16).replace("T", " ")}` : ""}`
-                    : "Plan waiting for your sign-off",
+                    ? `Bauplan abgesegnet${check.plan?.at ? ` ${new Date(check.plan.at).toISOString().slice(0, 16).replace("T", " ")}` : ""}`
+                    : "Bauplan wartet auf deine Freigabe",
             secondary: planRun.planFile ?? "",
             actions:
               planRun.state === "done" && !approved
                 ? [
                     {
                       key: "plan-approve",
-                      label: "Approve plan",
+                      label: "Bauplan absegnen",
                       primary: true,
                       onPress: () => void approvePlan($, planRun),
                     },
@@ -397,7 +452,7 @@ export async function renderBuild(
                       ? [
                           {
                             key: "plan-show",
-                            label: preview ? "Hide" : "Show",
+                            label: preview ? "Ausblenden" : "Zeigen",
                             onPress: () =>
                               void togglePreview($, planRun.planFile!),
                           },
@@ -414,7 +469,7 @@ export async function renderBuild(
   out.push(
     Section(k, {
       key: "runs",
-      title: "Agents",
+      title: "Agenten",
       count: mine.length,
       collapsible: true,
       children: mine.length
@@ -428,7 +483,7 @@ export async function renderBuild(
                     : r.state === "failed"
                       ? "failed"
                       : "ok",
-                primary: `${r.agent}${r.findings !== undefined ? ` · ${r.findings} findings` : ""}`,
+                primary: `${r.agent}${r.findings !== undefined ? ` · ${r.findings} Mängel` : ""}`,
                 secondary: r.findingsFile ?? "",
               }),
             ),
@@ -436,14 +491,14 @@ export async function renderBuild(
               Row(k, {
                 key: `file-${r.id}`,
                 glyph: "›",
-                primary: `Open items: ${r.agent}`,
+                primary: `Mängel: ${r.agent}`,
                 dim: true,
                 actions: rules.spoilerSafe
                   ? []
                   : [
                       {
                         key: `show-${r.id}`,
-                        label: preview ? "Hide" : "Show",
+                        label: preview ? "Ausblenden" : "Zeigen",
                         onPress: () => void togglePreview($, r.findingsFile!),
                       },
                     ],
@@ -453,55 +508,106 @@ export async function renderBuild(
               ? LogBox(k, { key: "preview", lines: preview.split("\n") })
               : null,
           ].filter((x): x is RenderElement => !!x)
-        : [EmptyState(k, "No pnp-* agent has run yet.")],
+        : [EmptyState(k, "Noch kein pnp-Agent gelaufen.")],
+    }),
+  );
+  const open = check.items.filter(
+    (it) => it.status === "failed" || it.status === "warning",
+  );
+  out.push(
+    Card(k, {
+      key: "check",
+      children: [
+        CardTitle(k, {
+          icon: "check",
+          title: "Abnahme-Check",
+          pill: campaign
+            ? open.length
+              ? { text: `${open.length} offen`, tone: "bad" }
+              : check.items.length
+                ? { text: "alles da", tone: "ok" }
+                : undefined
+            : undefined,
+          count: campaign?.name ?? "",
+        }),
+        ...(campaign
+          ? [
+              Sentence(
+                k,
+                `${campaign.scenes} Szenen · ${campaign.npcs} NPCs · ${campaign.places} Orte`,
+                { faint: true },
+              ),
+              check.error
+                ? ErrorState(k, {
+                    key: "check-err",
+                    message: check.error,
+                    onRetry: () => void refreshCampaign($),
+                  })
+                : null,
+              ...check.items.map((it) =>
+                ListRow(k, {
+                  key: `chk-${it.key}`,
+                  status: it.status,
+                  title: `${it.label} · ${it.counts}`,
+                  meta: rules.spoilerSafe ? "" : it.detail,
+                  pill: it.fix
+                    ? {
+                        text: `fix: ${it.fix.replace(/\s*\(.*\)$/, "")}`,
+                        tone: "info",
+                        glyph: false,
+                      }
+                    : undefined,
+                }),
+              ),
+              /meine familie/i.test(live.profile)
+                ? ErrorState(k, {
+                    key: "family",
+                    message:
+                      "Profil „Meine Familie“ ist offen: Schreiben wird abgelehnt.",
+                  })
+                : null,
+            ]
+          : [
+              Sentence(k, "„Neu prüfen“ liest die offene Kampagne.", {
+                faint: true,
+              }),
+            ]),
+        Actions(
+          k,
+          "check-acts",
+          [
+            ...(open.some((it) => it.fix)
+              ? [
+                  {
+                    key: "check-fix",
+                    label: "Offene Punkte beheben lassen",
+                    icon: "wand" as const,
+                    variant: "primary" as const,
+                    onPress: () => void fixOpen($, open),
+                  },
+                ]
+              : []),
+            {
+              key: "check-refresh",
+              label: "Neu prüfen",
+              icon: "refresh",
+              variant: "secondary",
+              onPress: () => void refreshCampaign($),
+            },
+          ],
+          2,
+        ),
+      ].filter((x): x is RenderElement => !!x),
     }),
   );
   out.push(
-    Section(k, {
-      key: "check",
-      title: "Acceptance",
-      count: campaign?.name ?? "",
-      actions: [
-        {
-          key: "check-refresh",
-          label: "Check",
-          onPress: () => void refreshCampaign($),
-        },
-      ],
-      children: campaign
-        ? [
-            Line(
-              k,
-              `${campaign.scenes} scenes · ${campaign.npcs} NPCs · ${campaign.places} places`,
-              { dim: true },
-            ),
-            check.error
-              ? ErrorState(k, {
-                  key: "check-err",
-                  message: check.error,
-                  onRetry: () => void refreshCampaign($),
-                })
-              : null,
-            ...check.items.flatMap((it) => [
-              Row(k, {
-                key: `chk-${it.key}`,
-                status: it.status,
-                primary: `${it.label} · ${it.counts}`,
-                secondary: rules.spoilerSafe ? "" : it.detail,
-              }),
-              it.fix
-                ? Line(k, `fix: ${it.fix}`, { dim: true, indent: 2 })
-                : null,
-            ]),
-            /meine familie/i.test(live.profile)
-              ? ErrorState(k, {
-                  key: "family",
-                  message:
-                    'Profile "Meine Familie" is open: writes are denied.',
-                })
-              : null,
-          ].filter((x): x is RenderElement => !!x)
-        : [EmptyState(k, "Press Check to read the open campaign.")],
+    Switch(k, {
+      key: "rule-buildLooks",
+      title: "Bau-Looks",
+      text: "Hintergrund wechselt mit dem Abschnitt.",
+      icon: "sliders",
+      on: rules.buildLooks,
+      onPress: () => void toggleRule($, "buildLooks").then(() => applyLook($)),
     }),
   );
   return out;

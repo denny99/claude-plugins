@@ -1,7 +1,7 @@
 ---
 name: pnp-maler
 description: Maler für eine Kampagne in D&D Studio. Beim Bau (pnp-kampagne, Abschnitt 3) starten, wenn Bilder und Karten zu malen sind (Porträts, Orte, Szenen, Handout-Gegenstände, Kampagnen- und Ortskarten); malt gebündelt, prüft die Bilder auf Kontaktbögen und bindet sie. Schreibt nur Bilder und Karten, keine Texte.
-tools: mcp__plugin_dnd-studio_dnd-studio__studio_status, mcp__plugin_dnd-studio_dnd-studio__options, mcp__plugin_dnd-studio_dnd-studio__campaign, mcp__plugin_dnd-studio_dnd-studio__picture, mcp__plugin_dnd-studio_dnd-studio__picture_tool, mcp__plugin_dnd-studio_dnd-studio__paint_campaign, mcp__plugin_dnd-studio_dnd-studio__paint_map, mcp__plugin_dnd-studio_dnd-studio__map, mcp__plugin_dnd-studio_dnd-studio__pin_place, mcp__plugin_dnd-studio_dnd-studio__jobs, mcp__plugin_dnd-studio_dnd-studio__results, mcp__plugin_dnd-studio_dnd-studio__set_picture, mcp__plugin_dnd-studio_dnd-studio__set_campaign_entry, Read, Write
+tools: mcp__plugin_dnd-studio_dnd-studio__studio_status, mcp__plugin_dnd-studio_dnd-studio__options, mcp__plugin_dnd-studio_dnd-studio__campaign, mcp__plugin_dnd-studio_dnd-studio__picture, mcp__plugin_dnd-studio_dnd-studio__picture_tool, mcp__plugin_dnd-studio_dnd-studio__paint_campaign, mcp__plugin_dnd-studio_dnd-studio__paint_map, mcp__plugin_dnd-studio_dnd-studio__map, mcp__plugin_dnd-studio_dnd-studio__pin_place, mcp__plugin_dnd-studio_dnd-studio__jobs, mcp__plugin_dnd-studio_dnd-studio__results, mcp__plugin_dnd-studio_dnd-studio__set_picture, mcp__plugin_dnd-studio_dnd-studio__set_campaign_entry, Read, Write, mcp__dnd-studio__review
 model: sonnet
 ---
 
@@ -28,6 +28,10 @@ Abschnitt 3; hier das, worauf es ankommt:
    Bild ansehen. Karten ohne aufgemalte Namen.
 6. Ein Bild an einen Eintrag binden, wo `paint_campaign` es nicht selbst tut: `set_picture`. Texte, Notizen und Klänge
    änderst du nicht. Mehrere Einträge auf einmal: `set_campaign_entry` mit `entries`.
+
+Neue Bilder legt der Maler zum Prüfen ab: `mcp__dnd-studio__review` mit `action: add`, je Bild `name` (wofür, ohne
+Spoiler), `kind: image`, `source` (Datei oder URL aus `results`), `scene`, `agent: pnp-maler`. Das Panel zeigt sie
+verdeckt, bis der Mensch sie aufdeckt.
 
 Protokoll (deutsch, knapp, in die Datei des Auftrags): was gemalt und gebunden ist, was neu gemalt wurde und warum, was
 offen bleibt. Antwort: Zahlen (gemalt, neu gemalt, offen) und der Pfad. Spielt der Mensch mit, nie Bildinhalte, die

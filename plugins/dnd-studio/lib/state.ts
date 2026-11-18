@@ -11,6 +11,7 @@ import type {
   Health,
   Initiative,
   Rules,
+  ReviewState,
   Tab,
   TableLive,
   TableView,
@@ -32,6 +33,7 @@ export const DEFAULT_RULES: Rules = {
   denyFamily: true,
   spoilerSafe: true,
   looks: true,
+  buildLooks: true,
 };
 
 const tabAtom = atom(
@@ -248,6 +250,28 @@ export async function patchCheck(
     $,
     checkAtom,
     (c) => (out = { ...EMPTY_CHECK, ...c, ...fn({ ...EMPTY_CHECK, ...c }) }),
+  );
+  return out;
+}
+
+const EMPTY_REVIEW: ReviewState = { items: [], playing: "", sentAt: 0 };
+const reviewAtom = atom(
+  { plugin: "dnd-studio", key: "review" } as const,
+  EMPTY_REVIEW,
+  { shape: "review-1" },
+);
+export async function readReview($: EngineInterface): Promise<ReviewState> {
+  return { ...EMPTY_REVIEW, ...(await read($, reviewAtom)) };
+}
+export async function patchReview(
+  $: EngineInterface,
+  fn: (r: ReviewState) => Partial<ReviewState>,
+): Promise<ReviewState> {
+  let out = EMPTY_REVIEW;
+  await update(
+    $,
+    reviewAtom,
+    (r) => (out = { ...EMPTY_REVIEW, ...r, ...fn({ ...EMPTY_REVIEW, ...r }) }),
   );
   return out;
 }

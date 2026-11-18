@@ -15,6 +15,7 @@ import {
   renderListener,
   STALE_TEXT,
 } from "./evening";
+import { autoOpen, noteTableEnded } from "./dnd-ui";
 import { applyLook } from "./look";
 import { jsonOf, studioCall, textOf } from "../lib/studio";
 import {
@@ -39,11 +40,15 @@ import {
 } from "../lib/state";
 import {
   Actions,
+  Card,
+  CardTitle,
   EmptyState,
   ErrorState,
   Line,
-  Row,
+  ListRow,
   Section,
+  Sentence,
+  sanitize,
   truncate,
 } from "../lib/ui";
 import type { Action, Kit } from "../lib/ui";
@@ -83,6 +88,7 @@ export async function refreshTable(
     }
     await setTable($, toTableView(state, campaignCache ?? {}, now));
     await applyLook($);
+    await checkTableOpen($);
   } catch (err) {
     const prev = await readTable($);
     await setTable($, {
@@ -417,7 +423,15 @@ export async function observe(
     ].includes(tool)
   )
     $.clock.after(0, () => void refreshTable($, false));
+  await checkTableOpen($);
   return notes;
+}
+
+/** Opens the pane once when a table goes live (userConfig autoOpen); a table that ended may open it again. */
+async function checkTableOpen($: EngineInterface): Promise<void> {
+  if (isLive(await readTable($), await readInitiative($)))
+    await autoOpen($, "table");
+  else noteTableEnded();
 }
 
 /** The body of every watching `tool.call` hook. */
@@ -686,7 +700,11 @@ export function renderTable(
   const out: RenderElement[] = [];
   if (!view) {
     out.push(
-      EmptyState(k, "No table read yet. Press Refresh (the app must run)."),
+      EmptyState(k, {
+        icon: "dice",
+        title: "Kein Tisch gelesen",
+        text: "Aktualisieren drücken (die Studio-App muss laufen).",
+      }),
     );
     return out;
   }
@@ -699,49 +717,62 @@ export function renderTable(
       }),
     );
 
-  // Table status
+  // Table status: one sentence, problems first
   const status = [
-    view.playersWindow ? "window ✓" : "window ✗",
-    view.discord ? "discord ✓" : "",
+    view.playersWindow ? "Spielerfenster offen" : "Spielerfenster zu",
+    view.discord ? "Discord" : "",
     view.listening
-      ? `listening${view.speaker ? ` · ${view.speaker} speaks` : ""}`
+      ? `hört zu${view.speaker ? ` · ${view.speaker} spricht` : ""}`
       : "",
-    view.turnsWaiting ? `${view.turnsWaiting} turn(s) waiting` : "",
-    view.paused ? "paused" : "",
-    isListenerMode(view) ? "listener on" : "",
+    view.turnsWaiting ? `${view.turnsWaiting} Züge warten` : "",
+    view.paused ? "Pause" : "",
+    isListenerMode(view) ? "Zuhörer an" : "",
   ].filter(Boolean);
-  out.push(Line(k, status.join(" · "), { dim: true }));
-  if (evening.stale) out.push(Line(k, `⚠ ${evening.stale}`, { color: "red" }));
+  out.push(Sentence(k, status.join(" · "), { faint: true }));
+  if (evening.stale)
+    out.push(Sentence(k, `⚠ ${evening.stale}`, { tone: "bad" }));
   if (isLive(view, ini) && isListenerMode(view)) {
     const ev = bandEvening(evening, true);
     out.push(
-      Line(k, `${ev.watching ? "●" : "○"} ${ev.watch}`, {
-        color: ev.watching ? "green" : "yellow",
+      Sentence(k, `${ev.watching ? "●" : "○"} ${ev.watch}`, {
+        tone: ev.watching ? "ok" : "warn",
       }),
     );
   } else if (isLive(view, ini))
     out.push(
-      Line(
+      Sentence(
         k,
         evening.watcher.state === "running"
           ? "● Watcher running (wait_for_players watch)"
           : "○ No watcher: players' turns go unnoticed",
-        { color: evening.watcher.state === "running" ? "green" : "yellow" },
+        { tone: evening.watcher.state === "running" ? "ok" : "warn" },
       ),
     );
   if (view.unheard)
-    out.push(Line(k, `Unheard: ${view.unheard}`, { color: "yellow" }));
+    out.push(Sentence(k, `Ungehört: ${view.unheard}`, { tone: "warn" }));
 
-  // Scene card
+  // Scene card: title in brass, the goal (not spoiler-safe), sound chips that play only on a press
+  const { Box, Text } = k;
   out.push(
-    Section(k, {
+    Card(k, {
       key: "scene",
-      title: "Scene",
-      count: view.scene?.title ?? "—",
       children: [
-        view.scene?.place ? Line(k, view.scene.place, { dim: true }) : null,
+        CardTitle(k, {
+          icon: "book",
+          title: view.scene?.place ? `Szene · ${view.scene.place}` : "Szene",
+          pill: ini.isActive
+            ? { text: `Runde ${ini.round}`, tone: "accent", glyph: false }
+            : undefined,
+        }),
+        k.graphical ? (
+          <Text size="heading" weight="bold" color={k.t.accentTintText}>
+            {sanitize(view.scene?.title ?? "—")}
+          </Text>
+        ) : (
+          <Text bold>{truncate(view.scene?.title ?? "—", k.cols)}</Text>
+        ),
         view.scene?.notes && !rules.spoilerSafe
-          ? Line(k, view.scene.notes, { dim: true })
+          ? Sentence(k, view.scene.notes)
           : null,
         view.sounds.length
           ? Actions(
@@ -750,9 +781,11 @@ export function renderTable(
               [
                 ...view.sounds.map((s, i): Action => ({
                   key: `snd-${i}`,
-                  label: `${s.loop ? "↻" : "♪"} ${truncate(s.name, 22)}`,
+                  label: truncate(s.name, 22),
+                  icon: s.loop ? "music" : "speaker",
+                  variant: "secondary",
                   onPress: () =>
-                    void tableAction($, `Playing ${s.name}`, "play_sound", {
+                    void tableAction($, `Spielt ${s.name}`, "play_sound", {
                       sound: s.file,
                       loop: s.loop,
                       volume: s.volume,
@@ -760,145 +793,240 @@ export function renderTable(
                 })),
                 {
                   key: "snd-stop",
-                  label: "Stop ambience",
+                  label: "Stille",
+                  icon: "stop",
+                  variant: "secondary",
                   onPress: () =>
-                    void tableAction($, "Ambience stopped", "play_sound", {
+                    void tableAction($, "Atmosphäre aus", "play_sound", {
                       stop: true,
                     }),
                 },
               ],
-              3,
+              4,
             )
           : null,
       ],
     }),
   );
 
-  // Initiative
+  // Order: whose turn, HP bars from the party values, one primary "next turn"
+  const hpOf = (name: string): { hp: number; max: number } | null => {
+    const h = view.party.find((p) => p.name === name);
+    const m = h?.values.match(/(\d+)\s*\/\s*(\d+)/);
+    return m ? { hp: Number(m[1]), max: Number(m[2]) } : null;
+  };
+  const Progress = k.Progress;
+  const current = ini.isActive ? ini.order[ini.index] : "";
   out.push(
-    Section(k, {
+    Card(k, {
       key: "ini",
-      title: "Initiative",
-      count: ini.isActive ? `round ${ini.round}` : "",
-      actions: ini.isActive
-        ? [
-            {
-              key: "ini-next",
-              label: "Next turn",
-              primary: true,
-              onPress: () => void nextTurn($),
-            },
-            {
-              key: "ini-end",
-              label: "End fight",
-              confirm: "Really end?",
-              onPress: () => void endInitiative($),
-            },
-          ]
-        : view.party.length
-          ? [
-              {
-                key: "ini-party",
-                label: "Party order",
-                onPress: () =>
-                  void startInitiative(
-                    $,
-                    view.party.filter((h) => !h.foe).map((h) => h.name),
-                  ),
-              },
-            ]
-          : [],
-      children: ini.isActive
-        ? ini.order.map((n, i) =>
-            Row(k, {
-              key: `ini-${i}`,
-              glyph: i === ini.index ? "▶" : " ",
-              primary: n,
-              dim: i !== ini.index,
-            }),
-          )
-        : [
-            Input({
-              key: "ini-order",
-              placeholder: "Order: Thorin, Wolf 1, Mara",
-              submitLabel: "Start",
-              onSubmit: (v: string) => void startInitiative($, parseOrder(v)),
-            }),
-          ],
+      children: [
+        CardTitle(k, {
+          icon: "dice",
+          title: ini.isActive ? "Reihenfolge · Kampf" : "Reihenfolge",
+          pill: current
+            ? { text: `${current} ist dran`, tone: "accent", glyph: "▶" }
+            : undefined,
+        }),
+        ...(ini.isActive
+          ? ini.order.map((n, i) => {
+              const hp = hpOf(n);
+              const on = i === ini.index;
+              if (!k.graphical || !Progress)
+                return (
+                  <Text key={`ini-${i}`} bold={on} dimColor={!on}>
+                    {truncate(
+                      `${on ? "▶" : " "} ${n}${hp ? `  ${hp.hp}/${hp.max}` : ""}`,
+                      k.cols,
+                    )}
+                  </Text>
+                );
+              const low = hp && hp.hp * 3 <= hp.max;
+              return (
+                <Box
+                  key={`ini-${i}`}
+                  flexDirection="row"
+                  alignItems="center"
+                  gap={1}
+                >
+                  <Box width={14} flexShrink={0}>
+                    <Text
+                      size="footnote"
+                      weight={on ? "bold" : undefined}
+                      color={on ? k.t.accentTintText : k.t.text}
+                      wrap="truncate-end"
+                    >
+                      {sanitize(`${on ? "▶ " : ""}${n}`)}
+                    </Text>
+                  </Box>
+                  <Box flexGrow={1} flexShrink={1}>
+                    {hp ? (
+                      <Progress
+                        label={sanitize(n)}
+                        value={hp.hp}
+                        max={hp.max}
+                        valueText={`${hp.hp}/${hp.max}`}
+                        color={low ? k.t.tones.bad.fg : k.t.tones.ok.fg}
+                      />
+                    ) : (
+                      <Text size="caption" color={k.t.faint}>
+                        –
+                      </Text>
+                    )}
+                  </Box>
+                </Box>
+              );
+            })
+          : [
+              Input({
+                key: "ini-order",
+                placeholder: "Reihenfolge: Thorin, Wolf 1, Mara",
+                submitLabel: "Start",
+                onSubmit: (v: string) => void startInitiative($, parseOrder(v)),
+              }),
+            ]),
+        Actions(
+          k,
+          "ini-acts",
+          ini.isActive
+            ? [
+                {
+                  key: "ini-next",
+                  label: "Nächster Zug",
+                  icon: "next",
+                  variant: "primary",
+                  onPress: () => void nextTurn($),
+                },
+                {
+                  key: "ini-end",
+                  label: "Kampf beenden",
+                  confirm: "Wirklich beenden?",
+                  onPress: () => void endInitiative($),
+                },
+              ]
+            : view.party.length
+              ? [
+                  {
+                    key: "ini-party",
+                    label: "Gruppe als Reihenfolge",
+                    icon: "list",
+                    variant: "secondary",
+                    onPress: () =>
+                      void startInitiative(
+                        $,
+                        view.party.filter((h) => !h.foe).map((h) => h.name),
+                      ),
+                  },
+                ]
+              : [],
+          3,
+        ),
+      ],
     }),
   );
 
   // Party, with values, conditions and spotlight fairness
   const fair = live.turnAt > 0 || Object.keys(live.addressed).length > 0;
   out.push(
-    Section(k, {
+    Card(k, {
       key: "party",
-      title: "Party",
-      count: view.party.length,
-      children: view.party.length
-        ? view.party.map((h) =>
-            Row(k, {
-              key: `hero-${h.name}`,
-              status: h.conditions.length ? "warning" : h.foe ? "idle" : "ok",
-              primary: `${h.name}${h.foe ? " (foe)" : ""}${h.values ? ` · ${h.values}` : ""}`,
-              secondary: [
-                h.conditions.join(", "),
-                fair && !h.foe
-                  ? live.addressed[h.name]
-                    ? `addressed ${ago(now - live.addressed[h.name]!)} ago`
-                    : "not addressed yet"
-                  : "",
-              ]
-                .filter(Boolean)
-                .join(" · "),
-            }),
-          )
-        : [EmptyState(k, "No party.")],
+      children: [
+        CardTitle(k, {
+          icon: "user",
+          title: "Gruppe",
+          count: view.party.length,
+        }),
+        ...(view.party.length
+          ? view.party.map((h) =>
+              ListRow(k, {
+                key: `hero-${h.name}`,
+                status: h.conditions.length ? "warning" : h.foe ? "idle" : "ok",
+                title: `${h.name}${h.foe ? " (Gegner)" : ""}${h.values ? ` · ${h.values}` : ""}`,
+                meta: [
+                  h.conditions.join(", "),
+                  fair && !h.foe
+                    ? live.addressed[h.name]
+                      ? `angesprochen vor ${ago(now - live.addressed[h.name]!)}`
+                      : "noch nicht angesprochen"
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · "),
+              }),
+            )
+          : [Sentence(k, "Keine Gruppe.", { faint: true })]),
+      ],
     }),
   );
 
   // NPCs: stock lines in their voice, picked by hand
-  out.push(
-    Section(k, {
-      key: "npcs",
-      title: "NPCs",
-      count: view.npcs.length,
-      collapsible: true,
-      children: view.npcs.map((n) =>
-        Row(k, {
-          key: `npc-${n.name}`,
-          primary: n.name,
-          secondary: n.place,
-          actions: n.stock.length
-            ? n.stock.map((l, i): Action => ({
-                key: `npc-${n.name}-${i}`,
-                label: truncate(
-                  `${l.kind}: ${l.text}${l.how ? ` (${l.how})` : ""}`,
-                  34,
-                ),
-                onPress: () =>
-                  void tableAction($, `${n.name}: ${l.text}`, "say_line", {
-                    voice: n.name,
-                    text: l.text,
-                    ...(l.how ? { how: l.how } : {}),
-                  }),
-              }))
-            : [
-                {
-                  key: `npc-${n.name}-greet`,
-                  label: "Greet",
+  for (const n of view.npcs)
+    out.push(
+      Card(k, {
+        key: `npc-card-${n.name}`,
+        children: [
+          CardTitle(k, {
+            icon: "chat",
+            title: n.place ? `${n.name} · ${n.place}` : n.name,
+            pill: { text: "mit Stimme", tone: "neutral", glyph: false },
+          }),
+          Actions(
+            k,
+            `npc-${n.name}`,
+            n.stock.length
+              ? n.stock.map((l, i): Action => ({
+                  key: `npc-${n.name}-${i}`,
+                  label: truncate(
+                    `„${l.text}“${l.how ? ` (${l.how})` : ""}`,
+                    40,
+                  ),
+                  variant: "link",
                   onPress: () =>
-                    void tableAction($, `${n.name} greets`, "say_line", {
+                    void tableAction($, `${n.name}: ${l.text}`, "say_line", {
                       voice: n.name,
-                      text: "",
-                      opener: "greet",
+                      text: l.text,
+                      ...(l.how ? { how: l.how } : {}),
                     }),
-                },
-              ],
-        }),
-      ),
-    }),
-  );
+                }))
+              : [
+                  {
+                    key: `npc-${n.name}-greet`,
+                    label: "Begrüßen",
+                    variant: "link",
+                    onPress: () =>
+                      void tableAction($, `${n.name} grüßt`, "say_line", {
+                        voice: n.name,
+                        text: "",
+                        opener: "greet",
+                      }),
+                  },
+                ],
+            k.narrow ? 1 : 4,
+          ),
+        ],
+      }),
+    );
+
+  // Listener line: who listens on Discord and what was said last
+  const disc = evening.discord;
+  if (view.discord || isListenerMode(view)) {
+    const last = view.turnsWaiting ? "" : (evening.notes.at(-1)?.text ?? "");
+    out.push(
+      ListRow(k, {
+        key: "listener-line",
+        icon: "mic",
+        tone: isListenerMode(view) ? "ok" : "neutral",
+        title: isListenerMode(view) ? "Zuhörer hört zu" : "Zuhörer aus",
+        meta: [
+          "Discord",
+          disc?.members.length ? `${disc.members.length} Spieler` : "",
+          last ? `zuletzt: „${truncate(last, 40)}“` : "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      }),
+    );
+  }
 
   // Dice and secrets
   const rolls = view.rolls.slice(-5);

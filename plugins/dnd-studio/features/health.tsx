@@ -12,9 +12,21 @@ import { applyLook } from "./look";
 import { createHost, startArgv, startHint, tidyError } from "../lib/host";
 import { readClash, readHealth, setHealth, toggleRule } from "../lib/state";
 import { SERVER_KEY } from "../lib/studio";
-import { Line, Row, Section } from "../lib/ui";
+import { PLUGIN_VERSION } from "../lib/brand";
+import { isListenerMode } from "../lib/model";
+import {
+  Actions,
+  Card,
+  CardTitle,
+  ListRow,
+  ProblemCard,
+  Section,
+  Sentence,
+} from "../lib/ui";
 import type { Kit } from "../lib/ui";
-import type { Health, Rules } from "../types";
+import type { EveningState, Health, Rules, TableView } from "../types";
+import { Switch } from "./dnd-ui";
+import { setListener } from "./evening";
 
 export function portOf(options: PluginOptions): number {
   const p = Number(options.port);
@@ -91,109 +103,183 @@ async function healthLine($: EngineInterface): Promise<string> {
 }
 
 const RULES: { key: keyof Rules; label: string }[] = [
-  { key: "annotate", label: "Notes on table calls" },
-  { key: "denyLeaks", label: "Block handouts/secrets on the shared window" },
-  { key: "denyTalkNpc", label: "Block talk_npc at a live table" },
-  { key: "denyFamily", label: 'Block writes in profile "Meine Familie"' },
-  { key: "spoilerSafe", label: "Spoiler-safe (I play along)" },
-  { key: "looks", label: "Scene looks (theme + backdrop)" },
+  { key: "annotate", label: "Hinweise zu Tisch-Aufrufen" },
+  {
+    key: "denyLeaks",
+    label: "Handouts/Geheimes nicht aufs gemeinsame Fenster",
+  },
+  { key: "denyTalkNpc", label: "talk_npc am laufenden Tisch sperren" },
+  { key: "denyFamily", label: "Schreiben im Profil „Meine Familie“ sperren" },
+  { key: "spoilerSafe", label: "Spoilerfrei (ich spiele mit)" },
 ];
 
 export function renderHealth(
   $: EngineInterface,
   k: Kit,
   options: PluginOptions,
-  d: { health: Health | null; rules: Rules; clash?: string | null },
+  d: {
+    health: Health | null;
+    rules: Rules;
+    clash?: string | null;
+    view?: TableView | null;
+    evening?: EveningState;
+  },
 ): RenderElement[] {
   const { health, rules } = d;
   const out: RenderElement[] = [];
   if (d.clash)
     out.push(
-      Section(k, {
+      ProblemCard(k, {
         key: "clash",
-        title: "Old MCP server",
-        children: [
-          Row(k, {
-            key: "h-clash",
-            status: "failed",
-            primary:
-              'User-level MCP server "dnd-studio" takes the plugin\'s tool names',
-            secondary: d.clash,
-          }),
-          Line(k, CLASH_FIX, { dim: true }),
-        ],
-      }),
-    );
-  out.push(
-    Section(k, {
-      key: "studio",
-      title: "Studio",
-      actions: [
-        {
-          key: "probe",
-          label: "Check",
-          primary: true,
+        title: "Namenskollision: alter MCP-Server „dnd-studio“",
+        cause: CLASH_FIX,
+        action: {
+          key: "probe-clash",
+          label: "Neu prüfen",
+          icon: "refresh",
           onPress: () => void probe($, options),
         },
-        ...(health?.app === "down" && startArgv(health.platform as never, "x")
+      }),
+    );
+  if (health?.app === "down")
+    out.push(
+      ProblemCard(k, {
+        key: "app-down",
+        title: "Die Studio-App läuft nicht",
+        cause: startHint(health.platform as never),
+        action: startArgv(health.platform as never, "x")
+          ? {
+              key: "start",
+              label: "Studio öffnen",
+              icon: "play",
+              onPress: () => void startApp($, options),
+            }
+          : {
+              key: "probe-down",
+              label: "Neu prüfen",
+              icon: "refresh",
+              onPress: () => void probe($, options),
+            },
+      }),
+    );
+  const disc = d.evening?.discord ?? null;
+  const version = d.evening?.versionNow ?? "";
+  const row = (
+    key: string,
+    status: "ok" | "failed" | "idle" | "warning",
+    title: string,
+    meta: string,
+  ): RenderElement => ListRow(k, { key, status, title, meta });
+  out.push(
+    Card(k, {
+      key: "studio",
+      children: [
+        CardTitle(k, {
+          icon: "stethoscope",
+          title: "Zustand",
+          count: health
+            ? new Date(health.checkedAt).toISOString().slice(11, 16)
+            : "",
+        }),
+        ...(health
           ? [
-              {
-                key: "start",
-                label: "Start app",
-                onPress: () => void startApp($, options),
-              },
-            ]
-          : []),
-      ],
-      children: health
-        ? [
-            Row(k, {
-              key: "h-app",
-              status: health.app === "up" ? "ok" : "failed",
-              primary:
+              row(
+                "h-app",
+                health.app === "up" ? "ok" : "failed",
+                "Studio-App",
                 health.app === "up"
-                  ? `App listening on 127.0.0.1:${portOf(options)}`
-                  : "App not running",
-              secondary: health.detail,
-            }),
-            Row(k, {
-              key: "h-mcp",
-              status: health.connected
-                ? "ok"
-                : health.app === "up"
-                  ? "failed"
-                  : "idle",
-              primary: health.connected
-                ? "Claude connected"
-                : "Claude not connected",
-              secondary: health.connected
-                ? ""
-                : "Studio → Settings → Connections → Install for Claude Code",
-            }),
-            health.app === "down"
-              ? Line(k, startHint(health.platform as never), { dim: true })
-              : null,
-          ].filter((x): x is RenderElement => !!x)
-        : [Line(k, "Press Check.", { dim: true })],
+                  ? `${version ? `${version} · ` : ""}läuft auf Port ${portOf(options)}`
+                  : "läuft nicht",
+              ),
+              row(
+                "h-mcp",
+                health.connected
+                  ? "ok"
+                  : health.app === "up"
+                    ? "failed"
+                    : "idle",
+                "Verbindung zu Claude",
+                health.connected
+                  ? "Token gesetzt"
+                  : "Studio → Einstellungen → Verbindungen → Für Claude Code einrichten",
+              ),
+            ]
+          : [Sentence(k, "Noch nicht geprüft.", { faint: true })]),
+        row("h-plugin", "ok", "Plugin", `dnd-studio ${PLUGIN_VERSION}`),
+        row(
+          "h-discord",
+          disc?.connected ? "ok" : "idle",
+          "Discord-Bot",
+          disc?.connected
+            ? `im Sprachkanal${disc.channel ? ` ${disc.channel}` : ""}`
+            : "nicht im Sprachkanal",
+        ),
+        row(
+          "h-clash",
+          d.clash ? "failed" : "ok",
+          "Namenskollision",
+          d.clash ? "alter MCP-Server hält den Namen" : "keine",
+        ),
+        Actions(
+          k,
+          "studio-acts",
+          [
+            {
+              key: "probe",
+              label: "Neu prüfen",
+              icon: "refresh",
+              variant: "primary",
+              onPress: () => void probe($, options),
+            },
+            {
+              key: "reconfigure",
+              label: "Plugin neu einrichten",
+              icon: "gear",
+              variant: "secondary",
+              onPress: () =>
+                $.ui.toast(
+                  "/plugin → dnd-studio → konfigurieren: Token aus Studio → Einstellungen → Verbindungen.",
+                ),
+            },
+          ],
+          2,
+        ),
+      ].filter((x): x is RenderElement => !!x),
+    }),
+  );
+  const listening = isListenerMode(d.view ?? null);
+  out.push(
+    Switch(k, {
+      key: "switch-listener",
+      title: "Zuhörer",
+      text: "Hört im Discord mit und reagiert, wenn jemand die Spielleitung anspricht. Nur bei laufendem Tisch.",
+      icon: "mic",
+      on: listening,
+      onPress: () => void setListener($, listening ? "off" : "haiku"),
+    }),
+  );
+  out.push(
+    Switch(k, {
+      key: "rule-looks",
+      title: "Szenen-Looks",
+      text: "Hintergrund und Farben der App folgen der Szene am Tisch.",
+      icon: "moon",
+      on: rules.looks,
+      onPress: () => void toggleRule($, "looks").then(() => applyLook($)),
     }),
   );
   out.push(
     Section(k, {
       key: "rules",
-      title: "Rules",
+      title: "Regeln",
       collapsible: true,
+      defaultOpen: false,
       children: RULES.map((r) =>
-        Row(k, {
-          key: `rule-${r.key}`,
-          glyph: rules[r.key] ? "[x]" : "[ ]",
-          primary: r.label,
-          actions: [
-            {
-              key: `toggle-${r.key}`,
-              label: rules[r.key] ? "Off" : "On",
-              onPress: () => void toggleRule($, r.key).then(() => applyLook($)),
-            },
-          ],
+        Switch(k, {
+          key: `toggle-${r.key}`,
+          title: r.label,
+          on: rules[r.key],
+          onPress: () => void toggleRule($, r.key).then(() => applyLook($)),
         }),
       ),
     }),

@@ -59,7 +59,7 @@ test('the build cockpit tracks pnp agents and counts the reviewers’ findings',
 
   await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 'x', agentId: 'a1', reason: 'answer' } as never)
   const ui2 = await $.ui.mount({ ...PANE, surface: 'mobile' })
-  expect((await ui2.find({ type: 'Text', text: /2 findings/ }))?.text).toContain('2 findings')
+  expect((await ui2.find({ type: 'Text', text: /2 Mängel/ }))?.text).toContain('2 Mängel')
   await ui2.unmount()
   // The build ended: the look the plugin set is cleared.
   expect(themes).toEqual(['dnd-inspect', 'clear'])

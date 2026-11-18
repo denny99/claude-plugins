@@ -140,7 +140,7 @@ test("listener mode: a running pnp-zuhoerer is the watcher, its return fills ban
     /Discussed without the GM: 3/,
     /Pizza bestellt/,
     /Jule will bestechen/,
-    /listener on/,
+    /Zuhörer an/,
   ])
     expect(await ui.find({ type: "Text", text })).toBeDefined();
   await ui.unmount();
@@ -231,7 +231,7 @@ test("render check: the filled Listener section and band stay inside 40 columns 
       expect(texts.length).toBeGreaterThan(0);
       for (const t of texts) {
         expect(t.text).not.toMatch(/[\x00-\x09\x0b-\x1f\x7f]/);
-        for (const line of t.text.split("\n"))
+        for (const line of surface === "terminal" ? t.text.split("\n") : [])
           if ([...line].length > 40)
             throw new Error(`${surface}: "${line}" is wider than 40`);
       }

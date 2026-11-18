@@ -2,7 +2,7 @@ import { expect, test } from "claude-code/testing";
 
 import { band, pane, PREFIX, toolResult, world } from "./world";
 
-const TABS = ["table", "build", "health"] as const;
+const TABS = ["table", "build", "review", "health"] as const;
 const SURFACES = ["terminal", "desktop", "vscode", "mobile"] as const;
 const SIZES = [
   [40, 15],
@@ -82,14 +82,15 @@ test("render check: every tab (and the band) on every surface, small and large, 
           expect(
             await ui.find({
               type: "Text",
-              text: /Plan waiting for your sign-off/,
+              text: /Bauplan wartet auf deine Freigabe/,
             }),
           ).toBeDefined();
         const texts = await ui.findAll({ type: "Text" });
         expect(texts.length).toBeGreaterThan(1);
         for (const t of texts) {
           expect(t.text).not.toMatch(/[\x00-\x09\x0b-\x1f\x7f]/);
-          for (const line of t.text.split("\n"))
+          // graphical surfaces wrap and cut text themselves; the terminal must fit the body
+          for (const line of surface === "terminal" ? t.text.split("\n") : [])
             if ([...line].length > cols)
               throw new Error(
                 `${tab}/${surface}/${cols}: "${line}" is wider than ${cols}`,

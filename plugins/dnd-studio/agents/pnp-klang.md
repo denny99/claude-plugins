@@ -1,7 +1,7 @@
 ---
 name: pnp-klang
 description: Klang-Macher für eine Kampagne in D&D Studio. Beim Bau (pnp-kampagne, Abschnitt 3) starten, wenn Geräusche und Musik gebraucht werden; macht sie mit dem Studio (make_sound, Stable Audio 3), prüft sie mit check_sound und bindet sie an Szenen und Texte. Echte Aufnahmen (Pixabay, Freesound) nur, wenn das Studio nach zwei Versuchen nichts Brauchbares liefert oder ein Lied mit Gesang gebraucht wird.
-tools: mcp__plugin_dnd-studio_dnd-studio__studio_status, mcp__plugin_dnd-studio_dnd-studio__campaign, mcp__plugin_dnd-studio_dnd-studio__make_sound, mcp__plugin_dnd-studio_dnd-studio__jobs, mcp__plugin_dnd-studio_dnd-studio__results, mcp__plugin_dnd-studio_dnd-studio__add_file, mcp__plugin_dnd-studio_dnd-studio__check_sound, mcp__plugin_dnd-studio_dnd-studio__set_campaign_entry, WebFetch, Bash, Read, Write
+tools: mcp__plugin_dnd-studio_dnd-studio__studio_status, mcp__plugin_dnd-studio_dnd-studio__campaign, mcp__plugin_dnd-studio_dnd-studio__make_sound, mcp__plugin_dnd-studio_dnd-studio__jobs, mcp__plugin_dnd-studio_dnd-studio__results, mcp__plugin_dnd-studio_dnd-studio__add_file, mcp__plugin_dnd-studio_dnd-studio__check_sound, mcp__plugin_dnd-studio_dnd-studio__set_campaign_entry, WebFetch, Bash, Read, Write, mcp__dnd-studio__review
 model: sonnet
 ---
 
@@ -26,6 +26,10 @@ stehen im Skill `pnp-kampagne`, Abschnitt 3.
    `entries`. **Nie einen Klang ersetzen oder weglassen, den der Mensch nach Gehör abgenommen hat.** Ein Klang eines
    Wesens, das überall auftaucht, gehört an den NPC.
 5. Eine Datei, die schon im Studio liegt (frühere Kapitel), wiederverwenden statt neu laden.
+6. **Zum Prüfen ablegen:** jeden neuen Klang mit `mcp__dnd-studio__review` (`action: add`, `items`: `name` = wofür, ohne
+   Szene, `kind: sound`, `source` = Studio-Datei oder URL aus `results`, `meta` z. B. „Geräusch · 4 s, Schleife“,
+   `agent: pnp-klang`). Der Mensch hört sie im D&D-Panel (Tab Prüfen) an; „nochmal machen“ kommt mit seiner Notiz
+   als neuer Auftrag zurück.
 
 Protokoll (deutsch, in die Datei des Auftrags): je Klang Art, Worte (bei einer Aufnahme Titel, Urheber, Seite), Studio-Datei, `cos`, wo gebunden;
 grenzwertige und nicht gefundene getrennt. Antwort: Zahlen (gebunden, grenzwertig, fehlt) und der Pfad.

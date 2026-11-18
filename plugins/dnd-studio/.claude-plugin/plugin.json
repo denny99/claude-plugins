@@ -1,7 +1,7 @@
 {
   "name": "dnd-studio",
-  "version": "0.2.3",
-  "description": "D&D Studio at the table and in the build: the GM screen (scene, initiative, party, NPC lines, sounds, dice, secrets), a band above the prompt, scene looks, the pnp-kampagne build cockpit, the pnp-* skills and agents, and the Studio's MCP server.",
+  "version": "0.3.0",
+  "description": "D&D Studio at the table and in the build: the GM screen (scene card, fight order with HP, NPC lines, sounds, dice, secrets), a band above the prompt, a review tab for new sounds and pictures, scene and build looks, the pnp-kampagne build cockpit, the pnp-* skills and agents, and the Studio's MCP server.",
   "author": {
     "name": "denny99"
   },
@@ -25,6 +25,12 @@
       "title": "D&D Studio MCP port",
       "description": "The port the app's MCP server listens on (127.0.0.1).",
       "default": 37641
+    },
+    "autoOpen": {
+      "type": "boolean",
+      "title": "Panel beim Start öffnen",
+      "description": "Opens the D&D pane by itself once a table starts or the campaign build begins (never at session start).",
+      "default": true
     }
   }
 }

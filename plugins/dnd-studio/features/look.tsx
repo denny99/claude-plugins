@@ -38,12 +38,13 @@ export function themeOf(id: LookId): ThemeSetArgs {
 /** The look the plugin wants now ('' none): GM scene looks first, then the build phase. */
 export async function wantedLook($: EngineInterface): Promise<LookId | ""> {
   const rules = await readRules($);
-  if (!rules.looks) return "";
   const view = await readTable($);
   if (isLive(view, await readInitiative($)))
-    return moodFor(view?.scene, (await readLook($)).overrides);
+    return rules.looks
+      ? moodFor(view?.scene, (await readLook($)).overrides)
+      : "";
   const runs = await readRuns($);
-  if (runs.some((r) => r.state === "running"))
+  if (rules.buildLooks && runs.some((r) => r.state === "running"))
     return phaseLook(buildPhase(runs));
   return "";
 }

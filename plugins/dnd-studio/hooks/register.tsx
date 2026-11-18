@@ -32,6 +32,7 @@ import {
   readInitiative,
   readLive,
   readLook,
+  readReview,
   readRules,
   readRuns,
   readTab,
@@ -39,19 +40,41 @@ import {
   setClash,
   setTab,
 } from "../lib/state";
-import { Header, Tabs, kit } from "../lib/ui";
+import { isLive } from "../lib/model";
+import { Tabs, kit } from "../lib/ui";
+import type { IconName } from "../lib/ui";
 import type { Tab } from "../types";
+import {
+  configureAutoOpen,
+  DndHeader,
+  openPane,
+  PANE,
+} from "../features/dnd-ui";
+import {
+  openCount,
+  renderReview,
+  REVIEW_TOOL,
+  REVIEW_TOOL_DESCRIPTION,
+  reviewTool,
+} from "../features/review";
 
-const PANE = "dnd";
-const TABS: { id: Tab; label: string }[] = [
-  { id: "table", label: "Table" },
-  { id: "build", label: "Build" },
-  { id: "health", label: "Health" },
+const TABS: { id: Tab; label: string; icon: IconName }[] = [
+  { id: "table", label: "Tisch", icon: "dice" },
+  { id: "build", label: "Bau", icon: "hammer" },
+  { id: "review", label: "Prüfen", icon: "speaker" },
+  { id: "health", label: "Zustand", icon: "heart" },
 ];
+const TAB_ALIASES: Record<string, Tab> = {
+  tisch: "table",
+  bau: "build",
+  pruefen: "review",
+  prüfen: "review",
+  zustand: "health",
+};
 
 function tabOf(args: string): Tab | undefined {
   const w = args.trim().toLowerCase();
-  return TABS.find((t) => t.id === w)?.id;
+  return TABS.find((t) => t.id === w)?.id ?? TAB_ALIASES[w];
 }
 
 /** Reads what a tab shows (a person opened it, so the Studio may be asked). */
@@ -64,7 +87,7 @@ export async function refreshTab(
     await refreshTable($);
     if ((await readTable($))?.discord) await refreshDiscord($);
   } else if (tab === "build") await refreshCampaign($);
-  else await probe($, options);
+  else if (tab === "health") await probe($, options);
 }
 
 export async function selectTab(
@@ -107,7 +130,12 @@ export function denyInitiative(): { deny: string } {
   return { deny: "dnd-studio: initiative failed." };
 }
 
+export function denyReview(): { deny: string } {
+  return { deny: "dnd-studio: review failed." };
+}
+
 export const register: Register = (on, options) => {
+  configureAutoOpen(options.autoOpen);
   registerTable(on);
   registerBuild(on);
   registerLook(on);
@@ -119,8 +147,8 @@ export const register: Register = (on, options) => {
     try {
       await $.command.register({
         name: "dnd",
-        description: "Open the D&D Studio pane (table, build, health)",
-        argumentHint: "[table|build|health]",
+        description: "Open the D&D Studio pane (table, build, review, health)",
+        argumentHint: "[table|build|review|health]",
       });
     } catch (err) {
       $.ui.log(`dnd-studio: /dnd not registered: ${String(err)}`);
@@ -156,6 +184,37 @@ export const register: Register = (on, options) => {
       $.ui.log(`dnd-studio: ${clashText(clash)}`);
     }
     try {
+      await $.tool.register({
+        name: REVIEW_TOOL,
+        description: REVIEW_TOOL_DESCRIPTION,
+        inputSchema: {
+          type: "object",
+          properties: {
+            action: { type: "string", enum: ["add", "list", "clear"] },
+            items: {
+              type: "array",
+              description: "add: the new things to review",
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  kind: { type: "string", enum: ["sound", "image", "video"] },
+                  source: { type: "string" },
+                  meta: { type: "string" },
+                  agent: { type: "string" },
+                  scene: { type: "string" },
+                },
+                required: ["name", "source"],
+              },
+            },
+          },
+        },
+      });
+    } catch (err) {
+      clash = clash ?? (err instanceof Error ? err.message : String(err));
+      $.ui.log(`dnd-studio: review tool not registered: ${String(err)}`);
+    }
+    try {
       await setClash($, clash);
       await loadRuns($);
       await loadPlanApproval($);
@@ -168,7 +227,7 @@ export const register: Register = (on, options) => {
 
   on("command.run", { command: "dnd" }, async ($, e) => {
     const tab = tabOf(e.args) ?? (await readTab($));
-    await $.ui.open({ id: PANE, title: "D&D" });
+    await openPane($);
     await selectTab($, tab, options);
     return {
       text: tab === "health" ? await healthText($) : `D&D pane: ${tab}.`,
@@ -178,7 +237,7 @@ export const register: Register = (on, options) => {
   on("command.run", { command: "dnd-scene" }, async ($) => {
     await refreshTable($);
     await setTab($, "table");
-    await $.ui.open({ id: PANE, title: "D&D" });
+    await openPane($);
     return { text: await tableSummary($) };
   });
 
@@ -188,8 +247,14 @@ export const register: Register = (on, options) => {
     };
   }).catch(denyInitiative);
 
+  on("tool.call", { tool: "mcp__dnd-studio__review" }, async ($, e) => {
+    return {
+      result: await reviewTool($, e as unknown as Record<string, unknown>),
+    };
+  }).catch(denyReview);
+
   on("ui.render", { component: "Pane", requestId: PANE }, async ($, e) => {
-    const k = await kit($, e);
+    const k = await kit($, e, { brand: "dnd", lang: "de" });
     const { Box, Input } = $.ui.resolve(e);
     const tab = await readTab($);
     const rules = await readRules($);
@@ -197,16 +262,22 @@ export const register: Register = (on, options) => {
     const now = await $.clock.now();
     const view = await readTable($);
     const look = await readLook($);
+    const ini = await readInitiative($);
+    const evening = await readEvening($);
+    const review = await readReview($);
+    const campaign = await readCampaign($);
+    const runs = await readRuns($);
+    const building = runs.some((r) => r.state === "running");
     const body =
       tab === "table"
         ? [
             ...renderTable($, k, Input as never, {
               view,
-              ini: await readInitiative($),
+              ini,
               live,
               rules,
               now,
-              evening: await readEvening($),
+              evening,
             }),
             renderLookPicker($, k, {
               sceneTitle: view?.scene?.title ?? "",
@@ -216,27 +287,49 @@ export const register: Register = (on, options) => {
           ]
         : tab === "build"
           ? await renderBuild($, k, {
-              runs: await readRuns($),
-              campaign: await readCampaign($),
+              runs,
+              campaign,
               live,
               rules,
               check: await readCheck($),
             })
-          : renderHealth($, k, options, {
-              health: await readHealth($),
-              rules,
-              clash: await readClash($),
-            });
+          : tab === "review"
+            ? renderReview($, k, Input as never, review)
+            : renderHealth($, k, options, {
+                health: await readHealth($),
+                rules,
+                clash: await readClash($),
+                view,
+                evening,
+              });
+    const tableLive = isLive(view, ini);
+    const waiting = openCount(review);
     return (
       <Box flexDirection="column" gap={1}>
-        {Header(k, {
-          title: "D&D STUDIO",
-          context: view?.scene?.title ?? "",
-          onRefresh: () => void refreshTab($, tab, options),
+        {DndHeader(k, {
+          title: campaign?.name || view?.scene?.title || "Studio",
+          pill: tableLive
+            ? { text: "am Tisch", tone: "ok", icon: "dice" }
+            : building
+              ? { text: "Bau", tone: "info", glyph: "◷" }
+              : undefined,
+          actions: [
+            {
+              key: "refresh",
+              icon: "refresh",
+              label: "Aktualisieren",
+              onPress: () => void refreshTab($, tab, options),
+            },
+          ],
         })}
         {Tabs(k, {
-          tabs: TABS,
+          tabs: TABS.map((t) => ({
+            ...t,
+            count: t.id === "review" && waiting ? waiting : undefined,
+          })),
           active: tab,
+          maxVisible: 4,
+          moreLabel: "Mehr",
           onSelect: (id) => void selectTab($, id, options),
         })}
         {body.filter(Boolean)}

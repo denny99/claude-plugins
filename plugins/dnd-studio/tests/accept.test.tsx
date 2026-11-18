@@ -91,27 +91,27 @@ test("Build: Check reads campaign, maps and studio_status; rows show status and 
   expect(w.calls[1]?.args).toEqual({ action: "list" });
 
   const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
-  expect((await ui.find({ type: "Text", text: /GPU busy/ }))?.text).toBe(
-    "● GPU busy · 1 running, 1 queued · KSampler 40%",
+  expect((await ui.find({ type: "Text", text: /GPU belegt/ }))?.text).toBe(
+    "● GPU belegt · 1 läuft, 1 warten · KSampler 40%",
   );
   expect(
     await ui.find({
       type: "Text",
-      text: /✗ Scenes: picture \+ text \+ recipe · 1\/2/,
+      text: /Scenes: picture \+ text \+ recipe · 1\/2/,
     }),
   ).toBeDefined();
-  expect(await ui.find({ type: "Text", text: /✗ Maps painted/ })).toBeDefined();
+  expect(await ui.find({ type: "Text", text: /Maps painted/ })).toBeDefined();
   expect(
     await ui.find({
       type: "Text",
-      text: /✓ Start squares in scene notes · 1\/1/,
+      text: /Start squares in scene notes · 1\/1/,
     }),
   ).toBeDefined();
   expect(
-    await ui.find({ type: "Text", text: /✓ Threads and party_at set/ }),
+    await ui.find({ type: "Text", text: /Threads and party_at set/ }),
   ).toBeDefined();
   expect(
-    await ui.find({ type: "Text", text: /○ prepare_table · not run yet/ }),
+    await ui.find({ type: "Text", text: /prepare_table · not run yet/ }),
   ).toBeDefined();
   expect(
     await ui.find({ type: "Text", text: /fix: pnp-maler, pnp-texter/ }),
@@ -137,7 +137,7 @@ test("Build: the plan is signed off by a press, recorded, and the main thread is
   await $.command.run({ command: "dnd", args: "build" } as never);
   let ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   expect(
-    await ui.find({ type: "Text", text: /drafting the plan/ }),
+    await ui.find({ type: "Text", text: /schreibt den Bauplan/ }),
   ).toBeDefined();
   expect(
     await ui.find({ type: "Button", key: "plan-approve" }),
@@ -154,7 +154,7 @@ test("Build: the plan is signed off by a press, recorded, and the main thread is
   } as never);
   ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   expect(
-    await ui.find({ type: "Text", text: /Plan waiting for your sign-off/ }),
+    await ui.find({ type: "Text", text: /Bauplan wartet auf deine Freigabe/ }),
   ).toBeDefined();
   expect(w.submitted).toEqual([]);
   await ui.press({ key: "plan-approve" });
@@ -168,7 +168,7 @@ test("Build: the plan is signed off by a press, recorded, and the main thread is
 
   ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   expect(
-    await ui.find({ type: "Text", text: /✓ Plan approved/ }),
+    await ui.find({ type: "Text", text: /✓ Bauplan abgesegnet/ }),
   ).toBeDefined();
   expect(
     await ui.find({ type: "Button", key: "plan-approve" }),
@@ -195,7 +195,7 @@ test("Build: two GPU agents at once are flagged", async ($, on) => {
   expect(
     await ui.find({
       type: "Text",
-      text: /pnp-maler \+ pnp-klang share the GPU/,
+      text: /pnp-maler \+ pnp-klang teilen sich gerade die GPU/,
     }),
   ).toBeDefined();
   await ui.unmount();

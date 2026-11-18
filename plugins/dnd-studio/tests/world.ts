@@ -138,6 +138,8 @@ export type World = {
   /** Set: $.tool.register throws this (an old MCP server holds the plugin's tool names). */
   registerError?: string;
   calls: Call[];
+  /** Pane ids opened ($.ui.open). */
+  opened: string[];
   writes: { path: string; text: string }[];
   toasts: string[];
   submitted: string[];
@@ -152,6 +154,7 @@ export function world(on: On, answers: Record<string, unknown> = {}): World {
     writes: [],
     toasts: [],
     submitted: [],
+    opened: [],
     store: new Map(),
     answers: {
       table_state: TABLE,
@@ -168,7 +171,10 @@ export function world(on: On, answers: Record<string, unknown> = {}): World {
     if (w.registerError) throw new Error(w.registerError);
     return { value: {} as never };
   });
-  on("ui.open", () => ({ value: { isPlaced: true } }));
+  on("ui.open", (_, e) => {
+    w.opened.push(String((e as { id?: string }).id ?? ""));
+    return { value: { isPlaced: true } };
+  });
   on("ui.toast", (_, e) => {
     w.toasts.push(String((e as { text?: string }).text ?? JSON.stringify(e)));
     return { value: undefined };
