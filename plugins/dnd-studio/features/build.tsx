@@ -10,7 +10,7 @@ import {
   noteListenerSpawn,
   noteStudioStatus,
   noteTurnEnd,
-  submitForPerson,
+  personAsk,
 } from "./evening";
 import { autoOpen } from "./dnd-ui";
 import { applyLook } from "./look";
@@ -46,6 +46,8 @@ import {
   CardTitle,
   EmptyState,
   ErrorState,
+  askTurnComplete,
+  isAsked,
   ListRow,
   LogBox,
   Row,
@@ -122,13 +124,14 @@ export function approvalPrompt(file: string, campaign: string): string {
 
 /**
  * The person signs the plan off (the pane asked first: "In ‚<Kampagne>‘ weiterbauen?"): recorded, and the main
- * thread is told to go on building in that campaign.
+ * thread is told to go on building in that campaign. Runs as the producer of the button's `askClaude`, so a second
+ * press while the first is on its way records nothing twice. Returns the prompt.
  */
 export async function approvePlan(
   $: EngineInterface,
   run: AgentRun,
   campaign = "",
-): Promise<void> {
+): Promise<string> {
   const plan: PlanApproval = {
     file: run.planFile ?? "",
     campaign: run.campaign || campaign,
@@ -136,9 +139,11 @@ export async function approvePlan(
   };
   await patchCheck($, () => ({ plan }));
   await $.store.set(PLAN_KEY, plan);
-  $.ui.toast("✓ Bauplan abgesegnet");
-  await submitForPerson($, approvalPrompt(plan.file, plan.campaign ?? ""));
+  return approvalPrompt(plan.file, plan.campaign ?? "");
 }
+
+/** Toast of the plan's sign-off (the kit adds „ – kommt nach der laufenden Antwort.“ while Claude is busy). */
+export const PLAN_TOAST = "✓ Bauplan abgesegnet – an Claude geschickt.";
 
 /** Forgets the build's kept state: the agent runs and the plan's sign-off (pane and store). */
 export async function resetBuild($: EngineInterface): Promise<void> {
@@ -531,6 +536,12 @@ export function registerBuild(on: On): void {
     } catch {
       // ignore
     }
+    try {
+      // kit „ask Claude“: the end of the turn that carried a sent prompt answers it (subagent turns are skipped)
+      await askTurnComplete($, e);
+    } catch {
+      // the lock falls back to its timeout
+    }
     return r;
   });
 }
@@ -547,10 +558,6 @@ export function fixPrompt(open: AcceptItem[]): string {
     "Abnahme-Check im D&D-Panel: diese Punkte sind offen. Lass sie von den genannten Agenten beheben (Kampagnen-Anleitung, Abschnitt Nachbessern) und prüfe danach neu:",
     ...lines,
   ].join("\n");
-}
-
-async function fixOpen($: EngineInterface, open: AcceptItem[]): Promise<void> {
-  await submitForPerson($, fixPrompt(open));
 }
 
 /** The check's error line with "Erneut versuchen" as a real (secondary) button below it, not bare text. */
@@ -704,15 +711,24 @@ export async function renderBuild(
               .filter(Boolean)
               .join(" · "),
             actions:
-              planRun.state === "done" && !approved
+              planRun.state === "done" &&
+              (!approved || isAsked(k.asked, "plan-approve"))
                 ? [
-                    {
-                      key: "plan-approve",
-                      label: "Bauplan absegnen",
-                      primary: true,
-                      confirm: `In „${planRun.campaign || campName || "die offene Kampagne"}“ weiterbauen?`,
-                      onPress: () => void approvePlan($, planRun, campName),
-                    },
+                    // stays as „✓ An Claude geschickt“ until Claude answered the sign-off
+                    personAsk(
+                      $,
+                      k,
+                      {
+                        key: "plan-approve",
+                        label: "Bauplan absegnen",
+                        variant: "primary",
+                        text: () => approvePlan($, planRun, campName),
+                        toast: PLAN_TOAST,
+                      },
+                      {
+                        confirm: `In „${planRun.campaign || campName || "die offene Kampagne"}“ weiterbauen?`,
+                      },
+                    ),
                     ...(planRun.planFile && !rules.spoilerSafe
                       ? [
                           {
@@ -868,17 +884,23 @@ export async function renderBuild(
           k,
           "check-acts",
           [
-            ...(canFix
+            ...(canFix || isAsked(k.asked, "check-fix")
               ? [
-                  {
-                    key: "check-fix",
-                    label: "Offene Punkte beheben lassen",
-                    icon: "wand" as const,
-                    variant: "primary" as const,
-                    // two steps, like the plan's sign-off: the agents write straight into this campaign
-                    confirm: `In „${campName || "die offene Kampagne"}“ beheben lassen?`,
-                    onPress: () => void fixOpen($, open),
-                  },
+                  // two steps, like the plan's sign-off: the agents write straight into this campaign
+                  personAsk(
+                    $,
+                    k,
+                    {
+                      key: "check-fix",
+                      label: "Offene Punkte beheben lassen",
+                      icon: "wand",
+                      variant: "primary",
+                      text: fixPrompt(open),
+                    },
+                    {
+                      confirm: `In „${campName || "die offene Kampagne"}“ beheben lassen?`,
+                    },
+                  ),
                 ]
               : []),
             {

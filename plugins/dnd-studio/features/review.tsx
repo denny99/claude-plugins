@@ -8,7 +8,7 @@ import type { EngineInterface, RenderElement } from "claude-code";
 
 import { agentLabel, clockTime } from "../lib/model";
 import { autoOpen } from "./dnd-ui";
-import { submitForPerson } from "./evening";
+import { personAsk, submitForPerson } from "./evening";
 import { createHost } from "../lib/host";
 import type { Platform } from "../lib/host";
 import { patchReview, readReview } from "../lib/state";
@@ -22,6 +22,7 @@ import {
   ListRow,
   ProgressBlock,
   Sentence,
+  isAsked,
 } from "../lib/ui";
 import type { Action, Kit } from "../lib/ui";
 import type { ReviewItem, ReviewKind, ReviewState } from "../types";
@@ -558,11 +559,17 @@ export function unsent(items: ReviewItem[]): ReviewItem[] {
   return items.filter((i) => i.verdict && !i.sent);
 }
 
-export async function sendResult($: EngineInterface): Promise<void> {
-  const now = await $.clock.now();
+/**
+ * Producer of „Ergebnis an Claude“ (runs inside the kit's `askClaude`, after its lock is taken): marks the judged
+ * items sent and returns the prompt; nothing judged → a toast and `undefined` (nothing is sent, the lock is freed).
+ * A note typed but not confirmed goes along.
+ */
+export async function takeResult(
+  $: EngineInterface,
+  at?: number,
+): Promise<string | undefined> {
+  const now = at ?? (await $.clock.now());
   let judged: ReviewItem[] = [];
-  // Marked sent BEFORE the prompt goes: $.prompt.submit settles only once the session takes the turn (or after it),
-  // and a second press meanwhile must find nothing left to send. A note typed but not confirmed goes along.
   await patchReview($, (s) => {
     const ids = new Set(unsent(s.items).map((i) => i.id));
     const items = s.items.map((i): ReviewItem => {
@@ -580,21 +587,32 @@ export async function sendResult($: EngineInterface): Promise<void> {
   });
   if (!judged.length) {
     $.ui.toast("Noch nichts beurteilt.");
-    return;
+    return undefined;
   }
   for (const i of judged) drafts.delete(i.id);
-  try {
-    await submitForPerson($, resultPrompt(judged));
-  } catch (err) {
-    // not delivered: the items are open again, nothing is lost
-    const back = new Set(judged.map((i) => i.id));
-    await patchReview($, (s) => ({
-      items: s.items.map((i) =>
-        back.has(i.id) ? { ...i, sent: false, sentAt: undefined } : i,
-      ),
-    }));
-    $.ui.toast(`✗ Nicht an Claude geschickt: ${errLine(err)}`);
-  }
+  return resultPrompt(judged);
+}
+
+/** „Ergebnis an Claude“: the judged items once (kit `askClaude`, key `rv-send`); not delivered → open again. */
+export async function sendResult($: EngineInterface): Promise<void> {
+  let at = 0;
+  const result = await submitForPerson($, {
+    key: "rv-send",
+    text: async () => {
+      at = await $.clock.now();
+      return takeResult($, at);
+    },
+  });
+  if (result === "failed" && at) await unsend($, at);
+}
+
+/** Puts items marked sent at `at` back to open (the prompt did not go out): nothing is lost. */
+async function unsend($: EngineInterface, at: number): Promise<void> {
+  await patchReview($, (s) => ({
+    items: s.items.map((i) =>
+      i.sent && i.sentAt === at ? { ...i, sent: false, sentAt: undefined } : i,
+    ),
+  }));
 }
 
 export function openCount(r: ReviewState): number {
@@ -803,25 +821,34 @@ export function renderReview(
         ],
       }),
     );
-  // only while something judged is not sent yet: nothing goes to Claude twice
-  if (toSend)
+  // the kit's ask button: „✓ An Claude geschickt“ until Claude answered the result, else only while something
+  // judged is not sent yet (nothing goes to Claude twice)
+  const asked = isAsked(k.asked, "rv-send");
+  if (toSend || asked)
     out.push(
       Actions(
         k,
         "rv-send-acts",
         [
-          {
-            key: "rv-send",
-            label: `Ergebnis an Claude (${toSend})`,
-            icon: "claude",
-            variant: "primary",
-            onPress: () => void sendResult($),
-          },
-        ],
+          personAsk(
+            $,
+            k,
+            {
+              key: "rv-send",
+              label: `Ergebnis an Claude (${toSend})`,
+              icon: "claude",
+              variant: "primary",
+              text: () => takeResult($),
+            },
+            { fresh: true },
+          ),
+          // a prompt that did not go out puts its items back to open
+        ].map((a) => ({ ...a, onPress: asked ? a.onPress : () => void sendResult($) })),
         1,
       ) as RenderElement,
     );
-  else if (r.items.some((i) => i.sent) && !r.items.some((i) => !i.verdict))
+  // after Claude's answer: when it went out
+  if (!toSend && !asked && r.items.some((i) => i.sent) && !r.items.some((i) => !i.verdict))
     out.push(
       Sentence(
         k,

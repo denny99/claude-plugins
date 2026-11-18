@@ -173,6 +173,22 @@ test("Build: the plan is signed off by a press, recorded, and the main thread is
 
   ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   expect(await findShown(ui, /✓ Bauplan abgesegnet/)).toBeDefined();
+  // until Claude answered the sign-off the button says it went (kit „ask Claude“), a press sends nothing
+  expect(
+    (await ui.find({ type: "Button", key: "plan-approve" }))?.text,
+  ).toContain("An Claude geschickt");
+  await ui.press({ key: "plan-approve" });
+  expect(w.submitted.length).toBe(1);
+  await ui.unmount();
+  await $.turn.start({ turnId: "t-plan", text: w.submitted[0] } as never);
+  await $.turn.complete({
+    answer: "ok",
+    durationMs: 1,
+    isAborted: false,
+    turnId: "t-plan",
+    reason: "answer",
+  } as never);
+  ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   expect(
     await ui.find({ type: "Button", key: "plan-approve" }),
   ).toBeUndefined();

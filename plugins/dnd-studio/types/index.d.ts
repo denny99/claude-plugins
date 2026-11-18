@@ -298,6 +298,18 @@ export type ReviewItem = {
 };
 export type ReviewState = { items: ReviewItem[]; playing: string; sentAt: number };
 
+/** One task a button sent to Claude (kit section „ask Claude“): queued → running (bound to the turn carrying it) → done. */
+export type AskedEntry = {
+  at: number;
+  phase: "queued" | "running" | "done";
+  /** Start of the prompt (whitespace folded): finds it in the text of the turn that carries it. */
+  probe?: string;
+  /** The turn that carries the prompt; only its turn.complete answers it. */
+  turnId?: string;
+};
+/** Whether the main loop is busy, and the sent tasks by key. */
+export type AskedState = { busy: boolean; sent: Record<string, AskedEntry> };
+
 declare module "claude-code" {
   interface PluginState {
     "dnd-studio": {
@@ -316,6 +328,7 @@ declare module "claude-code" {
       evening: ShapedState<EveningState>;
       check: ShapedState<BuildCheck>;
       review: ShapedState<ReviewState>;
+      asked: ShapedState<AskedState>;
     };
   }
 }

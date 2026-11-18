@@ -38,6 +38,10 @@ import {
 import { studioCall } from "../lib/studio";
 import {
   Actions,
+  askAction,
+  askClaude,
+  askTurnStart,
+  isAsked,
   CardTitle,
   CopyButton,
   ErrorState,
@@ -47,7 +51,7 @@ import {
   truncate,
 } from "../lib/ui";
 import { Fold } from "./dnd-ui";
-import type { Kit } from "../lib/ui";
+import type { Action, AskOptions, AskResult, Kit } from "../lib/ui";
 import type {
   EveningState,
   Interjection,
@@ -70,17 +74,51 @@ export const LISTENER_AGENT = "pnp-zuhoerer";
 /** True while this plugin submits a prompt itself (a person's button), so it is not taken as an interjection. */
 let submitting = false;
 
-/** Submits a prompt for the main thread on a person's press (never on its own). */
+/**
+ * Submits a prompt for the main thread on a person's press (never on its own), through the kit's `askClaude`: a toast
+ * at once, the same task (`key`) only once until Claude answered that prompt. A producer (`text` as a function) runs
+ * only after the lock is taken, so a second press never runs it twice.
+ */
 export async function submitForPerson(
   $: EngineInterface,
-  text: string,
-): Promise<void> {
+  opts: AskOptions,
+): Promise<AskResult> {
   submitting = true;
   try {
-    await $.prompt.submit({ text });
+    return await askClaude($, opts);
   } finally {
     submitting = false;
   }
+}
+
+/**
+ * A pane button that asks Claude (kit `askAction`): „✓ An Claude geschickt“ while the task waits for its answer (a
+ * press only toasts), else as given; `confirm` asks first (never while locked). `fresh`: once answered the button is
+ * back to its own label (a new batch, e.g. newly judged items), not „Nochmal schicken“.
+ */
+export function personAsk(
+  $: EngineInterface,
+  k: Kit,
+  a: Parameters<typeof askAction>[2],
+  opts: { confirm?: string; fresh?: boolean } = {},
+): Action {
+  const locked = isAsked(k.asked, a.key);
+  const base = askAction($, k, a);
+  const shown =
+    !locked && opts.fresh
+      ? {
+          ...base,
+          label: a.label,
+          icon: a.icon ?? base.icon,
+          variant: a.variant ?? base.variant,
+        }
+      : base;
+  return {
+    ...shown,
+    onPress: () =>
+      void submitForPerson($, { text: a.text, key: a.key, toast: a.toast }),
+    ...(opts.confirm && !locked ? { confirm: opts.confirm } : {}),
+  };
 }
 
 // --- what studio_status, discord and failing calls tell ------------------------------------------------------------
@@ -554,7 +592,14 @@ export function registerEvening(on: On): void {
     } catch {
       // timing never delays a turn
     }
-    return next(e);
+    const r = await next(e);
+    try {
+      // kit „ask Claude“: the turn carrying a sent prompt binds it (only that turn's end answers it)
+      await askTurnStart($, e);
+    } catch {
+      // the lock falls back to its timeout
+    }
+    return r;
   });
 
   // Another Studio profile is another evening: its interjections and debrief file are not this one's.

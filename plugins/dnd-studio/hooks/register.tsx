@@ -160,14 +160,14 @@ async function probeQuietly(
   }
 }
 
-/** Longest launcher status and hint on graphical surfaces (characters, "…" included). Band v3: a few words. */
+/** Longest launcher status and hint on graphical surfaces (characters, "…" included). Band v4: a few words, and none while all is calm. */
 export const BAND_STATUS_MAX = 24;
 export const BAND_HINT_MAX = 24;
 
 /**
- * The launcher row above the prompt (key `launchKey("dnd-studio")` = launch:dnd-studio@3, root `LAUNCH_ROW`, line 1 of
+ * The launcher row above the prompt (key `launchKey("dnd-studio")` = launch:dnd-studio@4, root `LAUNCH_ROW`, line 1 of
  * the band): the "D&D" chip while the Studio answers (or a table is live). At a live table its status reads „Tisch
- * läuft · Runde 3“ and the chip opens the Table tab, where the whole sentence stands; after it at most one hint, and
+ * läuft · Runde 3“ (tone ok: something runs) and the chip opens the Table tab, where the whole sentence stands; after it at most one hint, and
  * only a warn/bad one. Null: nothing to show.
  */
 async function drawLauncher(
@@ -193,6 +193,8 @@ async function drawLauncher(
               : Math.max(12, Math.floor(k.cols * 0.4)),
           )
         : undefined,
+      // Band v4: a calm Studio shows the bare name; text only while the table runs (problems come as the hint)
+      tone: table ? "ok" : undefined,
       onPress: table
         ? () => void openTable($, options)
         : () => void openPane($),
