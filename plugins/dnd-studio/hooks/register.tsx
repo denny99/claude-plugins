@@ -182,7 +182,7 @@ export const register: Register = (on, options) => {
     return { text: await tableSummary($) };
   });
 
-  on("tool.run", { tool: "mcp__dnd-studio__initiative" }, async ($, e) => {
+  on("tool.call", { tool: "mcp__dnd-studio__initiative" }, async ($, e) => {
     return {
       result: await initiativeTool($, e as unknown as Record<string, unknown>),
     };

@@ -243,13 +243,13 @@ export function registerUnity(on: On, options: Options): void {
   })
 
   // --- tools ---
-  on('tool.run', { tool: 'mcp__unity__unity_status' }, async $ => ({
+  on('tool.call', { tool: 'mcp__unity__unity_status' }, async $ => ({
     result: statusText(await refreshModel($, options)),
   })).catch(() => ({
     deny: 'unity: status failed.',
   }))
 
-  on('tool.run', { tool: 'mcp__unity__unity_console' }, async ($, e) => {
+  on('tool.call', { tool: 'mcp__unity__unity_console' }, async ($, e) => {
     const input = e as unknown as { all?: boolean; limit?: number }
     const m = await refreshModel($, options)
     if (!m.bridge.up)
@@ -263,14 +263,14 @@ export function registerUnity(on: On, options: Options): void {
     }
   }).catch(() => ({ deny: 'unity: console failed.' }))
 
-  on('tool.run', { tool: 'mcp__unity__unity_refresh' }, async $ => {
+  on('tool.call', { tool: 'mcp__unity__unity_refresh' }, async $ => {
     const m = await refreshModel($, options)
     if (!m.bridge.up) return { result: 'The editor bridge is not running; nothing to refresh. unity_status says why.' }
     const text = await compileGate($, { ...options, debounceMs: 0 }, [])
     return { result: text ?? 'Refreshed.' }
   }).catch(() => ({ deny: 'unity: refresh failed.' }))
 
-  on('tool.run', { tool: 'mcp__unity__unity_run_tests' }, async ($, e) => {
+  on('tool.call', { tool: 'mcp__unity__unity_run_tests' }, async ($, e) => {
     const input = e as unknown as { mode?: string; filter?: string; waitSeconds?: number }
     const mode = input.mode === 'PlayMode' ? 'PlayMode' : 'EditMode'
     const m = await ensureModel($, options)
@@ -278,7 +278,7 @@ export function registerUnity(on: On, options: Options): void {
     return { result: await runTests($, options, mode, filter, Math.max(0, input.waitSeconds ?? 120) * 1000) }
   }).catch(() => ({ deny: 'unity: run tests failed.' }))
 
-  on('tool.run', { tool: 'mcp__unity__unity_affected_tests' }, async ($, e) => {
+  on('tool.call', { tool: 'mcp__unity__unity_affected_tests' }, async ($, e) => {
     const input = e as unknown as { mode?: string; run?: boolean; waitSeconds?: number }
     return {
       result: await affectedTests($, options, {
@@ -289,28 +289,28 @@ export function registerUnity(on: On, options: Options): void {
     }
   }).catch(() => ({ deny: 'unity: affected tests failed.' }))
 
-  on('tool.run', { tool: 'mcp__unity__unity_worktree' }, async ($, e) => {
+  on('tool.call', { tool: 'mcp__unity__unity_worktree' }, async ($, e) => {
     const input = e as unknown as { name?: string }
     return { result: await createWorktree($, options, String(input.name ?? '').trim()) }
   }).catch(() => ({ deny: 'unity: worktree failed.' }))
 
-  on('tool.run', { tool: 'mcp__unity__unity_test_results' }, async $ => ({
+  on('tool.call', { tool: 'mcp__unity__unity_test_results' }, async $ => ({
     result: await testsText($, options),
   })).catch(() => ({
     deny: 'unity: test results failed.',
   }))
 
-  on('tool.run', { tool: 'mcp__unity__unity_play' }, async $ => {
+  on('tool.call', { tool: 'mcp__unity__unity_play' }, async $ => {
     const r = await bridgeCommand($, options, { cmd: 'play' })
     return { result: r.ok ? 'Entered Play mode.' : `Not started: ${r.error}` }
   }).catch(() => ({ deny: 'unity: play failed.' }))
 
-  on('tool.run', { tool: 'mcp__unity__unity_stop' }, async $ => {
+  on('tool.call', { tool: 'mcp__unity__unity_stop' }, async $ => {
     const r = await bridgeCommand($, options, { cmd: 'stop' })
     return { result: r.ok ? 'Left Play mode.' : `Not stopped: ${r.error}` }
   }).catch(() => ({ deny: 'unity: stop failed.' }))
 
-  on('tool.run', { tool: 'mcp__unity__unity_screenshot' }, async ($, e) => {
+  on('tool.call', { tool: 'mcp__unity__unity_screenshot' }, async ($, e) => {
     const input = e as unknown as { width?: number; height?: number }
     const shot = await screenshot($, options, {
       ...(input.width ? { width: input.width } : {}),
