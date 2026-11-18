@@ -30,14 +30,77 @@ No sockets, no network: a socket does not survive a domain reload. The bridge po
 | File in `<project>/Temp/ClaudeBridge/` | Written by | Content |
 | --- | --- | --- |
 | `status.json` | bridge, every second | heartbeat: Unity version, compiling, playing, paused, compile counter, scene |
-| `cmd-<id>.json` | plugin | one command: `refresh`, `play`, `stop`, `pause`, `run-tests` (`mode`, `filter`), `screenshot` (`path`, `width`, `height`), `open-scene` (`path`), `select` (`path`), `clear-console` |
-| `result-<id>.json` | bridge | `{ id, ok, error, runId, path, compileSeq }`; removed after 10 minutes |
+| `cmd-<id>.json` | plugin | one command: `refresh`, `play`, `stop`, `pause`, `run-tests` (`mode`, `filter`), `screenshot` (`path`, `width`, `height`), `open-scene` (`path`), `select` (`path`), `clear-console`; provider commands below |
+| `result-<id>.json` | bridge | `{ id, ok, error, code, runId, path, compileSeq }` (provider commands: their own fields, below); removed after 10 minutes |
 | `compile.json` | bridge | messages of the last compile, written before the domain reload |
 | `console.json` | bridge | last 300 console entries with stack traces |
 | `tests.json` | bridge | current / last test run, rewritten after every test |
 
 Writes go through a temp file and a rename, retried (on Windows indexers and virus scanners hold files briefly).
 Unity deletes `Temp/` when the editor closes, so nothing is left behind.
+
+## Project providers (0.2+)
+
+The bridge is generic. What only the game knows comes from interfaces in the runtime assembly `Denny99.ClaudeBridge`
+(`Runtime/ClaudeProviders.cs`, auto-referenced, so `Assembly-CSharp` and any asmdef that references it can implement
+them):
+
+```csharp
+public interface IClaudeSpotProvider {
+    string Capture();               // current spot as a JSON object ("{...}"), or null
+    void GoTo(string spotJson);     // jump to a spot Capture() made; throw on failure
+}
+public interface IClaudePerfSource {
+    void Sample(IDictionary<string, float> costsMs);  // once per recorded frame: costsMs["AI"] = 1.2f
+}
+public enum ClaudeSoundMode { Near, Flat }
+public interface IClaudeSoundBoard {
+    IList<ClaudeSound> List();                    // ClaudeSound { id, name, group, duration (s), takes }
+    void Play(string id, ClaudeSoundMode mode);
+    void Stop();
+    IList<ClaudeMixGroup> GetMix();               // ClaudeMixGroup { group, db }
+    void SetMix(string group, float db);          // apply AND persist
+}
+```
+
+### Registering a provider
+
+Both ways survive domain reloads (script compiles, entering Play mode):
+
+1. **`[ClaudeBridgeProvider]` on a plain class** with a public parameterless constructor (not a `UnityEngine.Object`).
+   The bridge finds it with `TypeCache` after every domain reload and creates one instance. Nothing else to do; the
+   recommended way for editor-side or static game access.
+2. **`ClaudeBridge.Register(obj)`** (editor code) or **`ClaudeProviders.Register(obj)`** (runtime code), e.g. from a
+   MonoBehaviour's `OnEnable` (and `ClaudeProviders.Unregister(this)` in `OnDisable`). Registrations are statics and a
+   domain reload clears them, so register from code that runs again after a reload (`OnEnable`, `[InitializeOnLoad]`,
+   `[RuntimeInitializeOnLoadMethod]`).
+
+Explicit registrations win over discovered ones; the newest wins. Destroyed Unity objects are skipped. All registered
+`IClaudePerfSource`s are sampled; of the other two, the winner is used. Providers run on the main thread.
+
+### Commands
+
+Errors carry a `code`: `no-provider`, `not-playing`, `busy`, `batchmode`, `aborted`, `no-frames`, `bad-input`
+(other exceptions: `error` = `Type: message`, no code).
+
+| `cmd` | Fields | Answer (`{ id, ok: true, … }`) |
+| --- | --- | --- |
+| `capture` | `path?`, `width?`, `height?` | `path` (PNG, as `screenshot`), `playing`, `scene`, `provider` (bool), `camera` `{ name, position:[x,y,z], rotation:[x,y,z] (euler), fov }` or null, `spot` (provider JSON or null) |
+| `goto` | `spot` (JSON **text** of a spot) | `spot` (the spot after the jump); `no-provider` without spot provider |
+| `perf_record` | `seconds` (default 5, max 120) | after the recording: `perf` `{ seconds, requestedSeconds, frames, budgetMs: 16.6, avgMs, p50, p95, p99, worst, hitches, seriesStep, series: [ms…] (≤ 200 points, each the worst frame of `seriesStep` frames), costs: [{ name, avgMs, maxMs, hitchAvgMs, hitchMaxMs, hitchShare }], aborted? }`, `spot` (at the start) |
+| `sound_list` | – | `sounds: [{ id, name, group, duration, takes }]` |
+| `sound_play` | `sound` (id), `mode` (`near`\|`flat`, default near) | `sound`, `mode` |
+| `sound_stop` | – | – |
+| `mix_get` | – | `groups: [{ group, db }]` |
+| `mix_set` | `group`, `db` | `groups` (after the change) |
+
+`perf_record` needs Play mode. It adds a system to the player loop (`PostLateUpdate`) that records
+`Time.unscaledDeltaTime` per frame (the first delta, from before the start, is skipped) and asks every
+`IClaudePerfSource` for the frame's costs; it ends when the recorded frame time reaches `seconds`, or after
+`2 × seconds + 5` s of wall clock (paused or throttled editor) with what it has, or when Play mode ends (`aborted`).
+A background editor is throttled, which shows up in the frame times. A domain reload during a recording loses it (the
+plugin then times out). `capture` takes the spot in the same frame as the picture; in Play mode the picture is the
+Game view (needs a window, `code: batchmode` otherwise), in Edit mode the main camera.
 
 ## Notes and limits
 
@@ -72,6 +135,12 @@ Mono 6.13 on macOS: `File.Replace` over an existing file is an atomic rename (30
 no missing or partial reads, no leftover temp files); `File.Move` onto an existing file throws and has no `overwrite`
 overload, hence Replace-or-Move.
 
-Untested: HDRP/URP camera rendering for Edit-mode screenshots, Windows file locking (virus scanners, indexers; the
+0.2.0 (provider commands), same setup: EditMode tests in `Tests/Editor` (list the package under `testables` in
+`Packages/manifest.json` to run them) cover discovery via `[ClaudeBridgeProvider]`, explicit registration winning and
+falling back, destroyed objects skipped, `goto` / sound / mix commands through the file queue, `no-provider` /
+`not-playing` codes, Edit-mode `capture` with camera and spot, and a Play-mode `perf_record` end to end (player-loop
+hook, percentiles, named costs, spot) plus the batchmode refusal of a Play-mode `capture`.
+
+Untested: Play-mode `capture` in a visible editor (same `ScreenCapture` path as `screenshot`), HDRP/URP camera rendering for Edit-mode screenshots, Windows file locking (virus scanners, indexers; the
 writes retry), Unity versions other than 6000.6 (the 6000.3.24f1 install on the test machine had no editor binary),
 and how `select`'s ping looks in a visible Project window.

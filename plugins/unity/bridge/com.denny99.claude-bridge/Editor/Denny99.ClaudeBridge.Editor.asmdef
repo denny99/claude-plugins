@@ -2,6 +2,7 @@
     "name": "Denny99.ClaudeBridge.Editor",
     "rootNamespace": "Denny99.ClaudeBridge",
     "references": [
+        "Denny99.ClaudeBridge",
         "UnityEditor.TestRunner",
         "UnityEngine.TestRunner"
     ],

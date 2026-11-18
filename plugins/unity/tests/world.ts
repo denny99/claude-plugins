@@ -90,6 +90,9 @@ export function fakeWorld(
       const done = (data: Record<string, unknown>) => {
         files[`${BRIDGE}/result-${m[1]}.json`] = JSON.stringify({ id: m[1], ok: true, ...data })
       }
+      const fail = (error: string, code: string) => {
+        files[`${BRIDGE}/result-${m[1]}.json`] = JSON.stringify({ id: m[1], ok: false, error, code })
+      }
       if (cmd.cmd === 'refresh' && world.bridge.nothingToCompile) done({})
       else if (cmd.cmd === 'refresh') {
         world.bridge.compileSeq++
@@ -124,6 +127,39 @@ export function fakeWorld(
       } else if (cmd.cmd === 'screenshot') {
         files[String(cmd.path)] = 'PNG!'
         done({ path: cmd.path })
+      } else if (cmd.cmd === 'capture') {
+        files[String(cmd.path)] = 'PNG!'
+        done({
+          path: cmd.path,
+          playing: world.bridge.isPlaying,
+          scene: 'Assets/Scenes/Main.unity',
+          provider: true,
+          camera: { name: 'Main Camera', position: [1, 2, 3], rotation: [10, 0, 0], fov: 60 },
+          spot: { pos: [4, 5, 6], weather: 'rain' },
+        })
+      } else if (cmd.cmd === 'perf_record') {
+        if (!world.bridge.isPlaying) fail('perf_record needs Play mode.', 'not-playing')
+        else
+          done({
+            perf: {
+              seconds: cmd.seconds,
+              requestedSeconds: cmd.seconds,
+              frames: 3,
+              budgetMs: 16.6,
+              avgMs: 15,
+              p50: 10,
+              p95: 30,
+              p99: 30,
+              worst: 30,
+              hitches: 1,
+              seriesStep: 1,
+              series: [10, 5, 30],
+              costs: [{ name: 'AI', avgMs: 2, maxMs: 5, hitchAvgMs: 5, hitchMaxMs: 5, hitchShare: 0.16 }],
+            },
+            spot: { pos: [4, 5, 6] },
+          })
+      } else if (/^(sound_|mix_|goto$)/.test(String(cmd.cmd))) {
+        fail('This project offers no sound board (no IClaudeSoundBoard registered).', 'no-provider')
       } else if (cmd.cmd === 'play') {
         world.bridge.isPlaying = true
         done({})

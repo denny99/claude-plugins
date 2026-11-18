@@ -83,6 +83,14 @@ Test filters are regexes on full test names, several separated by `;`. Without `
 `docs/code-map.md`-style docs: each `##`/`###` section with ``Filter `...` `` becomes an area (a
 `FullyQualifiedName~A|FullyQualifiedName~B` dotnet filter is turned into `A|B`).
 
+## Project providers (bridge 0.2+)
+
+Spots (capture + jump back), frame-time recordings and a sound board come from the Unity project itself: it implements
+`IClaudeSpotProvider`, `IClaudePerfSource` or `IClaudeSoundBoard` from the bridge package and registers them (bridge
+README, “Project providers”). The mod's typed client is `lib/play.ts` (`capture`, `gotoSpot`, `perfRecord`,
+`soundList`, `soundPlay`, `soundStop`, `mixGet`, `mixSet`; bound to the session in `features/state.ts`). Without a
+provider the calls answer `code: 'no-provider'` with a sentence to show.
+
 ## Plugin options
 
 `compileGate` (on), `compileWaitSeconds` (60), `debounceMs` (400), `editorPath` (empty: found through Unity Hub,
@@ -93,4 +101,4 @@ including the Hub's custom install location), `commitGuard` (on), `metaGuard` (o
 - The Bash guards read the command line, not a real shell: commands built at run time (variables, `$(…)`,
   `powershell -Command "…"`) pass unchecked.
 - The worktree is not removed by the mod (`git worktree remove` when done).
-- The bridge's C# was written without a Unity compiler at hand; see its README.
+- The bridge is verified on Unity 6000.6.7f1 only (see its README).

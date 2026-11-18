@@ -1,0 +1,25 @@
+{
+    "name": "Denny99.ClaudeBridge.Editor.Tests",
+    "rootNamespace": "Denny99.ClaudeBridge.Tests",
+    "references": [
+        "Denny99.ClaudeBridge",
+        "Denny99.ClaudeBridge.Editor",
+        "UnityEditor.TestRunner",
+        "UnityEngine.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

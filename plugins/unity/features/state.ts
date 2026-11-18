@@ -7,7 +7,17 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 
 import type { ModelJob, UnityModel } from '../types'
-import { readCompile, readConsole, readStatus, readTests, sendCommand, sleep, type BridgeCommand } from '../lib/bridge'
+import {
+  readCompile,
+  readConsole,
+  readStatus,
+  readTests,
+  sendCommand,
+  sleep,
+  type BridgeCommand,
+  type BridgeResult,
+} from '../lib/bridge'
+import * as play from '../lib/play'
 import { createHost, type Host } from '../lib/host'
 import { lockState } from '../lib/lock'
 import { affectedAreas, affectedText, changedFiles, landingsReminder } from '../lib/affected'
@@ -179,16 +189,18 @@ export async function bridgeCommand(
   options: Options,
   command: BridgeCommand,
   timeoutMs = 10000,
-): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; error: string }> {
+): Promise<BridgeResult> {
   const m = await refreshModel($, options)
   if (!m.project)
     return {
       ok: false,
+      code: 'no-project',
       error: 'No Unity project here (no ProjectSettings/ProjectVersion.txt at the root or one level down).',
     }
   if (!m.bridge.up)
     return {
       ok: false,
+      code: 'bridge-down',
       error:
         'The editor bridge is not running. Open the project in Unity with the com.denny99.claude-bridge package installed (/unity shows how).',
     }
@@ -777,3 +789,44 @@ export async function screenshot(
     return { error: `screenshot written but not readable (${written}): ${e instanceof Error ? e.message : String(e)}` }
   }
 }
+
+// --- provider-backed commands (capture, goto, perf, sounds; lib/play.ts) ---
+
+/** A lib/play.ts sender bound to this session's bridge (checks project + heartbeat before every command). */
+export function playSend($: EngineInterface, options: Options): play.Send {
+  return (command, timeoutMs) => bridgeCommand($, options, command, timeoutMs)
+}
+
+/** Capture with the PNG read back as base64 (for an inline image). */
+export async function capture(
+  $: EngineInterface,
+  options: Options,
+  size?: { width?: number; height?: number },
+): Promise<(play.CaptureResult & { base64: string }) | play.PlayError> {
+  const m = await refreshModel($, options)
+  if (!m.project) return { code: 'no-project', error: 'No Unity project here.' }
+  if (m.bridge.up && m.bridge.batchmode && m.bridge.isPlaying) return { code: 'batchmode', error: BATCHMODE_SHOT }
+  const host = await createHost($)
+  const path = join(m.project.root, 'Temp', 'ClaudeBridge', 'shots', `capture-${await host.now()}.png`)
+  const res = await play.capture(playSend($, options), { path, ...size })
+  if (play.isPlayError(res)) return res
+  try {
+    const base64 = await host.fs.readBase64(res.path)
+    await patchModel($, { lastShot: res.path })
+    return { ...res, base64 }
+  } catch (e) {
+    return { error: `capture written but not readable (${res.path}): ${e instanceof Error ? e.message : String(e)}` }
+  }
+}
+
+export const gotoSpot = ($: EngineInterface, options: Options, spot: play.Spot | string) =>
+  play.gotoSpot(playSend($, options), spot)
+export const perfRecord = ($: EngineInterface, options: Options, seconds: number) =>
+  play.perfRecord(playSend($, options), seconds)
+export const soundList = ($: EngineInterface, options: Options) => play.soundList(playSend($, options))
+export const soundPlay = ($: EngineInterface, options: Options, sound: string, mode: 'near' | 'flat' = 'near') =>
+  play.soundPlay(playSend($, options), sound, mode)
+export const soundStop = ($: EngineInterface, options: Options) => play.soundStop(playSend($, options))
+export const mixGet = ($: EngineInterface, options: Options) => play.mixGet(playSend($, options))
+export const mixSet = ($: EngineInterface, options: Options, group: string, db: number) =>
+  play.mixSet(playSend($, options), group, db)

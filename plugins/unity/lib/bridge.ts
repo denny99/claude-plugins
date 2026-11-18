@@ -5,9 +5,10 @@
  *
  * - `status.json`  — heartbeat the bridge rewrites every second: `{ updatedAt, pid, unityVersion, projectPath,
  *                    isCompiling, isPlaying, isPaused, compileSeq, scene, batchmode? }`. Older than {@link STALE_MS} → bridge down (10 s: a domain reload pauses the heartbeat for a few seconds).
- * - `cmd-<id>.json` — written by the mod: one flat object `{ id, cmd, mode?, filter?, path?, width?, height? }`. The
+ * - `cmd-<id>.json` — written by the mod: one flat object `{ id, cmd, mode?, filter?, path?, width?, height?, spot?,
+ *                    seconds?, sound?, group?, db? }`. The
  *                    bridge picks it up on EditorApplication.update and deletes it.
- * - `result-<id>.json` — written by the bridge (tmp + rename, retried): `{ id, ok, error?, ...data }`.
+ * - `result-<id>.json` — written by the bridge (tmp + rename, retried): `{ id, ok, error?, code?, ...data }`.
  * - `compile.json`  — the last compile: `{ seq, finishedAt, messages: [{ severity, message, file, line, column, code? }] }`,
  *                    written in compilationFinished, i.e. BEFORE the domain reload.
  * - `console.json`  — the last 300 log entries `{ entries: [{ seq, type, message, stack, time }] }`.
@@ -150,8 +151,18 @@ export type BridgeCommand =
   | { cmd: 'open-scene'; path: string }
   | { cmd: 'select'; path: string }
   | { cmd: 'clear-console' }
+  // provider-backed commands (lib/play.ts)
+  | { cmd: 'capture'; path?: string; width?: number; height?: number }
+  | { cmd: 'goto'; spot: string }
+  | { cmd: 'perf_record'; seconds: number }
+  | { cmd: 'sound_list' }
+  | { cmd: 'sound_play'; sound: string; mode: 'near' | 'flat' }
+  | { cmd: 'sound_stop' }
+  | { cmd: 'mix_get' }
+  | { cmd: 'mix_set'; group: string; db: number }
 
-export type BridgeResult = { ok: true; data: Record<string, unknown> } | { ok: false; error: string }
+/** `code` (bridge 0.2+): machine-readable failure kind, e.g. `no-provider`, `not-playing`, `busy`, `batchmode`. */
+export type BridgeResult = { ok: true; data: Record<string, unknown> } | { ok: false; error: string; code?: string }
 
 let counter = 0
 
@@ -186,7 +197,8 @@ export async function sendCommand(
     const raw = await readJson(host.fs, resultFile)
     if (raw) {
       if (raw.ok === true) return { ok: true, data: raw }
-      return { ok: false, error: String(raw.error ?? 'the bridge reported a failure') }
+      const code = typeof raw.code === 'string' && raw.code ? { code: raw.code } : {}
+      return { ok: false, error: String(raw.error ?? 'the bridge reported a failure'), ...code }
     }
     if ((await host.now()) >= deadline)
       return { ok: false, error: `no answer from the bridge within ${Math.round(timeoutMs / 1000)} s` }

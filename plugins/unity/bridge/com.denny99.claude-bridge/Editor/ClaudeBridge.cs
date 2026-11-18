@@ -21,10 +21,12 @@ using UnityEditor.Compilation;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Denny99.ClaudeBridge.Editor.Tests")]
+
 namespace Denny99.ClaudeBridge
 {
     [InitializeOnLoad]
-    public static class ClaudeBridge
+    public static partial class ClaudeBridge
     {
         public static readonly string ProjectRoot = Path.GetDirectoryName(Application.dataPath);
         public static readonly string Dir = Path.Combine(ProjectRoot, "Temp", "ClaudeBridge");
@@ -43,9 +45,10 @@ namespace Denny99.ClaudeBridge
         static readonly List<CompileMessage> pendingMessages = new List<CompileMessage>();
 
         // A screenshot taken in Play mode is written at the end of a frame: wait for the file.
-        static string shotId;
         static string shotPath;
         static double shotDeadline;
+        static Action<string> shotDone;
+        static Action<string> shotFailed;
 
         static ClaudeBridge()
         {
@@ -64,6 +67,8 @@ namespace Denny99.ClaudeBridge
                 AssemblyReloadEvents.beforeAssemblyReload += () => { FlushConsole(); WriteStatus(); };
                 EditorApplication.update += Tick;
                 BridgeTests.Init();
+                DiscoverProviders();
+                InitPlay();
                 WriteStatus();
             }
             catch (Exception e)
@@ -127,7 +132,8 @@ namespace Denny99.ClaudeBridge
                 nextCleanup = t + 30.0;
                 Cleanup();
             }
-            if (shotId != null) CheckShot();
+            if (shotPath != null) CheckShot();
+            TickPlay();
             ProcessCommands();
         }
 
@@ -143,6 +149,12 @@ namespace Denny99.ClaudeBridge
             public string path;
             public int width;
             public int height;
+            // capture / goto / perf_record / sound_* / mix_* (see ClaudeBridge.Play.cs)
+            public string spot;
+            public float seconds;
+            public string sound;
+            public string group;
+            public float db;
         }
 
         [Serializable]
@@ -154,9 +166,11 @@ namespace Denny99.ClaudeBridge
             public string runId;
             public string path;
             public int compileSeq;
+            /// <summary>Machine-readable error kind (e.g. "no-provider", "not-playing"); empty when none.</summary>
+            public string code;
         }
 
-        static void ProcessCommands()
+        internal static void ProcessCommands()
         {
             string[] files;
             try { files = Directory.GetFiles(Dir, "cmd-*.json"); }
@@ -179,6 +193,10 @@ namespace Denny99.ClaudeBridge
                 try
                 {
                     Handle(c);
+                }
+                catch (BridgeError e)
+                {
+                    Answer(new Result { id = c.id, ok = false, error = e.Message, code = e.Code });
                 }
                 catch (Exception e)
                 {
@@ -241,6 +259,7 @@ namespace Denny99.ClaudeBridge
                     Answer(new Result { id = c.id, ok = true });
                     break;
                 default:
+                    if (HandlePlay(c)) break;
                     throw new ArgumentException("unknown command " + c.cmd);
             }
         }
@@ -251,28 +270,48 @@ namespace Denny99.ClaudeBridge
 
         static void Screenshot(Command c)
         {
-            var path = string.IsNullOrEmpty(c.path) ? Path.Combine(Dir, "shots", "shot-" + Now() + ".png") : c.path;
+            TakeShot(c.path, c.width, c.height,
+                p => Answer(new Result { id = c.id, ok = true, path = p }),
+                err => Answer(new Result { id = c.id, ok = false, error = err }));
+        }
+
+        /// <summary>The camera a shot renders in Edit mode (and whose pose capture reports): Camera.main, else any.</summary>
+        internal static Camera ShotCamera()
+        {
+            var cam = Camera.main;
+#pragma warning disable 0618
+            if (cam == null) cam = UnityEngine.Object.FindObjectOfType<Camera>();
+#pragma warning restore 0618
+            return cam;
+        }
+
+        /// <summary>
+        /// Writes a Game view PNG. Edit mode: synchronously (done is called before returning). Play mode: at the end of
+        /// the frame; done / failed are called from Tick. Throws for what fails up front.
+        /// </summary>
+        internal static void TakeShot(string requested, int width, int height, Action<string> done, Action<string> failed)
+        {
+            var path = string.IsNullOrEmpty(requested) ? Path.Combine(Dir, "shots", "shot-" + Now() + ".png") : requested;
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             if (File.Exists(path)) File.Delete(path);
             if (EditorApplication.isPlaying && Application.isBatchMode)
-                throw new InvalidOperationException("Play-mode screenshots need a visible editor window (not batchmode).");
+                throw new BridgeError("batchmode", "Play-mode screenshots need a visible editor window (not batchmode).");
+            if (shotPath != null) throw new BridgeError("busy", "Another screenshot is still being written.");
             if (EditorApplication.isPlaying)
             {
                 // The Game view as the player sees it (UI included); written at the end of the frame.
                 ScreenCapture.CaptureScreenshot(path);
-                shotId = c.id;
                 shotPath = path;
+                shotDone = done;
+                shotFailed = failed;
                 // Below the plugin's 10 s command timeout, so it gets this error instead of a timeout.
                 shotDeadline = EditorApplication.timeSinceStartup + 7;
                 return;
             }
             // Edit mode: render the main camera into a texture (no overlay UI).
-            var cam = Camera.main;
-#pragma warning disable 0618
-            if (cam == null) cam = UnityEngine.Object.FindObjectOfType<Camera>();
-#pragma warning restore 0618
+            var cam = ShotCamera();
             if (cam == null) throw new InvalidOperationException("No camera in the open scene.");
-            int w = c.width > 0 ? c.width : 1280, h = c.height > 0 ? c.height : 720;
+            int w = width > 0 ? width : 1280, h = height > 0 ? height : 720;
             var rt = new RenderTexture(w, h, 24);
             var prevTarget = cam.targetTexture;
             var prevActive = RenderTexture.active;
@@ -293,20 +332,22 @@ namespace Denny99.ClaudeBridge
                 UnityEngine.Object.DestroyImmediate(rt);
                 UnityEngine.Object.DestroyImmediate(tex);
             }
-            Answer(new Result { id = c.id, ok = true, path = path.Replace('\\', '/') });
+            done(path.Replace('\\', '/'));
         }
 
         static void CheckShot()
         {
-            if (File.Exists(shotPath) && new FileInfo(shotPath).Length > 0)
+            var path = shotPath;
+            Action<string> done = shotDone, failed = shotFailed;
+            if (File.Exists(path) && new FileInfo(path).Length > 0)
             {
-                Answer(new Result { id = shotId, ok = true, path = shotPath.Replace('\\', '/') });
-                shotId = null;
+                shotPath = null;
+                done(path.Replace('\\', '/'));
             }
             else if (EditorApplication.timeSinceStartup > shotDeadline)
             {
-                Answer(new Result { id = shotId, ok = false, error = "The Game view wrote no screenshot (is it visible?)." });
-                shotId = null;
+                shotPath = null;
+                failed("The Game view wrote no screenshot (is it visible?).");
             }
         }
 
