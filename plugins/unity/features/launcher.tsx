@@ -1,7 +1,7 @@
 /**
  * Starter strip above the prompt: one chip "Unity" (only in a Unity project) that opens the pane, with the editor's
  * state next to it — not connected, tests running, compile errors or Play mode. Rows are merged with other mods' rows by
- * `mergeLauncherRows` (key `launch:unity`).
+ * `mergeLauncherRows` (key `launch:unity@2`).
  */
 import type { EngineInterface, On, RenderElement, RenderInput } from 'claude-code'
 

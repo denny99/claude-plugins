@@ -291,7 +291,7 @@ test('starter strip: chip "Unity" in a Unity project with the editor state; open
   await $.session.start(start)
   for (const surface of ['desktop', 'terminal'] as const) {
     const band = await $.ui.mount({ plugin: 'unity', surface, component: 'AbovePrompt', props: BAND })
-    expect(((await band.drawn()) as { props?: { key?: string } }).props?.key).toBe('launch:unity')
+    expect(((await band.drawn()) as { props?: { key?: string } }).props?.key).toBe('launch:unity@2')
     expect(await band.find({ type: 'Button', key: 'launch-unity' })).toBeDefined()
     await band.unmount()
   }
