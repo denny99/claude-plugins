@@ -413,7 +413,7 @@ export function Pill(k: Kit, p: PillProps & { shrink?: boolean }): RenderElement
   const iconName = p.icon ?? (p.glyph === undefined ? TONE_ICON[tone] : undefined)
   const icon = iconName ? Icon(k, iconName, { size: 12, color: c.fg }) : null
   return (
-    <Box flexDirection="row" alignItems="center" flexShrink={p.shrink ? 1 : 0}>
+    <Box flexDirection="row" alignItems="center" flexShrink={p.shrink ? 1 : 0} minWidth={p.shrink ? 0 : undefined}>
       <Box
         flexDirection="row"
         alignItems="center"
@@ -423,6 +423,7 @@ export function Pill(k: Kit, p: PillProps & { shrink?: boolean }): RenderElement
         paddingY={0}
         backgroundColor={c.bg}
         flexShrink={p.shrink ? 1 : 0}
+        minWidth={p.shrink ? 0 : undefined}
       >
         {icon}
         <Text size="caption" weight="bold" color={c.fg} wrap="truncate-end">
@@ -481,7 +482,7 @@ export function CardTitle(
   return (
     <Box flexDirection="row" alignItems="center" gap={1}>
       {c.icon ? Icon(k, c.icon, { tone: c.tone, color: c.tone ? undefined : k.t.faint }) : null}
-      <Box flexGrow={1} flexShrink={1}>
+      <Box flexGrow={1} flexShrink={1} minWidth={0}>
         <Text weight="bold" color={c.tone ? k.t.tones[c.tone].fg : k.t.text} wrap="truncate-end">
           {sanitize(c.title)}
         </Text>
@@ -535,9 +536,11 @@ export function IconButton(k: Kit, a: IconAction): RenderElement {
       </Button>
     )
   const glyph = ICON_GLYPHS[a.icon]
+  // A desktop draws `label` in place of the children: the glyph must be in the label itself.
+  const shown = k.compact && glyph ? glyph : glyphLabel(a.icon, a.label)
   return (
-    <Button key={a.key} label={a.label} variant="secondary" onPress={a.onPress}>
-      {k.compact && glyph ? glyph : glyphLabel(a.icon, a.label)}
+    <Button key={a.key} label={shown} variant="secondary" onPress={a.onPress}>
+      {shown}
     </Button>
   )
 }
@@ -598,7 +601,7 @@ export function PaneHeader(
           {sanitize(hd.label).toUpperCase()}
         </Text>
       ) : null}
-      <Box flexShrink={1}>
+      <Box flexShrink={1} minWidth={0}>
         <Text weight="bold" color={k.t.text} wrap="truncate-end">
           {sanitize(hd.title)}
         </Text>
@@ -802,15 +805,17 @@ export function ListRow(
     <Box key={r.key} flexDirection="column" paddingY={0}>
       <Box flexDirection="row" alignItems="center" gap={1}>
         {icon ? Icon(k, icon, { tone, color: tone ? undefined : k.t.faint, size: 14 }) : null}
-        <Box flexGrow={1} flexShrink={1}>
+        <Box flexGrow={1} flexShrink={1} minWidth={0}>
           <Text size="footnote" color={k.t.text} wrap="truncate-end">
             {sanitize(r.title)}
           </Text>
         </Box>
         {r.meta && !k.narrow ? (
-          <Text size="caption" color={k.t.faint} wrap="truncate-end">
-            {sanitize(r.meta)}
-          </Text>
+          <Box flexShrink={1} minWidth={0}>
+            <Text size="caption" color={k.t.faint} wrap="truncate-end">
+              {sanitize(r.meta)}
+            </Text>
+          </Box>
         ) : null}
         {r.pill ? Pill(k, r.pill) : null}
         {acts && !k.narrow ? acts : null}
@@ -855,7 +860,7 @@ export function KeyValue(
             {sanitize(r.label)}
           </Text>
         </Box>
-        <Box flexGrow={1} flexShrink={1} flexDirection="row" justifyContent="flex-end">
+        <Box flexGrow={1} flexShrink={1} minWidth={0} flexDirection="row" justifyContent="flex-end">
           <Text size="footnote" tabular color={r.tone ? k.t.tones[r.tone].fg : k.t.text} wrap="truncate-middle">
             {sanitize(r.value)}
           </Text>
@@ -891,7 +896,7 @@ export function CopyButton(
         {TERM_GLYPHS.copy ?? label}
       </Button>
     ) : k.graphical ? (
-      <Button key={c.key} label={label} variant="secondary" onPress={press}>
+      <Button key={c.key} label={glyphLabel('copy', label)} variant="secondary" onPress={press}>
         {glyphLabel('copy', label)}
       </Button>
     ) : (
@@ -903,7 +908,7 @@ export function CopyButton(
   return (
     <Box flexDirection="row" alignItems="center" gap={1}>
       {c.show ? (
-        <Box flexShrink={1}>
+        <Box flexGrow={1} flexShrink={1} minWidth={0}>
           <Text mono dimColor={k.graphical ? undefined : true} color={ink(k, 'faint')} wrap="truncate-middle">
             {k.graphical ? sanitize(c.text) : truncate(c.text, Math.max(6, k.cols - [...label].length - 4))}
           </Text>
@@ -1045,42 +1050,56 @@ export function ActionButton(k: Kit, a: Action): RenderElement {
         {a.label}
       </Button>
     )
+  // A desktop draws `label` in place of the children: the glyph must be in the label itself.
   const text = k.graphical ? glyphLabel(a.icon, a.label) : a.label
   return (
-    <Button key={a.key} label={a.label} variant={variant} onPress={a.onPress}>
+    <Button key={a.key} label={text} variant={variant} onPress={a.onPress}>
       {text}
     </Button>
   )
 }
 
 /**
- * A wrapped row of buttons: at most `max` (3) shown, the rest behind a "…" toggle keyed `${key}-more`. v2 actions on a
- * narrow body stack in one column.
+ * A wrapped row of buttons: at most `max` (3) shown, the rest behind a "…" toggle keyed `${key}-more`. Narrow body
+ * with v2 actions: the primary on a row of its own (stretched where the surface lets a Button stretch), the other
+ * buttons and links together in one wrapping row below it, so they do not each take a line.
  */
 export function Actions(k: Kit, key: string, actions: Action[], max = 3): RenderElement | null {
   const { Box, Button } = k
   if (!actions.length) return null
   const open = k.isMore(key)
   const shown = actions.length > max && !open ? actions.slice(0, max) : actions
-  const stack = k.narrow && actions.some(isV2)
+  const toggle =
+    actions.length > max ? (
+      <Button key={`${key}-more`} plain onPress={() => k.toggleMore(key)}>
+        {open ? '‹' : '…'}
+      </Button>
+    ) : null
+  const isPrimary = (a: Action) =>
+    (isV2(a) ? (a.variant ?? (a.primary ? 'primary' : 'secondary')) : a.primary ? 'primary' : '') === 'primary'
+  const lead = shown.filter(isPrimary)
+  if (k.narrow && actions.some(isV2) && lead.length) {
+    const rest = shown.filter(a => !isPrimary(a))
+    return (
+      <Box flexDirection="column" alignItems="stretch" gap={1}>
+        {lead.map(a => ActionButton(k, a))}
+        {rest.length || toggle ? (
+          <Box flexDirection="row" alignItems="center" gap={1} flexWrap="wrap">
+            {rest.map(a => ActionButton(k, a))}
+            {toggle}
+          </Box>
+        ) : null}
+      </Box>
+    )
+  }
   return (
-    <Box
-      flexDirection={stack ? 'column' : 'row'}
-      alignItems={stack ? 'stretch' : undefined}
-      gap={1}
-      flexWrap={stack ? undefined : 'wrap'}
-    >
+    <Box flexDirection="row" alignItems="center" gap={1} flexWrap="wrap">
       {shown.map(a => ActionButton(k, a))}
-      {actions.length > max && (
-        <Button key={`${key}-more`} plain onPress={() => k.toggleMore(key)}>
-          {open ? '‹' : '…'}
-        </Button>
-      )}
+      {toggle}
     </Box>
   )
 }
 
-/** Header row: title, dim context (repo · branch), actions right with Refresh ⟳ last. v1; v2 panes use PaneHeader. */
 export function Header(
   k: Kit,
   hd: {
@@ -1353,16 +1372,25 @@ export function LogBox(
   const all = b.lines.flatMap(l => sanitize(l).split('\n'))
   if (b.collapsed && !more) {
     const last = [...all].reverse().find(l => l.trim()) ?? ''
-    const btn = ActionButton(k, {
-      key: `${b.key}-more`,
-      label: k.s.log,
-      icon: 'log',
-      variant: 'link',
-      onPress: () => k.toggleLogMore(b.key),
-    })
+    // Graphical: the link's text in the line's own size and color (a label would be drawn at button size instead).
+    const btn = k.graphical ? (
+      <Button key={`${b.key}-more`} plain onPress={() => k.toggleLogMore(b.key)}>
+        <Text size="footnote" color={k.t.link}>
+          {k.s.log}
+        </Text>
+      </Button>
+    ) : (
+      ActionButton(k, {
+        key: `${b.key}-more`,
+        label: k.s.log,
+        icon: 'log',
+        variant: 'link',
+        onPress: () => k.toggleLogMore(b.key),
+      })
+    )
     return (
       <Box flexDirection="row" alignItems="center" gap={1}>
-        <Box flexGrow={1} flexShrink={1}>
+        <Box flexGrow={1} flexShrink={1} minWidth={0}>
           <Text dimColor={k.graphical ? undefined : true} color={ink(k, 'faint')} size="footnote" wrap="truncate-end">
             {k.graphical ? last || ' ' : truncate(last || ' ', Math.max(4, k.cols - [...k.s.log].length - 3))}
           </Text>
@@ -1467,7 +1495,7 @@ export function Tabs<T extends string>(
       return (
         <Button
           key={`${prefix}${tab.id}`}
-          label={tab.label}
+          label={glyphLabel(tab.icon && (!k.narrow || inMenu) ? tab.icon : undefined, text(tab))}
           plain={on ? undefined : true}
           variant={on ? 'primary' : undefined}
           onPress={press}
@@ -1560,9 +1588,9 @@ export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
   const btn = (
     <Button
       key={c.key}
-      label={c.label}
-      variant={c.primary ? 'primary' : k.graphical ? 'secondary' : undefined}
-      plain={!c.primary && !k.graphical ? true : undefined}
+      label={k.graphical ? glyphLabel(c.icon, c.label) : c.label}
+      variant={c.primary ? 'primary' : undefined}
+      plain={c.primary ? undefined : true}
       onPress={c.onPress}
     >
       {k.graphical ? glyphLabel(c.icon, c.label) : c.label}
@@ -1579,7 +1607,7 @@ export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
     </Text>
   )
   return (
-    <Box key={`${c.key}-chip`} flexDirection="row" alignItems="center" gap={1} flexShrink={1}>
+    <Box key={`${c.key}-chip`} flexDirection="row" alignItems="center" gap={1} flexShrink={1} minWidth={0}>
       {btn}
       {status}
     </Box>

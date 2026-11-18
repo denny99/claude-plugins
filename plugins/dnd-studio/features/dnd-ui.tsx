@@ -59,7 +59,7 @@ export function DndHeader(
           D&D
         </Text>
       )}
-      <Box flexShrink={1}>
+      <Box flexShrink={1} minWidth={0}>
         <Text
           size="heading"
           weight="bold"
@@ -95,7 +95,12 @@ export function Switch(
   if (!k.graphical)
     return (
       <Box key={`${s.key}-sw`} flexDirection="column">
-        <Button key={s.key} label={s.title} plain onPress={s.onPress}>
+        <Button
+          key={s.key}
+          label={truncate(`${s.on ? "[x]" : "[ ]"} ${s.title}`, k.cols)}
+          plain
+          onPress={s.onPress}
+        >
           <Text color={s.on ? "green" : undefined}>
             {truncate(`${s.on ? "[x]" : "[ ]"} ${s.title}`, k.cols)}
           </Text>
@@ -108,17 +113,23 @@ export function Switch(
   return Card(k, {
     key: `${s.key}-card`,
     children: [
+      // Desktop paints `label`, not the children: both carry the same text (kit v3.1).
       <Button
         key={s.key}
-        label={`${s.title}: ${s.on ? "an" : "aus"}`}
+        label={switchText(s.title, s.on)}
         variant={s.on ? "primary" : "secondary"}
         onPress={s.onPress}
       >
-        {`${s.on ? SWITCH_ON : SWITCH_OFF} ${sanitize(s.title)} · ${s.on ? "an" : "aus"}`}
+        {switchText(s.title, s.on)}
       </Button>,
       s.text ? Sentence(k, s.text, { faint: true }) : null,
     ],
   });
+}
+
+/** The switch button's text, e.g. "◉ Zuhörer · an". */
+export function switchText(title: string, on: boolean): string {
+  return `${on ? SWITCH_ON : SWITCH_OFF} ${sanitize(title)} · ${on ? "an" : "aus"}`;
 }
 
 /** The switch's marks on the button (system-font characters, no emoji form). */

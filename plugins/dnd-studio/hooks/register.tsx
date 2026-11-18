@@ -185,16 +185,18 @@ async function drawLauncher(
     }),
   ];
   if (table) {
+    // Desktop paints `label`, not the children: both carry the same text (kit v3.1).
+    const tableText = k.graphical
+      ? table.status
+      : truncate(table.status, Math.max(12, Math.floor(k.cols * 0.6)));
     chips.push(
       <Button
         key="launch-dnd-table"
-        label={`Tisch: ${table.status}`}
+        label={tableText}
         plain
         onPress={() => void openTable($, options)}
       >
-        {k.graphical
-          ? table.status
-          : truncate(table.status, Math.max(12, Math.floor(k.cols * 0.6)))}
+        {tableText}
       </Button>,
     );
     for (const [n, hint] of table.hints.entries())

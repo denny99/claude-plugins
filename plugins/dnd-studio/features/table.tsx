@@ -871,7 +871,7 @@ export function renderTable(
                       {sanitize(`${on ? "▶ " : ""}${n}`)}
                     </Text>
                   </Box>
-                  <Box flexGrow={1} flexShrink={1}>
+                  <Box flexGrow={1} flexShrink={1} minWidth={0}>
                     {hp ? (
                       <Progress
                         label={sanitize(n)}
