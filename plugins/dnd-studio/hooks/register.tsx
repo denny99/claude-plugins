@@ -168,8 +168,9 @@ export const BAND_STATUS_MAX = 40;
 export const BAND_HINT_MAX = 40;
 
 /**
- * The launcher row above the prompt (key launch:dnd-studio): the "D&D" chip while the Studio answers (or a table is
- * live), and at a live table its state as a button to the Table tab, hints after it. Null: nothing to show.
+ * The launcher row above the prompt (key `launchKey("dnd-studio")` = launch:dnd-studio@2, root `LAUNCH_ROW`: one line
+ * that shrinks and cuts with "…"): the "D&D" chip while the Studio answers (or a table is live), and at a live table
+ * its state as a button to the Table tab, hints after it. Null: nothing to show.
  */
 async function drawLauncher(
   $: EngineInterface,
@@ -194,9 +195,7 @@ async function drawLauncher(
     // mods: a short line with "…" (no tooltip exists for a Button; the whole line is in the Table tab it opens).
     const tableText = truncate(
       table.status,
-      k.graphical
-        ? BAND_STATUS_MAX
-        : Math.max(12, Math.floor(k.cols * 0.6)),
+      k.graphical ? BAND_STATUS_MAX : Math.max(12, Math.floor(k.cols * 0.6)),
     );
     chips.push(
       <Button

@@ -1988,17 +1988,49 @@ export function Tabs<T extends string>(
   );
 }
 
-// --- launcher strip above the prompt ---
+// --- launcher strip above the prompt (Band v2: one line) ---
+// Keep this section identical in every copy of the kit and in ds-usage-line's hooks/register.tsx (see README "Band").
 
-/** Key prefix that marks a plugin's band row as a launcher row (`launch:<plugin>`), so a merger can find it. */
+/** Key prefix that marks a plugin's band row as a launcher row (`launch:<plugin>@<version>`), so a merger can find it. */
 export const LAUNCH_PREFIX = "launch:";
+/** The band layout this copy draws. A row keyed `…@<n>` with n above it hands the merge to a newer copy. */
+export const BAND_VERSION = 2;
+/** The root key of a plugin's launcher row. */
+export const launchKey = (plugin: string): string =>
+  `${LAUNCH_PREFIX}${plugin}@${BAND_VERSION}`;
+
+/**
+ * Root props of a starter row (`LauncherRow`): one line that shrinks and clips, its texts cut with "…". The merger
+ * may not set these on its own boxes (the engine refuses `minWidth`/`overflow` on a Box holding another plugin's row),
+ * so every row brings them.
+ */
+export const LAUNCH_ROW = {
+  flexDirection: "row",
+  flexWrap: "nowrap",
+  alignItems: "center",
+  flexShrink: 1,
+  minWidth: 0,
+  overflow: "hidden",
+} as const;
+/** Root props of a trailing row (ds-usage-line's meters): takes the rest of the line, right-aligned, never shrinks. */
+export const LAUNCH_END = {
+  flexDirection: "row",
+  flexWrap: "nowrap",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  flexGrow: 1,
+  flexShrink: 0,
+} as const;
 
 export type LauncherChipProps = {
   key: string;
   /** Unused since Kit v3.2 (launcher chips carry no glyph: "Solutions", not "▦ Solutions"); kept for callers. */
   icon?: IconName;
   label: string;
-  /** A short state next to the chip ("Termin in 8 min", "Tests laufen", "Tisch aktiv"). */
+  /**
+   * A short state next to the chip, **only when something needs the person** ("Tests rot", "Gerät fehlt", "Termin in
+   * 8 min"). Band v2: no steady details (device names, counts) — those belong in the pane. Cut with "…" when tight.
+   */
   status?: string;
   /** Colors the status (state only: ok, warn, bad, info). */
   tone?: Tone;
@@ -2037,6 +2069,7 @@ export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
     <Text
       color={c.tone ? terminalColor(k.brand, c.tone) : undefined}
       dimColor={c.tone ? undefined : true}
+      wrap="truncate-end"
     >
       {truncate(c.status, Math.max(6, Math.floor(k.cols / 3)))}
     </Text>
@@ -2045,10 +2078,12 @@ export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
     <Box
       key={`${c.key}-chip`}
       flexDirection="row"
+      flexWrap="nowrap"
       alignItems="center"
       gap={1}
       flexShrink={1}
       minWidth={0}
+      overflow="hidden"
     >
       {btn}
       {status}
@@ -2057,8 +2092,8 @@ export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
 }
 
 /**
- * A plugin's launcher row for its `AbovePrompt` hook: chips in one wrapping row, keyed `launch:<plugin>` so
- * `mergeLauncherRows` (any installed plugin's) puts the rows of every plugin into one strip.
+ * A plugin's launcher row for its `AbovePrompt` hook: chips in one line that shrinks and clips (`LAUNCH_ROW`), keyed
+ * `launch:<plugin>@2` so `mergeLauncherRows` (any installed plugin's) puts the rows of every plugin into one strip.
  */
 export function LauncherRow(
   k: Kit,
@@ -2066,42 +2101,46 @@ export function LauncherRow(
 ): RenderElement {
   const { Box } = k;
   return (
-    <Box
-      key={`${LAUNCH_PREFIX}${r.plugin}`}
-      flexDirection="row"
-      alignItems="center"
-      gap={k.graphical ? 2 : 1}
-      flexWrap="wrap"
-    >
+    <Box key={launchKey(r.plugin)} {...LAUNCH_ROW} gap={k.graphical ? 2 : 1}>
       {kids(r.chips)}
     </Box>
   );
 }
 
 type BandRow = { plugin: string; tree: RenderElement };
+const rootProps = (row: BandRow) =>
+  (row.tree as { props?: { key?: unknown; justifyContent?: unknown } }).props;
 
 /** Whether a band row is a launcher row (its root Box keyed `launch:…`). */
 export function isLauncherRow(row: BandRow): boolean {
-  const key = (row.tree as { props?: { key?: unknown } }).props?.key;
+  const key = rootProps(row)?.key;
   return typeof key === "string" && key.startsWith(LAUNCH_PREFIX);
 }
 
 /**
  * Whether a launcher row stands at the end of the strip: its root Box carries `justifyContent: 'flex-end'` (e.g. the
- * usage row of ds-usage-line, which grows and must push no starter).
+ * usage row of ds-usage-line, `LAUNCH_END`).
  */
 export function isTrailing(row: BandRow): boolean {
-  const props = (row.tree as { props?: { justifyContent?: unknown } }).props;
-  return props?.justifyContent === "flex-end";
+  return rootProps(row)?.justifyContent === "flex-end";
+}
+
+/** The band version a launcher row was drawn for: the `@<n>` of its key, 1 for a row keyed before v2. */
+export function bandVersion(row: BandRow): number {
+  const m = /@(\d+)$/.exec(String(rootProps(row)?.key ?? ""));
+  return m ? Number(m[1]) : 1;
 }
 
 /**
- * The `AbovePromptList` hook that lays every plugin's launcher row side by side in one wrapping strip on top of the
- * band; other rows stay stacked under it, in their order. The engine lets a hook only reorder rows and wrap what
- * `next(e)` returns (never re-place another plugin's tree), so each launcher row goes through `next` alone and the
- * strip wraps those results; presses stay with the plugin that drew the chip. Trailing rows (`isTrailing`) go last,
- * the others keep their order. Fewer than two launcher rows: passes.
- * Safe when several plugins install it (an inner one sees single rows and passes).
+ * The `AbovePromptList` hook that lays every plugin's launcher row into **one line** on top of the band: starters
+ * left, in their order (their roots shrink and clip, `LAUNCH_ROW`), trailing rows (`isTrailing`, `LAUNCH_END`) right,
+ * never shrunk. No wrap. Other rows stay stacked under it, in their order. The engine lets a hook only reorder rows
+ * and wrap what `next(e)` returns (never re-place another plugin's tree), so each launcher row goes through `next`
+ * alone and the strip wraps those results; presses stay with the plugin that drew the chip.
+ *
+ * Several plugins carry a copy: the outermost in the chain merges, the inner ones see single rows and pass. Which one
+ * is outermost does not matter: a copy that finds a row keyed for a newer band version (`@<n>`) passes the rows
+ * untouched, so the newest copy installed draws the band. Fewer than two launcher rows: passes.
  *
  *   on('ui.render', { component: 'AbovePromptList' }, ($, e, next) => mergeLauncherRows($, e, next))
  */
@@ -2113,6 +2152,7 @@ export async function mergeLauncherRows(
   const rows = e.props.rows;
   const found = rows.filter(isLauncherRow);
   if (found.length < 2) return next(e);
+  if (found.some((row) => bandVersion(row) > BAND_VERSION)) return next(e);
   const launch = [
     ...found.filter((row) => !isTrailing(row)),
     ...found.filter(isTrailing),
@@ -2124,13 +2164,14 @@ export async function mergeLauncherRows(
   for (const row of launch) parts.push((await only([row])) as RenderElement);
   const rest = others.length ? ((await only(others)) as RenderElement) : null;
   const { Box } = $.ui.resolve(e) as unknown as Els;
+  // Only flex props here: the engine refuses `minWidth`/`overflow` on a Box that holds another plugin's row.
   const strip = (
     <Box
       key="launch-strip"
       flexDirection="row"
+      flexWrap="nowrap"
       alignItems="center"
       columnGap={2}
-      flexWrap="wrap"
     >
       {parts}
     </Box>
