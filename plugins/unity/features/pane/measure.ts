@@ -5,9 +5,29 @@ import type { ModelPerf } from '../../types'
 import { isPlayError } from '../../lib/play'
 import { patchModel, perfRecord, readModel, type Options } from '../state'
 
-/** Records `seconds` of frame times and keeps the result (newest first, at most 5). */
+/**
+ * Starts recording `seconds` of frame times and returns right away: the button hook only marks the model busy
+ * („Messe 10 s …“), the recording itself runs detached on the clock (like `measureThenComplete` in the review report),
+ * so no hook waits for the bridge. The result is kept newest first, at most 5.
+ */
 export async function measure($: EngineInterface, options: Options, seconds: number, switchTab = false): Promise<void> {
-  await patchModel($, { busy: `perf ${seconds}`, ...(switchTab ? { tab: 'perf' as const } : {}) })
+  const m = await readModel($)
+  if (m.busy?.startsWith('perf ')) return
+  await patchModel($, {
+    busy: `perf ${seconds}`,
+    perfError: undefined,
+    ...(switchTab ? { tab: 'perf' as const } : {}),
+  })
+  $.clock.after(0, () => void record($, options, seconds))
+}
+
+/** The seconds of a running recording from `busy` (`perf 10` → 10), else undefined. */
+export function measuringSeconds(busy: string | undefined): number | undefined {
+  const m = /^perf (\d+)$/.exec(busy ?? '')
+  return m ? Number(m[1]) : undefined
+}
+
+async function record($: EngineInterface, options: Options, seconds: number): Promise<void> {
   try {
     const res = await perfRecord($, options, seconds)
     if (isPlayError(res)) {

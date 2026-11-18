@@ -9,7 +9,7 @@ import { isPlayError } from '../../lib/play'
 import { Actions, Card, CardTitle, ProblemCard, Sentence, sanitize, truncate, type Kit } from '../../lib/ui'
 import { gotoSpot, patchModel, type Options } from '../state'
 import { clockTime, dec, thousands } from './common'
-import { measure } from './measure'
+import { measure, measuringSeconds } from './measure'
 import { playActions } from './overview'
 
 /** A spot as one short line: the provider's own `line`, else place / clock, else nothing. */
@@ -165,7 +165,8 @@ function perfPrompt(at: number, p: ModelPerf): string {
 
 export function perfTab($: EngineInterface, k: Kit, m: UnityModel, options: Options): RenderElement {
   const { Box } = k
-  const measuring = m.busy?.startsWith('perf ')
+  const secs = measuringSeconds(m.busy)
+  const measuring = secs !== undefined
   const playing = m.bridge.up && m.bridge.isPlaying
   const runs = m.perfRuns ?? []
   const err = m.perfError
@@ -196,11 +197,13 @@ export function perfTab($: EngineInterface, k: Kit, m: UnityModel, options: Opti
           CardTitle(k, {
             icon: 'activity',
             title: 'Es ruckelt gerade?',
-            pill: measuring ? { text: 'misst …', tone: 'warn', glyph: '◷' } : undefined,
+            pill: measuring ? { text: `Messe ${secs} s …`, tone: 'warn', glyph: '◷' } : undefined,
           }),
           Sentence(
             k,
-            playing
+            measuring
+              ? `Messe ${secs} s Leistung … Spiel einfach weiter, das Ergebnis erscheint hier.`
+              : playing
               ? 'Lauf einfach weiter. Das Panel misst die nächsten Sekunden im laufenden Spiel und merkt sich, wo du warst.'
               : 'Messen geht im Play-Modus: starte das Spiel, lauf zur Stelle, dann messen.',
             { faint: true },
