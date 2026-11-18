@@ -1,6 +1,6 @@
 {
   "name": "dnd-studio",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "description": "D&D Studio at the table and in the build: the GM screen (scene card, fight order with HP, NPC lines, sounds, dice, secrets), a band above the prompt, a review tab for new sounds and pictures, a pixel table backdrop (the scene picture or a game table) and build looks, the pnp-kampagne build cockpit, the pnp-* skills and agents, and the Studio's MCP server.",
   "author": {
     "name": "denny99"
