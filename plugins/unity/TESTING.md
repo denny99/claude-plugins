@@ -33,7 +33,7 @@ anlegen.
 
 ## 3. Review
 
-1. Tab **Review**: Leer-Zustand verständlich, oder Liste mit **Passt so** / **Verwerfen**.
+1. Tab **Review**: Leer-Zustand verständlich, oder Liste mit **passt** / **passt nicht** (Entscheidungen: Optionen A, B, …). Kommentar mit dem Knopf **Antworten** am Feld; **☑/☐ Screenshot mitschicken** schaltet um.
 2. **Sounds**: **Abspielen** / **Anspielen** spielt im Editor; Mix nur ansehen.
 3. **Problem melden** nur ansehen.
 

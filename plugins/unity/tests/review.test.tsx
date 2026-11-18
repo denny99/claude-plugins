@@ -147,6 +147,11 @@ test('review list: renders on desktop and terminal; an answer is appended with s
     await ui.unmount()
   }
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  // Befund 64/65: one "Antworten" (the comment field's), the screenshot switch reads as a checkbox.
+  expect(await ui.find({ type: 'Button', key: 'rv-answer-reuse' })).toBeUndefined()
+  expect((await ui.find({ type: 'Button', key: 'rv-shot-reuse' }))?.props.label).toMatch(
+    /^[☑☐] Screenshot mitschicken$/,
+  )
   await settle(world, ui.press({ key: 'rv-goto-reuse' }))
   const gotoCmd = Object.entries(world.files).find(([p, t]) => /cmd-.*\.json$/.test(p) && t.includes('"goto"'))
   expect(gotoCmd?.[1]).toContain('spot: seed=1 x=2 z=3')
@@ -364,7 +369,14 @@ test('schmales Panel: Entscheidungs-Optionen ganz lesbar, keine „Entscheiden�
   const subs = async () =>
     (await ui.findAll({ type: 'Button' })).map(b => String(b.props.key ?? '')).filter(k => /^rv-tab-/.test(k))
   if ((await subs()).includes('rv-tab-more')) await settle(world, ui.press({ key: 'rv-tab-more' }))
-  for (const k of ['rv-tab-look', 'rv-tab-decide', 'rv-tab-pictures', 'rv-tab-sounds', 'rv-tab-ideas', 'rv-tab-running'])
+  for (const k of [
+    'rv-tab-look',
+    'rv-tab-decide',
+    'rv-tab-pictures',
+    'rv-tab-sounds',
+    'rv-tab-ideas',
+    'rv-tab-running',
+  ])
     expect(await subs()).toContain(k)
   await settle(world, ui.press({ key: 'rv-tab-decide' }))
   expect((await subs()).includes('rv-tab-look')).toBe(true) // menu closed again, strip keeps its order

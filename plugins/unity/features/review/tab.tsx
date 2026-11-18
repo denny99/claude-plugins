@@ -308,32 +308,35 @@ function questionCard(
       q.text ? Sentence(k, q.text) : null,
       acts.length ? Actions(k, `rv-acts-${q.id}`, acts, 3) : null,
       choices.length && q.kind === 'entscheiden'
-        ? decisionChoices(k, q.id, choices, c => () =>
-            void answerItem($, options, q.id, 'kommentar', c, draft, s.attachShot),
+        ? decisionChoices(
+            k,
+            q.id,
+            choices,
+            c => () => void answerItem($, options, q.id, 'kommentar', c, draft, s.attachShot),
           )
         : choices.length
-        ? Actions(
-            k,
-            `rv-choices-${q.id}`,
-            choices.map((c, i) => ({
-              key: `rv-choice-${q.id}-${i}`,
-              label: q.kind === 'entscheiden' ? `${letter(i)} · ${c}` : c,
-              icon: choiceIcon(c),
-              variant: 'secondary' as const,
-              onPress: () =>
-                void answerItem(
-                  $,
-                  options,
-                  q.id,
-                  q.kind === 'entscheiden' ? 'kommentar' : verdictOf(c, draft),
-                  q.kind === 'entscheiden' ? c : null,
-                  draft,
-                  s.attachShot,
-                ),
-            })),
-            4,
-          )
-        : null,
+          ? Actions(
+              k,
+              `rv-choices-${q.id}`,
+              choices.map((c, i) => ({
+                key: `rv-choice-${q.id}-${i}`,
+                label: q.kind === 'entscheiden' ? `${letter(i)} · ${c}` : c,
+                icon: choiceIcon(c),
+                variant: 'secondary' as const,
+                onPress: () =>
+                  void answerItem(
+                    $,
+                    options,
+                    q.id,
+                    q.kind === 'entscheiden' ? 'kommentar' : verdictOf(c, draft),
+                    q.kind === 'entscheiden' ? c : null,
+                    draft,
+                    s.attachShot,
+                  ),
+              })),
+              4,
+            )
+          : null,
       Input
         ? Input({
             key: `rv-comment-${q.id}`,
@@ -344,20 +347,25 @@ function questionCard(
             onSubmit: (v: string) => void answerItem($, options, q.id, 'kommentar', null, v, s.attachShot),
           })
         : null,
+      // One "Antworten": the comment field's own submit button; a separate one only where there is no field.
       Actions(
         k,
         `rv-send-${q.id}`,
         [
-          {
-            key: `rv-answer-${q.id}`,
-            label: 'Antworten',
-            icon: 'check',
-            variant: 'primary',
-            onPress: () => void answerItem($, options, q.id, 'kommentar', null, draft, s.attachShot),
-          },
+          ...(Input
+            ? []
+            : [
+                {
+                  key: `rv-answer-${q.id}`,
+                  label: 'Antworten',
+                  icon: 'check' as const,
+                  variant: 'primary' as const,
+                  onPress: () => void answerItem($, options, q.id, 'kommentar', null, draft, s.attachShot),
+                },
+              ]),
           {
             key: `rv-shot-${q.id}`,
-            label: s.attachShot ? 'Screenshot kommt mit' : 'Ohne Screenshot',
+            label: shotToggleLabel(s.attachShot),
             variant: 'link',
             onPress: () => void patchReview($, x => ({ attachShot: !x.attachShot })),
           },
@@ -366,6 +374,11 @@ function questionCard(
       ),
     ],
   })
+}
+
+/** The screenshot switch as a checkbox, so it reads as a switch and not as a note: "☑ Screenshot mitschicken". */
+export function shotToggleLabel(on: boolean): string {
+  return `${on ? '☑' : '☐'} Screenshot mitschicken`
 }
 
 function storedReportRow(
@@ -1027,12 +1040,7 @@ export async function reviewTab(
  * so a long option is read in full before it is chosen (a native Button cuts its label). The button's accessible
  * label carries the whole option.
  */
-function decisionChoices(
-  k: Kit,
-  id: string,
-  choices: string[],
-  choose: (c: string) => () => void,
-): RenderElement {
+function decisionChoices(k: Kit, id: string, choices: string[], choose: (c: string) => () => void): RenderElement {
   const { Box, Button } = k
   return (
     <Box key={`rv-choices-${id}`} flexDirection="column" gap={k.graphical ? 'xs' : 0}>

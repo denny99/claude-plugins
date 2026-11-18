@@ -309,6 +309,12 @@ test('starter strip: chip "Unity" in a Unity project with the editor state; open
       compile: { seq: 1, at: 0, source: 'bridge', messages: [{ severity: 'error', message: 'x' }] },
     }),
   ).toEqual({ status: '1 Kompilierfehler', tone: 'bad' })
+  // Befund 16: no editor shows in the chip, in the warn color; ready says nothing.
+  expect(launcherStatus({ ...EMPTY_STATUS, bridge: { up: false } })).toEqual({
+    status: 'nicht verbunden',
+    tone: 'warn',
+  })
+  expect(launcherStatus({ ...EMPTY_STATUS })).toEqual({})
   const band = await $.ui.mount({ plugin: 'unity', surface: 'desktop', component: 'AbovePrompt', props: BAND })
   await settle(world, band.press({ key: 'launch-unity' }))
   await band.unmount()

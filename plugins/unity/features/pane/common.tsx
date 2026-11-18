@@ -1,7 +1,7 @@
 /** Helpers the pane's tabs share (no tab imports here, so tabs and the shell never import each other). */
 import type { EngineInterface, RenderElement } from 'claude-code'
 
-import type { UnityModel, UnityTab } from '../../types'
+import type { ModelConsoleEntry, UnityModel, UnityTab } from '../../types'
 import { BRIDGE_VERSION } from '../../lib/bridge'
 import { batchAllowed } from '../../lib/unity'
 import { Card, CardTitle, CopyButton, Actions, Sentence, type Action, type Kit } from '../../lib/ui'
@@ -191,4 +191,30 @@ export function stopTestsAction($: EngineInterface, options: Options): Action {
     confirm: 'Testlauf wirklich stoppen?',
     onPress: run($, 'stop tests', () => cancelTests($, options)),
   }
+}
+
+/** Where an entry comes from: the first script path in message or stack, and the package when it is one. */
+export function consoleOrigin(
+  c: Pick<ModelConsoleEntry, 'message' | 'stack'>,
+): { file: string; pkg?: string } | undefined {
+  const text = `${c.message}\n${c.stack ?? ''}`
+  const hit = /((?:\.\/)?(?:Assets|Packages|Library\/PackageCache)\/[^\s():]+?\.cs)(?::(\d+)|\((\d+),\d+\))?/.exec(text)
+  if (!hit) return undefined
+  const path = hit[1] ?? ''
+  const line = hit[2] ?? hit[3]
+  const pkg = /PackageCache\/([^@/]+)/.exec(path)?.[1] ?? /^(?:\.\/)?Packages\/([^/]+)/.exec(path)?.[1]
+  const file = `${path.split('/').pop() ?? path}${line ? `:${line}` : ''}`
+  return pkg ? { file, pkg } : { file }
+}
+
+/** Same type and message collapsed into one entry (the latest), counted — like Unity's Collapse. */
+export function collapseConsole(entries: ModelConsoleEntry[]): { entry: ModelConsoleEntry; count: number }[] {
+  const groups = new Map<string, { entry: ModelConsoleEntry; count: number }>()
+  for (const c of entries) {
+    const key = `${c.type}|${c.message}`
+    const g = groups.get(key)
+    groups.delete(key) // re-insert: the group moves to the time of its latest entry
+    groups.set(key, { entry: c, count: (g?.count ?? 0) + 1 })
+  }
+  return [...groups.values()]
 }

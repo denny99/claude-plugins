@@ -31,6 +31,7 @@ import {
 import {
   ago,
   bridgeUpdateCard,
+  consoleOrigin,
   exactFilter,
   FIX_ASK,
   fixWithClaude,
@@ -81,7 +82,7 @@ export function playActions($: EngineInterface, m: UnityModel, options: Options)
         {
           key: 'pause',
           label: b.isPaused ? 'Weiter' : 'Pause',
-          icon: b.isPaused ? 'play' : 'stop',
+          icon: b.isPaused ? 'play' : 'pause',
           variant: 'secondary',
           onPress: run($, 'pause', async () =>
             msg(await bridgeCommand($, options, { cmd: 'pause' }), b.isPaused ? 'Läuft weiter' : 'Pausiert'),
@@ -185,13 +186,20 @@ export function testsCard($: EngineInterface, k: Kit, m: UnityModel, options: Op
         CardTitle(k, { icon: 'flask', title: 'Tests' }),
         Sentence(k, 'Noch kein Lauf in dieser Sitzung.', { faint: true }),
         Actions(k, 'tests-card-acts', [
-          { key: 'tests-open', label: 'Tests wählen', icon: 'flask', variant: 'secondary', onPress: selectTab($, 'tests') },
+          {
+            key: 'tests-open',
+            label: 'Tests wählen',
+            icon: 'flask',
+            variant: 'secondary',
+            onPress: selectTab($, 'tests'),
+          },
         ]),
       ],
     })
   const c = countResults(t.results)
   const ranked = rankResults(t.results, m.previous).filter(r => r.status === 'Failed')
-  const fresh = ranked.filter(r => r.newlyRed).length
+  const compared = Object.keys(m.previous).length > 0
+  const fresh = compared ? ranked.filter(r => r.newlyRed).length : 0
   const mode = t.mode ?? 'EditMode'
   const running = t.state === 'running'
   const pill = running
@@ -229,7 +237,7 @@ export function testsCard($: EngineInterface, k: Kit, m: UnityModel, options: Op
           key: `ov-tf-${i}`,
           status: 'failed',
           title: r.fullName.split('.').slice(-2).join('.'),
-          pill: r.newlyRed ? { text: 'neu', tone: 'info', glyph: false } : undefined,
+          pill: compared && r.newlyRed ? { text: 'neu', tone: 'info', glyph: false } : undefined,
         }),
       ),
       Actions(k, 'tests-card-acts', acts),
@@ -241,6 +249,7 @@ function consoleCard($: EngineInterface, k: Kit, m: UnityModel): RenderElement {
   const errors = m.console.filter(c => c.type === 'Error' || c.type === 'Exception' || c.type === 'Assert')
   const warnings = m.console.filter(c => c.type === 'Warning').length
   const last = errors[errors.length - 1]
+  const origin = last ? consoleOrigin(last) : undefined
   return Card(k, {
     key: 'console-card',
     children: [
@@ -255,8 +264,17 @@ function consoleCard($: EngineInterface, k: Kit, m: UnityModel): RenderElement {
       }),
       Sentence(k, last ? (last.message.split('\n')[0] ?? '') : 'Keine Fehler seit dem letzten Kompilieren.', {
         faint: !last,
-        tone: last ? 'bad' : undefined,
+        tone: last && !origin?.pkg ? 'bad' : undefined,
       }),
+      origin
+        ? Sentence(
+            k,
+            origin.pkg ? `Aus Paket ${origin.pkg} · ${origin.file} — nicht aus deinem Spiel-Code` : `In ${origin.file}`,
+            {
+              faint: true,
+            },
+          )
+        : null,
       ActionButton(k, {
         key: 'console-open',
         label: 'Konsole öffnen',
@@ -278,6 +296,24 @@ const JOB_STATUS: Record<string, string> = {
   stopped: 'gestoppt',
   denied: 'abgelehnt',
   timeout: 'Zeit überschritten',
+}
+
+/**
+ * One line per job button that needs saying: what "Kompilieren prüfen" does next to a project job of the same kind,
+ * and each project job's `description` from .claude/unity.json.
+ */
+export function jobNotes(
+  jobs: { name: string; label?: string; description?: string; batch?: boolean }[],
+  allowed: boolean,
+): string[] {
+  const shown = jobs.filter(j => !j.batch || allowed)
+  const notes: string[] = []
+  if (allowed && shown.length)
+    notes.push(
+      '„Kompilieren prüfen“ kompiliert das Projekt im Hintergrund ohne Editor (Unity-Batchmodus). Die anderen Knöpfe sind Projekt-Aufgaben aus .claude/unity.json.',
+    )
+  for (const j of shown) if (j.description) notes.push(`${j.label ?? j.name}: ${j.description}`)
+  return notes
 }
 
 /** Batch and custom jobs: start buttons, the last five, the latest log collapsed. */
@@ -309,7 +345,7 @@ export function jobsCard($: EngineInterface, k: Kit, m: UnityModel, options: Opt
     if (!j.batch || allowed)
       actions.push({
         key: `custom-${j.name}`,
-        label: j.name,
+        label: j.label ?? j.name,
         icon: 'terminal',
         variant: 'secondary',
         ...(allowed ? {} : { confirm: 'Editor ist offen — trotzdem starten?' }),
@@ -358,6 +394,7 @@ export function jobsCard($: EngineInterface, k: Kit, m: UnityModel, options: Opt
           ? LogBox(k, { key: 'job-log', title: `Log · ${head.name}`, lines: head.tail, collapsed: true })
           : null,
       actions.length ? Actions(k, 'jobs-acts', actions, 3) : null,
+      ...jobNotes(cfg.customJobs ?? [], allowed).map(t => Sentence(k, t, { faint: true })),
     ],
   })
 }

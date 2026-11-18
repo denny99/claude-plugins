@@ -160,10 +160,15 @@ export function batchAllowed(s: { lock: LockState; bridgeUp: boolean }): { ok: b
   if (s.bridgeUp)
     return {
       ok: false,
-      reason: 'Der Editor hat das Projekt offen. Arbeite im Editor, oder lass Hintergrund-Läufe in einem Worktree laufen.',
+      reason:
+        'Der Editor hat das Projekt offen. Arbeite im Editor, oder lass Hintergrund-Läufe in einem Worktree laufen.',
     }
   if (s.lock === 'held')
-    return { ok: false, reason: 'Ein Editor hat das Projekt offen (Sperrdatei). Schließ ihn, oder lass Hintergrund-Läufe in einem Worktree laufen.' }
+    return {
+      ok: false,
+      reason:
+        'Ein Editor hat das Projekt offen (Sperrdatei). Schließ ihn, oder lass Hintergrund-Läufe in einem Worktree laufen.',
+    }
   return { ok: true }
 }
 
@@ -476,7 +481,7 @@ export interface TestFilterPreset {
  *   "bannedApis": [{ "glob": "Assets/Game/Sim/**", "patterns": ["System.Random", "DateTime.Now"] }],
  *   "restoreBeforeCommit": ["Packages/packages-lock.json"],
  *   "syncReminders": [{ "glob": "**\/texts.*.json", "message": "Run the text sync job" }],
- *   "customJobs": [{ "name": "Smoke", "command": "node tools/smoke.mjs", "batch": true }],
+ *   "customJobs": [{ "name": "Smoke", "label": "Rauchtest", "description": "Startet das Spiel kurz", "command": "node tools/smoke.mjs", "batch": true }],
  *   "playRestart": { "*.cs": "restart", "*.json": "reload" },
  *   "refreshWhilePlaying": false,
  *   "watchdogMinutes": 30,
@@ -503,7 +508,8 @@ export interface ProjectConfig {
   restoreBeforeCommit?: string[]
   syncReminders?: { glob: string; message: string }[]
   /** Shell commands as pane buttons/tools; `batch: true` → only when no editor holds the project. */
-  customJobs?: { name: string; command: string; batch?: boolean }[]
+  /** `label`: the button's text (default `name`); `description`: one line under the job buttons. */
+  customJobs?: { name: string; command: string; batch?: boolean; label?: string; description?: string }[]
   /** glob → `restart` (Play must restart) | `reload` | any hint text. */
   playRestart?: Record<string, string>
   /** Let the compile gate refresh an editor that is in Play mode (default false: never disturb a running game). */
@@ -569,7 +575,13 @@ export function parseProjectConfig(text: string): ProjectConfig {
   if (Array.isArray(raw.customJobs))
     cfg.customJobs = (raw.customJobs as Record<string, unknown>[])
       .filter(j => str(j?.name) && str(j?.command))
-      .map(j => ({ name: String(j.name), command: String(j.command), ...(j.batch === true ? { batch: true } : {}) }))
+      .map(j => ({
+        name: String(j.name),
+        command: String(j.command),
+        ...(j.batch === true ? { batch: true } : {}),
+        ...(str(j.label) ? { label: String(j.label) } : {}),
+        ...(str(j.description) ? { description: String(j.description) } : {}),
+      }))
   if (typeof raw.refreshWhilePlaying === 'boolean') cfg.refreshWhilePlaying = raw.refreshWhilePlaying
   if (typeof raw.watchdogMinutes === 'number' && raw.watchdogMinutes > 0) cfg.watchdogMinutes = raw.watchdogMinutes
   return cfg

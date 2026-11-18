@@ -157,7 +157,11 @@ export function targetTab($: EngineInterface, k: Kit, m: UnityModel, options: Op
             meta: 'z. B. Dateien, die Unity selbst ändert',
             pill: onOff(options.commitGuard),
           }),
-          Sentence(k, 'Umschalten in den Plugin-Einstellungen.', { faint: true }),
+          Sentence(
+            k,
+            'Umschalten: /plugin → unity → Einstellungen („Compile gate“, „.meta guard“, „Restore-before-commit guard“).',
+            { faint: true },
+          ),
         ],
       })}
     </Box>

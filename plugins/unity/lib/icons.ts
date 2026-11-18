@@ -6,6 +6,8 @@
 export const ICONS = {
   play: '<path d="M7 4v16l13-8z" fill="currentColor" stroke="none"></path>',
   stop: '<rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor" stroke="none"></rect>',
+  pause:
+    '<rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"></rect><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"></rect>',
   refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"></path><path d="M21 3v5h-5"></path>',
   rerun: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path>',
   up: '<path d="M12 19V5"></path><path d="m6 11 6-6 6 6"></path>',
@@ -93,6 +95,7 @@ export type IconName = keyof typeof ICONS
 export const TERM_GLYPHS: Partial<Record<IconName, string>> = {
   play: '▶',
   stop: '■',
+  pause: '‖',
   refresh: '⟳',
   rerun: '⟳',
   up: '↑',
@@ -128,6 +131,7 @@ const VS15 = '\uFE0E'
 export const ICON_GLYPHS: Partial<Record<IconName, string>> = {
   play: `▶${VS15}`,
   stop: '■',
+  pause: '‖',
   refresh: '⟳',
   rerun: '⟳',
   up: '↑',
@@ -140,6 +144,10 @@ export const ICON_GLYPHS: Partial<Record<IconName, string>> = {
   external: `↗${VS15}`,
   pen: '✎',
   flag: '⚑',
+  camera: '◉',
+  gauge: '◔',
+  trash: '⌫',
+  gear: `⚙${VS15}`,
 }
 
 /** `"<glyph> <label>"` for a native Button (just `label` without an icon or for an icon without a glyph). */
@@ -153,7 +161,7 @@ export function iconSvg(name: IconName, color: string, size = 16): string {
   const body = (ICONS[name] ?? '').replace(/currentColor/g, color)
   return schemeSvg(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" ` +
-    `stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`,
+      `stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`,
   )
 }
 

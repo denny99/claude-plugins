@@ -70,7 +70,7 @@ export async function setupView(
               ? 'Editor beschäftigt (Tests laufen) — gleich wieder da. Solange die Tests laufen, antwortet er nicht.'
               : stale
                 ? 'Der Editor antwortet nicht mehr: geschlossen, abgestürzt oder gerade beschäftigt (Import, Kompilieren).'
-              : 'Ohne die Verbindung kann Claude nicht kompilieren lassen, die Konsole lesen oder Screenshots machen. Zwei Schritte:',
+                : 'Ohne die Verbindung kann Claude nicht kompilieren lassen, die Konsole lesen oder Screenshots machen. Zwei Schritte:',
             { faint: true },
           ),
           Stepper(k, {
@@ -127,21 +127,28 @@ export async function setupView(
       })}
       {m.tests ? testsCard($, k, m, options, now) : null}
       {jobsCard($, k, m, options)}
-      {Card(k, {
-        key: 'setup-elsewhere',
-        children: [
-          CardTitle(k, { icon: 'download', title: 'Bridge in einem anderen Projekt einrichten' }),
-          Sentence(
-            k,
-            'Package Manager → + → Add package from git URL. Die Adresse liegt in der Zwischenablage, wenn du kopierst.',
-            { faint: true },
-          ),
-          <Box key="setup-links" flexDirection="row" gap={1} flexWrap="wrap">
-            {CopyButton(k, { key: 'copy-bridge-url', text: BRIDGE_GIT_URL_TAGGED, label: 'Paket-Adresse kopieren' })}
-            <x.Link href={BRIDGE_README} label="Anleitung" />
-          </Box>,
-        ],
-      })}
+      {/* Only while this project has no bridge: once installed here, the card is noise. */}
+      {installed
+        ? null
+        : Card(k, {
+            key: 'setup-elsewhere',
+            children: [
+              CardTitle(k, { icon: 'download', title: 'Bridge in einem anderen Projekt einrichten' }),
+              Sentence(
+                k,
+                'Package Manager → + → Add package from git URL. Die Adresse liegt in der Zwischenablage, wenn du kopierst.',
+                { faint: true },
+              ),
+              <Box key="setup-links" flexDirection="row" gap={1} flexWrap="wrap">
+                {CopyButton(k, {
+                  key: 'copy-bridge-url',
+                  text: BRIDGE_GIT_URL_TAGGED,
+                  label: 'Paket-Adresse kopieren',
+                })}
+                <x.Link href={BRIDGE_README} label="Anleitung" />
+              </Box>,
+            ],
+          })}
     </Box>
   )
 }

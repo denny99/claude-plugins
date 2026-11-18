@@ -3,9 +3,19 @@ import type { EngineInterface, RenderElement } from 'claude-code'
 
 import type { UnityModel } from '../../types'
 import { batchAllowed, countResults, rankResults, testErrorLine } from '../../lib/unity'
-import { Actions, Card, CardTitle, ListRow, Sentence, type Action, type Kit } from '../../lib/ui'
+import { ActionButton, Actions, Card, CardTitle, ListRow, Sentence, type Action, type Kit } from '../../lib/ui'
 import { affectedTests, batchTarget, landingsLine, patchModel, runTests, type Options } from '../state'
-import { FIX_ASK, ago, dec, fixWithClaude, run, stopTestsAction, testsProgress, type Extra } from './common'
+import {
+  FIX_ASK,
+  ago,
+  dec,
+  exactFilter,
+  fixWithClaude,
+  run,
+  stopTestsAction,
+  testsProgress,
+  type Extra,
+} from './common'
 
 export function testsTab(
   $: EngineInterface,
@@ -19,6 +29,7 @@ export function testsTab(
   return (
     <Box flexDirection="column" gap={1}>
       {startCard($, k, x, m, options)}
+      {affectedCard(k, m, now)}
       {resultCard($, k, m, options, now)}
     </Box>
   )
@@ -83,13 +94,6 @@ function startCard($: EngineInterface, k: Kit, x: Extra, m: UnityModel, options:
     children: [
       CardTitle(k, { icon: 'flask', title: 'Tests starten' }),
       reminder ? Sentence(k, reminder, { tone: 'warn' }) : null,
-      m.affected
-        ? Sentence(
-            k,
-            `Betroffen: ${m.affected.areas.length ? m.affected.areas.join(', ') : (m.affected.text.split('\n')[0] ?? '')}`,
-            { faint: true },
-          )
-        : null,
       <Select
         key="preset"
         label="Bereich"
@@ -133,13 +137,41 @@ function startCard($: EngineInterface, k: Kit, x: Extra, m: UnityModel, options:
 
 const ALL = '*all*'
 
+/** The last "Betroffene" check as a block of its own: which areas, or the check's own sentence. */
+function affectedCard(k: Kit, m: UnityModel, now: number): RenderElement | null {
+  const a = m.affected
+  if (!a) return null
+  const lines = a.text
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean)
+  return Card(k, {
+    key: 'tests-affected',
+    children: [
+      CardTitle(k, {
+        icon: 'diff',
+        title: `Betroffene Tests · geprüft ${ago(now, a.at)}`,
+        pill: a.areas.length
+          ? { text: `${a.areas.length} ${a.areas.length === 1 ? 'Bereich' : 'Bereiche'}`, tone: 'info', glyph: false }
+          : { text: 'nichts betroffen', tone: 'ok', glyph: false },
+      }),
+      a.areas.length ? Sentence(k, a.areas.join(', ')) : Sentence(k, lines[0] ?? '', { faint: true }),
+    ],
+  })
+}
+
 function resultCard($: EngineInterface, k: Kit, m: UnityModel, options: Options, now: number): RenderElement | null {
   const t = m.tests
   if (!t) return null
   const c = countResults(t.results)
   const ranked = rankResults(t.results, m.previous).filter(r => r.status === 'Failed')
-  const fresh = ranked.filter(r => r.newlyRed)
-  const still = ranked.filter(r => !r.newlyRed)
+  // "neu" needs a run to compare with: without one every red test would be "neu".
+  const compared = Object.keys(m.previous).length > 0
+  const fresh = compared ? ranked.filter(r => r.newlyRed) : []
+  const still = compared ? ranked.filter(r => !r.newlyRed) : ranked
+  const skipped = t.results.filter(r => r.status === 'Skipped' || r.status === 'Inconclusive')
+  const skippedOpen = k.isMore('tests-skipped')
+  const done = t.state !== 'running' && t.state !== 'error'
   const total = c.passed + c.failed + c.skipped
   const secs = t.results.reduce((s, r) => s + (r.duration ?? 0), 0)
   const head =
@@ -178,11 +210,49 @@ function resultCard($: EngineInterface, k: Kit, m: UnityModel, options: Options,
       t.filter ? Sentence(k, `Filter ${t.filter}`, { faint: true }) : null,
       t.state === 'running' && t.current ? Sentence(k, `Gerade: ${t.current}`, { faint: true }) : null,
       t.state === 'running' ? Actions(k, 'tests-running-acts', [stopTestsAction($, options)]) : null,
-      fresh.length ? Sentence(k, `Neu rot · ${fresh.length}`, { tone: 'bad' }) : null,
+      fresh.length ? Sentence(k, `Neu rot gegenüber dem Lauf davor · ${fresh.length}`, { tone: 'bad' }) : null,
       ...fresh.slice(0, 8).flatMap((r, i) => [row(r, i, 'new'), msgLine(r)]),
-      still.length ? Sentence(k, `Weiterhin rot · ${still.length}`, { faint: true }) : null,
-      ...still.slice(0, 8).map((r, i) => row(r, i, 'old')),
-      t.state !== 'running' && t.state !== 'error' ? Sentence(k, `${c.passed} grün`, { tone: 'ok' }) : null,
+      still.length
+        ? Sentence(k, compared ? `Weiterhin rot · ${still.length}` : `Rot · ${still.length}`, {
+            tone: compared ? undefined : 'bad',
+            faint: compared,
+          })
+        : null,
+      ...still.slice(0, 8).flatMap((r, i) => (compared ? [row(r, i, 'old')] : [row(r, i, 'old'), msgLine(r)])),
+      ranked.length && !compared && done
+        ? Sentence(k, 'Kein Vergleichslauf in dieser Sitzung — „neu rot“ zeigt sich ab dem nächsten Lauf.', {
+            faint: true,
+          })
+        : null,
+      done ? Sentence(k, `${c.passed} grün`, { tone: 'ok' }) : null,
+      done && skipped.length
+        ? ActionButton(k, {
+            key: 'tests-skipped',
+            label: `${skipped.length} übersprungen ${skippedOpen ? '▴' : '▾'}`,
+            variant: 'link',
+            onPress: () => k.toggleMore('tests-skipped'),
+          })
+        : null,
+      ...(done && skippedOpen
+        ? skipped
+            .slice(0, 20)
+            .map((r, i) =>
+              ListRow(k, { key: `tskip-${i}`, status: 'idle', title: r.fullName, meta: r.message?.split('\n')[0] }),
+            )
+        : []),
+      done && ranked.length
+        ? Actions(k, 'tests-result-acts', [
+            {
+              key: 'tests-rerun-red',
+              label: 'Rote erneut ausführen',
+              icon: 'rerun',
+              variant: 'secondary',
+              onPress: run($, 'rerun red', () =>
+                runTests($, options, t.mode ?? 'EditMode', exactFilter(ranked.map(r => r.fullName)), 0),
+              ),
+            },
+          ])
+        : null,
     ],
   })
 }

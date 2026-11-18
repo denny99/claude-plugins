@@ -637,7 +637,7 @@ export function PaneHeader(
     typeof hd.logo === 'string' && Svg ? (
       <Svg
         source={svgDocument(hd.logo)}
-        alt={hd.logoAlt ?? hd.label ?? 'logo'}
+        alt={hd.logoAlt ?? hd.label ?? 'Logo'}
         width={hd.logoWidth ?? 18}
         height={hd.logoHeight ?? hd.logoWidth ?? 18}
       />
@@ -677,7 +677,7 @@ function Rule(k: Kit): RenderElement | null {
       source={svgDocument(
         `<svg width="4000" height="1" viewBox="0 0 4000 1" preserveAspectRatio="none"><rect width="4000" height="1" fill="${k.t.line}"/></svg>`,
       )}
-      alt="divider"
+      alt="Trennlinie"
       height={1}
     />
   )
@@ -878,13 +878,13 @@ export function ListRow(
       <Box flexDirection="row" alignItems="center" gap={1}>
         {icon ? Icon(k, icon, { tone, color: tone ? undefined : k.t.faint, size: 14 }) : null}
         <Box flexGrow={1} flexShrink={1} minWidth={0}>
-          <Text size="footnote" color={k.t.text} wrap="truncate-end">
+          <Text size="footnote" color={k.t.text} wrap="wrap">
             {sanitize(r.title)}
           </Text>
         </Box>
         {r.meta && !k.narrow ? (
-          <Box flexShrink={1} minWidth={0}>
-            <Text size="caption" color={k.t.faint} wrap="truncate-end">
+          <Box flexShrink={0}>
+            <Text size="caption" color={k.t.faint} tabular>
               {sanitize(r.meta)}
             </Text>
           </Box>
@@ -1311,7 +1311,7 @@ export function EmptyState(k: Kit, info: string | EmptyInfo): RenderElement {
   return (
     <Box flexDirection="column" alignItems="center" gap={1} paddingY={2}>
       {Icon(k, info.icon ?? 'circle', { size: 28, color: k.t.faint })}
-      <Text weight="bold" color={k.t.text} wrap="truncate-end">
+      <Text weight="bold" color={k.t.text} wrap="wrap">
         {sanitize(info.title)}
       </Text>
       {info.text ? Sentence(k, info.text) : null}
