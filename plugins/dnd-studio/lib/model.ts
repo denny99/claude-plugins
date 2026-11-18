@@ -782,7 +782,10 @@ function acceptanceRows(
       "failed",
     ),
   );
-  const unpinned = places
+  // A place with no in goes on the campaign map; without one (worldMap false) there is nowhere to put it: the region
+  // that holds every place on its own map (Ödland's Rostmark, 2026-11-18) stayed red for good
+  const pinnable = places.filter((p) => str(p.in) || campaign.worldMap !== false);
+  const unpinned = pinnable
     .filter(
       (p) => p.marker === null || p.marker === undefined || p.marker === false,
     )
@@ -791,7 +794,7 @@ function acceptanceRows(
     item(
       "pins",
       "Orte auf ihrer Karte",
-      places.length,
+      pinnable.length,
       unpinned,
       "pnp-maler",
     ),

@@ -460,3 +460,21 @@ test("Build: a build agent's end checks the campaign again while the Build tab i
   for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 10));
   expect(reads()).toBe(now);
 });
+
+// Ödland 2026-11-18: the region itself (Die Rostmark, no in) holds every place on its own map, and the campaign has no
+// campaign map of its own: there is nowhere to put its marker, pin_place refuses ("no campaign map with a painted
+// tile"), and the check stayed red at 96/97 for good
+test("pure: a place with no in needs no marker while the campaign has no campaign map", () => {
+  const campaign = {
+    open: "Rostmark",
+    worldMap: false,
+    places: [
+      { name: "Die Rostmark", in: "", map: "Rostmark Karte", marker: null },
+      { name: "Schöneck", in: "Die Rostmark", map: "", marker: { x: 0.7, y: 0.58 } },
+    ],
+  };
+  const pins = acceptanceOf(campaign, { maps: [] }, "").find((i) => i.key === "pins");
+  expect(pins).toMatchObject({ status: "ok", counts: "1/1" });
+  const withWorld = acceptanceOf({ ...campaign, worldMap: true }, { maps: [] }, "").find((i) => i.key === "pins");
+  expect(withWorld).toMatchObject({ status: "failed", counts: "1/2", detail: "Die Rostmark" });
+});
