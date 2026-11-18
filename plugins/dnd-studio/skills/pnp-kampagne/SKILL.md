@@ -57,7 +57,7 @@ NPCs, Zeitplan (Agent-Tool mit `subagent_type: "pnp-architekt"`; der Auftrag nen
 mitspielt, und den Pfad der Plan-Datei im Scratchpad). Der Mensch segnet ihn ab (spielt er mit, nur Zahlen und
 Rahmen), dann wird nach dem Plan gebaut.
 
-1. `campaign new`, dann `campaign set`: `about` (Setting, Zeit, Geschichte in 1–3 Absätzen, Stimmung), `language`,
+1. `campaign new` immer mit `language` (`"German"`, nur auf Wunsch `"English"`; ohne setzt der Mod `"German"`), dann `campaign set`: `about` (Setting, Zeit, Geschichte in 1–3 Absätzen, Stimmung), `language`,
    `game`, `narrator` (Erzählerstimme in Worten, englisch beschrieben, mit Sprache am Ende: „a calm, warm narrator …,
    German“). Ist das Spiel umgedeutet (Der Eine Ring im Ödland), bekommen die Sonderseiten der Würfel eigene Namen und
    Zeichen: `dice_faces` (Ödland 2026-10-30: die Rune als Atom-Symbol ⚛, das Auge als Totenkopf 💀); die Regeln bleiben.

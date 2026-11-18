@@ -30,9 +30,11 @@ import {
   campaignName,
   patchCheck,
   patchRuns,
+  readCampaign,
   readLive,
   readPreview,
   readRuns,
+  readTab,
   setCampaign,
   setPreview,
   toggleRule,
@@ -197,10 +199,10 @@ export async function recordEnd(
   $: EngineInterface,
   agentId: string,
   failed: boolean,
-): Promise<void> {
+): Promise<AgentRun | undefined> {
   const runs = await readRuns($);
   const run = runs.find((r) => r.id === agentId && r.state === "running");
-  if (!run) return;
+  if (!run) return undefined;
   let findings: number | undefined;
   if (run.findingsFile) {
     const host = await createHost($);
@@ -219,6 +221,52 @@ export async function recordEnd(
     ),
   );
   await applyLook($);
+  return run;
+}
+
+let recheck: Promise<void> | null = null;
+let recheckAgain = false;
+
+/**
+ * After a build agent ended (done or failed): the acceptance check reads the campaign again, so the card shows what
+ * the agent wrote. Only while the Build tab is open and was checked before (on the run's campaign); runs ending while
+ * a check is reading coalesce into one more check after it, never one per agent. Never throws (it runs detached).
+ */
+export async function recheckAfterRun(
+  $: EngineInterface,
+  run: AgentRun,
+): Promise<void> {
+  try {
+    if ((await readTab($)) !== "build") return;
+    const checked = await readCampaign($);
+    if (!checked) return;
+    if (run.campaign && checked.name && run.campaign !== checked.name) return;
+    if (recheck) {
+      recheckAgain = true;
+      return await recheck;
+    }
+    recheck = (async () => {
+      do {
+        recheckAgain = false;
+        await refreshCampaign($);
+      } while (recheckAgain);
+    })().finally(() => {
+      recheck = null;
+    });
+    await recheck;
+  } catch {
+    // the session may be gone; the next "Neu prüfen" reads again
+  }
+}
+
+/** "1 Szene · 2 NPCs · 0 Orte": the campaign's head counts in singular or plural. */
+export function headCounts(c: { scenes: number; npcs: number; places: number }): string {
+  const n = (v: number, one: string, many: string) => `${v} ${v === 1 ? one : many}`;
+  return [
+    n(c.scenes, "Szene", "Szenen"),
+    n(c.npcs, "NPC", "NPCs"),
+    n(c.places, "Ort", "Orte"),
+  ].join(" · ");
 }
 
 function count(v: unknown): number {
@@ -470,12 +518,14 @@ export function registerBuild(on: On): void {
         ))
       ) {
         // the listener's return is read; it is no build run
-      } else if (e.agentId)
-        await recordEnd(
+      } else if (e.agentId) {
+        const ended = await recordEnd(
           $,
           e.agentId,
           e.reason === "error" || e.reason === "aborted",
         );
+        if (ended) void recheckAfterRun($, ended);
+      }
       // The main thread's turn: at a live table it must leave a watcher running.
       else if (e.reason === "answer") await noteTurnEnd($);
     } catch {
@@ -501,6 +551,25 @@ export function fixPrompt(open: AcceptItem[]): string {
 
 async function fixOpen($: EngineInterface, open: AcceptItem[]): Promise<void> {
   await submitForPerson($, fixPrompt(open));
+}
+
+/** The check's error line with "Erneut versuchen" as a real (secondary) button below it, not bare text. */
+function checkError(k: Kit, $: EngineInterface, message: string): RenderElement {
+  const { Box } = k;
+  return (
+    <Box key="check-err-box" flexDirection="column" gap={1}>
+      {ErrorState(k, { key: "check-err", message })}
+      {Actions(k, "check-err-acts", [
+        {
+          key: "check-err-retry",
+          label: k.s.retry,
+          icon: "refresh",
+          variant: "secondary",
+          onPress: () => void refreshCampaign($),
+        },
+      ])}
+    </Box>
+  );
 }
 
 export async function renderBuild(
@@ -747,21 +816,16 @@ export async function renderBuild(
           ? [
               Sentence(
                 k,
-                `${campaign.scenes} Szenen · ${campaign.npcs} NPCs · ${campaign.places} Orte`,
+                headCounts(campaign),
                 { faint: true },
               ),
-              check.error
-                ? ErrorState(k, {
-                    key: "check-err",
-                    message: check.error,
-                    onRetry: () => void refreshCampaign($),
-                  })
-                : null,
+              check.error ? checkError(k, $, check.error) : null,
               ...check.items.map((it) =>
                 ListRow(k, {
                   key: `chk-${it.key}`,
                   status: it.status,
                   title: `${it.label} · ${it.counts}`,
+                  wrap: true,
                   meta: rules.spoilerSafe ? "" : it.detail,
                   pill: it.fix
                     ? {
@@ -795,11 +859,7 @@ export async function renderBuild(
             ]
           : [
               check.error
-                ? ErrorState(k, {
-                    key: "check-err",
-                    message: check.error,
-                    onRetry: () => void refreshCampaign($),
-                  })
+                ? checkError(k, $, check.error)
                 : Sentence(k, "„Neu prüfen“ liest die offene Kampagne.", {
                     faint: true,
                   }),
@@ -815,6 +875,8 @@ export async function renderBuild(
                     label: "Offene Punkte beheben lassen",
                     icon: "wand" as const,
                     variant: "primary" as const,
+                    // two steps, like the plan's sign-off: the agents write straight into this campaign
+                    confirm: `In „${campName || "die offene Kampagne"}“ beheben lassen?`,
                     onPress: () => void fixOpen($, open),
                   },
                 ]

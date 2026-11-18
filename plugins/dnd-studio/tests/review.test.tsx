@@ -227,3 +227,58 @@ test("review: Studio paths are told apart from local paths and URLs", () => {
   expect(isStudioPath("C:\\x.wav")).toBe(false);
   expect(isStudioPath("https://x/y.png")).toBe(false);
 });
+
+test("review: a sent verdict is done (dimmed, local time, no buttons), a typed note goes along without Enter, nothing is sent twice", async ($, on) => {
+  resetAutoOpen();
+  const w = world(on);
+  on("process.run", () => ({ value: { code: 0, stdout: "", stderr: "" } }) as never);
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.tool.call({
+    tool: "mcp__dnd-studio__review",
+    action: "add",
+    items: [
+      { name: "Brann", kind: "image", source: "https://x.test/brann.png" },
+      { name: "Tor", kind: "image", source: "https://x.test/tor.png" },
+    ],
+  } as never);
+  const id0 = `r${(1_700_000_000_000).toString(36)}0`;
+  const id1 = `r${(1_700_000_000_000).toString(36)}1`;
+  const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
+  for (const id of [id0, id1]) {
+    await ui.press({ key: `rv-reveal-${id}` });
+    await ui.press({ key: `rv-open-${id}` });
+  }
+  await ui.press({ key: `rv-redo-${id0}` });
+  await ui.press({ key: `rv-ok-${id1}` });
+  expect(await findShown(ui, /leer geht es als „Nochmal ohne Notiz“/)).toBeDefined();
+  // typed, never confirmed with Enter
+  await ui.input({ key: `rv-note-${id0}`, text: "heller, mehr Nebel", kind: "change" } as never);
+  expect(await ui.find({ type: "Button", text: /Ergebnis an Claude \(2\)/ })).toBeDefined();
+  await ui.press({ key: "rv-send" });
+
+  expect(w.submitted).toHaveLength(1);
+  expect(w.submitted[0]).toContain("Notiz: „heller, mehr Nebel“");
+  expect(w.submitted[0]).toContain("Passt: Tor");
+  // done: one dimmed line each, with the local time; no verdict buttons, no send button
+  const at = new Date(1_700_000_000_000);
+  const hhmm = `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
+  expect(
+    (await findShown(ui, /✓ Brann · nochmal \(„heller, mehr Nebel“\) · an Claude geschickt/))?.text,
+  ).toContain(hhmm);
+  expect(await findShown(ui, /✓ Tor · passt · an Claude geschickt/)).toBeDefined();
+  expect(await ui.find({ type: "Button", key: `rv-redo-${id0}` })).toBeUndefined();
+  expect(await ui.find({ type: "Button", key: `rv-ok-${id1}` })).toBeUndefined();
+  expect(await ui.find({ type: "Button", key: "rv-send" })).toBeUndefined();
+  expect(await findShown(ui, /Alles an Claude geschickt/)).toBeDefined();
+  await ui.unmount();
+  const list = JSON.stringify(await $.tool.call({ tool: "mcp__dnd-studio__review" } as never));
+  expect(list).toContain("sent to Claude");
+});
+
+test("review: a redo without a note says so in the prompt", () => {
+  const item = {
+    id: "a", kind: "sound", name: "Tor", meta: "", source: "/t.wav", agent: "pnp-klang",
+    scene: "", verdict: "redo", note: "", revealed: true, addedAt: 0,
+  } as ReviewItem;
+  expect(resultPrompt([item])).toContain("→ pnp-klang; ohne Notiz");
+});

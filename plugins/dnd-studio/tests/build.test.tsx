@@ -7,6 +7,7 @@ import { LOOKS, phaseLook } from '../lib/looks'
 import type { LookId } from '../lib/looks'
 import { buildPhase, countFindings, findingsPathOf, pnpAgentOf } from '../lib/model'
 import { augmentedPath, startArgv } from '../lib/host'
+import { buildOpen } from '../features/look'
 
 const PANE = {
   plugin: 'dnd-studio',
@@ -61,8 +62,18 @@ test('the build cockpit tracks pnp agents and counts the reviewers’ findings',
   const ui2 = await $.ui.mount({ ...PANE, surface: 'mobile' })
   expect((await findShown(ui2, /2 Mängel/))?.text).toContain('2 Mängel')
   await ui2.unmount()
-  // The build ended: the look the plugin set is cleared.
-  expect(themes).toEqual(['dnd-inspect', 'clear'])
+  // Between phases the build stays open: the review look stands instead of flickering back to the person's theme.
+  expect(themes).toEqual(['dnd-inspect'])
+})
+
+test('a build is open between phases until the fixes end, reset or three idle hours', () => {
+  const t = 1_700_000_000_000
+  const run = (agent: string, state: 'running' | 'done', endedAt?: number) => ({ id: agent, agent, campaign: 'K', state, startedAt: t - 1000, endedAt })
+  expect(buildOpen([run('pnp-texter', 'running')], t)).toBe(true)
+  expect(buildOpen([run('pnp-architekt', 'done', t - 60_000)], t)).toBe(true)
+  expect(buildOpen([run('pnp-architekt', 'done', t - 4 * 3600_000)], t)).toBe(false)
+  expect(buildOpen([run('pnp-nachbesserer', 'done', t - 60_000)], t)).toBe(false)
+  expect(buildOpen([], t)).toBe(false)
 })
 
 const SEASONS = {

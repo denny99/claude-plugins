@@ -27,6 +27,7 @@ import {
 } from "../lib/ui";
 import type { Action, IconAction, IconName, Kit, PillProps } from "../lib/ui";
 import type { Tone } from "../lib/theme";
+import { svgDocument } from "../lib/icons";
 import type { Tab } from "../types";
 
 export const PANE = "dnd";
@@ -112,17 +113,36 @@ export function Switch(
         ) : null}
       </Box>
     );
+  const Svg = k.Svg;
   const parts = [
-      // Desktop paints `label`, not the children: both carry the same text (kit v3.1).
+    <Box
+      key={`${s.key}-row`}
+      flexDirection="row"
+      alignItems="center"
+      gap={1}
+      minWidth={0}
+    >
+      {/* The state at a glance: a small toggle beside the button (the engine drops a Svg inside a Button). */}
+      {Svg ? (
+        <Svg
+          source={toggleSvg(k, s.on)}
+          alt={s.on ? "an" : "aus"}
+          width={TOGGLE.w}
+          height={TOGGLE.h}
+        />
+      ) : null}
+      {/* Desktop paints `label`, not the children: both carry the same text (kit v3.1). Always secondary: a
+          bright primary pill per switch made the settings the loudest thing in the panel. */}
       <Button
         key={s.key}
         label={switchText(s.title, s.on)}
-        variant={s.on ? "primary" : "secondary"}
+        variant="secondary"
         onPress={s.onPress}
       >
         {switchText(s.title, s.on)}
-      </Button>,
-      s.text ? Sentence(k, s.text, { faint: true }) : null,
+      </Button>
+    </Box>,
+    s.text ? Sentence(k, s.text, { faint: true }) : null,
   ];
   if (s.bare)
     return (
@@ -131,6 +151,25 @@ export function Switch(
       </Box>
     );
   return Card(k, { key: `${s.key}-card`, children: parts });
+}
+
+/** Toggle geometry (CSS px). */
+export const TOGGLE = { w: 28, h: 16 } as const;
+
+/**
+ * The switch's toggle: a rounded track with a knob. On: track in the accent, knob right in the accent's ink; off: an
+ * outlined, dimmed track with the knob left. Colors are theme keys (`schemeSvg` gives them light and dark).
+ */
+export function toggleSvg(k: Kit, on: boolean): string {
+  const { w, h } = TOGGLE;
+  const r = h / 2;
+  const knob = r - 3;
+  const track = on
+    ? `<rect x="0.5" y="0.5" width="${w - 1}" height="${h - 1}" rx="${r - 0.5}" fill="${k.t.accent}"/>`
+    : `<rect x="0.75" y="0.75" width="${w - 1.5}" height="${h - 1.5}" rx="${r - 0.75}" fill="none" stroke="${k.t.faint}" stroke-width="1.5"/>`;
+  const dot = `<circle cx="${on ? w - r : r}" cy="${r}" r="${knob}" fill="${on ? k.t.onAccent : k.t.faint}"/>`;
+  // svgDocument adds xmlns and size and runs schemeSvg (the D&D brand) over it
+  return svgDocument(`<svg viewBox="0 0 ${w} ${h}">${track}${dot}</svg>`);
 }
 
 /** The switch button's text, e.g. "◉ Zuhörer · an". */

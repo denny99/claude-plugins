@@ -2,6 +2,7 @@ import { expect, test } from "claude-code/testing";
 
 import { findShown } from "./shown";
 
+import { headCounts } from "../features/build";
 import { acceptanceOf, gpuOf } from "../lib/model";
 import { CAMPAIGN, MAPS, pane, STATUS, world } from "./world";
 
@@ -342,4 +343,104 @@ test("Build: a part that cannot be read leaves its rows unchecked and locks the 
   expect(by.scenes).toMatchObject({ status: "idle", fix: "", unchecked: true });
   expect(by.start).toMatchObject({ counts: "nicht geprüft", fix: "" });
   expect(by.pins?.unchecked).toBeUndefined();
+});
+
+test("Build: „Offene Punkte beheben lassen“ asks first into which campaign, only the yes sends", async ($, on) => {
+  const w = world(on);
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd", args: "build" } as never);
+  const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
+  await ui.press({ key: "check-fix" });
+  expect(w.submitted).toEqual([]);
+  expect(
+    await ui.find({ type: "Button", text: /In „Breeland“ beheben lassen\?/ }),
+  ).toBeDefined();
+  await ui.press({ key: "check-fix" });
+  expect(w.submitted.length).toBe(1);
+  expect(w.submitted[0]).toContain("Abnahme-Check im D&D-Panel");
+  await ui.unmount();
+});
+
+test("Build: „Erneut versuchen“ under the check's error is a real secondary button that checks again", async ($, on) => {
+  const w = world(on, {
+    campaign: () => [{ type: "text", text: '{"open": "Breel' }, CUT],
+  });
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd", args: "build" } as never);
+  const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
+  const retry = await ui.find({ type: "Button", key: "check-err-retry" });
+  expect(retry?.text).toMatch(/Erneut versuchen/);
+  expect(retry?.props.variant).toBe("secondary");
+  expect(retry?.props.plain).toBeUndefined();
+  const before = w.calls.length;
+  await ui.press({ key: "check-err-retry" });
+  expect(w.calls.length).toBeGreaterThan(before);
+  await ui.unmount();
+});
+
+test("Build: in a narrow pane the check's rows wrap instead of cutting, the pill below the title", async ($, on) => {
+  world(on);
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd", args: "build" } as never);
+  const ui = await $.ui.mount({ ...pane(40, 60), surface: "desktop" });
+  const rows = (await ui.findAll({ type: "Text" })).filter((t) =>
+    /^(Szenen mit Bild, Vorlesetext und Ablauf · 1\/2|Stimmen vorbereitet · noch nicht gelaufen)$/.test(t.text),
+  );
+  expect(rows.length).toBe(2);
+  for (const r of rows) expect(r.props.wrap).toBe("wrap");
+  expect(await findShown(ui, /beheben: Maler, Texter/)).toBeDefined();
+  await ui.unmount();
+});
+
+test("Build: head counts say 1 Szene · 1 NPC · 1 Ort, more in plural", () => {
+  expect(headCounts({ scenes: 1, npcs: 1, places: 1 })).toBe("1 Szene · 1 NPC · 1 Ort");
+  expect(headCounts({ scenes: 2, npcs: 0, places: 3 })).toBe("2 Szenen · 0 NPCs · 3 Orte");
+});
+
+test("Build: a build agent's end checks the campaign again while the Build tab is open", async ($, on) => {
+  const w = world(on);
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd", args: "build" } as never);
+  const reads = () => w.calls.filter((c) => c.tool === "campaign").length;
+  const first = reads();
+  expect(first).toBeGreaterThan(0);
+  await $.agent.spawn({
+    tool_use_id: "t2",
+    prompt: "Schreib die Szenen.",
+    description: "tex1",
+    subagentType: "dnd-studio:pnp-texter",
+    parentModel: "opus",
+  } as never);
+  await $.turn.complete({
+    answer: "",
+    durationMs: 1,
+    isAborted: false,
+    turnId: "y",
+    agentId: "tex1",
+    reason: "answer",
+  } as never);
+  // the check runs detached from the hook: wait until it has read the campaign again
+  for (let i = 0; i < 50 && reads() < first * 2; i++)
+    await new Promise((r) => setTimeout(r, 10));
+  expect(reads()).toBe(first * 2);
+  // another tab open: no check
+  await $.command.run({ command: "dnd", args: "health" } as never);
+  const now = reads();
+  await $.agent.spawn({
+    tool_use_id: "t3",
+    prompt: "Male die Orte.",
+    description: "mal1",
+    subagentType: "dnd-studio:pnp-maler",
+    parentModel: "opus",
+  } as never);
+  await $.turn.complete({
+    answer: "",
+    durationMs: 1,
+    isAborted: false,
+    turnId: "z",
+    agentId: "mal1",
+    reason: "answer",
+  } as never);
+  for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 10));
+  expect(reads()).toBe(now);
 });

@@ -1020,6 +1020,8 @@ export function ListRow(
     meta?: string;
     pill?: PillProps;
     actions?: Action[];
+    /** Graphical: the title wraps instead of being cut ("…"); narrow puts the pill on a line of its own below it. */
+    wrap?: boolean;
   },
 ): RenderElement {
   const { Box, Text } = k;
@@ -1054,6 +1056,32 @@ export function ListRow(
     );
   }
   const acts = r.actions?.length ? Actions(k, r.key, r.actions) : null;
+  // A wrapping row in a narrow body: title (wrapped) beside the icon, the pill under the title, nothing cut.
+  if (r.wrap && k.narrow)
+    return (
+      <Box key={r.key} flexDirection="column" paddingY={0}>
+        <Box flexDirection="row" alignItems="flex-start" gap={1}>
+          {icon
+            ? Icon(k, icon, {
+                tone,
+                color: tone ? undefined : k.t.faint,
+                size: 14,
+              })
+            : null}
+          <Box flexDirection="column" flexGrow={1} flexShrink={1} minWidth={0} gap={0}>
+            <Text size="footnote" color={k.t.text} wrap="wrap">
+              {sanitize(r.title)}
+            </Text>
+            {r.pill ? (
+              <Box flexDirection="row" flexShrink={0}>
+                {Pill(k, r.pill)}
+              </Box>
+            ) : null}
+          </Box>
+        </Box>
+        {acts}
+      </Box>
+    );
   return (
     <Box key={r.key} flexDirection="column" paddingY={0}>
       <Box flexDirection="row" alignItems="center" gap={1}>
@@ -1065,7 +1093,11 @@ export function ListRow(
             })
           : null}
         <Box flexGrow={1} flexShrink={1} minWidth={0}>
-          <Text size="footnote" color={k.t.text} wrap="truncate-end">
+          <Text
+            size="footnote"
+            color={k.t.text}
+            wrap={r.wrap ? "wrap" : "truncate-end"}
+          >
             {sanitize(r.title)}
           </Text>
         </Box>

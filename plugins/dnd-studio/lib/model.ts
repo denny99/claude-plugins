@@ -896,6 +896,35 @@ export function slug(text: string): string {
   );
 }
 
+/** Blocks the app or the IDE attaches to a typed prompt (never what the person typed). */
+const ATTACHED_TAG =
+  "system-reminder|command-[\\w-]+|local-command-[\\w-]+|ide_[\\w-]+|task-notification|user-prompt-submit-hook|bash-[\\w-]+";
+
+/**
+ * Only what the person typed: every attached block (`<system-reminder>…</system-reminder>` with its session ids,
+ * `<command-…>`, `<local-command-…>`, `<ide_…>`, …) is cut out, a lone leftover tag of these too; '' when nothing is left.
+ */
+export function personsText(text: string): string {
+  return String(text ?? "")
+    .replace(
+      new RegExp(`<(${ATTACHED_TAG})\\b[^>]*>[\\s\\S]*?<\\/\\1\\s*>`, "gi"),
+      " ",
+    )
+    .replace(new RegExp(`<(${ATTACHED_TAG})\\b[^>]*>[\\s\\S]*$`, "i"), " ")
+    .replace(new RegExp(`<\\/?(${ATTACHED_TAG})\\b[^>]*>`, "gi"), " ")
+    .replace(/[ \t]*\n[ \t]*/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+/** The interjections as the person typed them: attached blocks cut out, empty ones dropped. */
+export function personsNotes<T extends { text: string }>(notes: T[]): T[] {
+  return notes
+    .map((n) => ({ ...n, text: personsText(n.text) }))
+    .filter((n) => n.text);
+}
+
 /** The debrief file's text. */
 export function debriefText(
   title: string,
@@ -906,7 +935,7 @@ export function debriefText(
     "",
     "Was du bei laufendem Tisch in den Chat geschrieben hast (für die Nachbesprechung, nach-dem-abend.md).",
     "",
-    ...notes.map(
+    ...personsNotes(notes).map(
       (n) =>
         `- ${clockTime(n.at)} ${n.text.replace(/\s+/g, " ")}`,
     ),

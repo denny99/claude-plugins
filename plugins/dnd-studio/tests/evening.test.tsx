@@ -1,5 +1,5 @@
 import { expect, test } from "claude-code/testing";
-import { findShown } from "./shown";
+import { findShown, shownTexts } from "./shown";
 
 import {
   discordOf,
@@ -363,5 +363,63 @@ test("Discord section offers Join when the bot is away", async ($, on) => {
   await ui.press({ key: "sec-discord" });
   await ui.press({ key: "discord-join" });
   expect(w.calls.at(-1)).toEqual({ tool: "discord", args: { action: "join" } });
+  await ui.unmount();
+});
+
+test("interjections: only what the person typed (attached blocks cut, empty ones dropped); they end with the evening and with a profile switch", async ($, on) => {
+  const w = world(on);
+  on("tool.call", (_, e) =>
+    String(e.tool).startsWith(PREFIX) ? (toolResult({ ok: true }) as never) : (undefined as never),
+  );
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd", args: "table" } as never);
+  await $.prompt.submit({
+    text: "Mara war heute still\n<system-reminder>\nSession 0f3c-11aa: The user opened file x.\n</system-reminder>",
+    origin: { kind: "composer" },
+  } as never);
+  await $.prompt.submit({
+    text: "<system-reminder>only the app's</system-reminder>\n<ide_selection>a b c</ide_selection>",
+    origin: { kind: "composer" },
+  } as never);
+  await $.prompt.submit({
+    text: "<local-command-stdout>ok</local-command-stdout> Tempo höher",
+    origin: { kind: "composer" },
+  } as never);
+  const firstFile = w.writes.at(-1);
+  expect(firstFile?.text).toContain("Mara war heute still");
+  expect(firstFile?.text).toContain("Tempo höher");
+  expect(firstFile?.text).not.toContain("system-reminder");
+  expect(firstFile?.text).not.toContain("0f3c-11aa");
+  expect(firstFile?.text).not.toContain("local-command");
+
+  let ui = await $.ui.mount({ ...pane(), surface: "desktop" });
+  await ui.press({ key: "sec-evening" });
+  expect((await shownTexts(ui)).join(" | ")).toContain("Mara war heute still");
+  expect(await findShown(ui, /system-reminder|0f3c-11aa|only the app/)).toBeUndefined();
+  await ui.unmount();
+
+  // the evening ends (the window and the bot gone): the next prompt finds the list empty, the file stays named
+  w.answers.table_state = { ...TABLE, players_window: false, discord: false };
+  await $.command.run({ command: "dnd", args: "table" } as never);
+  await $.prompt.submit({ text: "schreib die Sitzung auf", origin: { kind: "composer" } } as never);
+
+  // a new table: the list is empty, the last evening's file stays named; then only the new evening's lines
+  w.answers.table_state = TABLE;
+  await $.command.run({ command: "dnd", args: "table" } as never);
+  ui = await $.ui.mount({ ...pane(), surface: "desktop" }); // the fold stays open across mounts
+  expect(await findShown(ui, /Mara war heute still/)).toBeUndefined();
+  expect((await shownTexts(ui)).join(" | ")).toContain("Am laufenden Tisch noch nichts getippt");
+  expect((await shownTexts(ui)).join(" | ")).toContain("Die Einwürfe des letzten Abends stehen in dieser Datei");
+  await ui.unmount();
+  await $.prompt.submit({ text: "Neuer Abend, neues Glück", origin: { kind: "composer" } } as never);
+  expect(w.writes.at(-1)?.text).not.toContain("Mara war heute still");
+  ui = await $.ui.mount({ ...pane(), surface: "desktop" }); // the fold stays open across mounts
+  expect((await shownTexts(ui)).join(" | ")).toContain("Neuer Abend, neues Glück");
+  await ui.unmount();
+
+  // another Studio profile: another evening, the list is empty
+  await $.tool.call({ tool: `${PREFIX}profile`, action: "use", name: "Andere" } as never);
+  ui = await $.ui.mount({ ...pane(), surface: "desktop" }); // the fold stays open across mounts
+  expect(await findShown(ui, /Neuer Abend, neues Glück/)).toBeUndefined();
   await ui.unmount();
 });

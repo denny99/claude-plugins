@@ -2,6 +2,7 @@ import { expect, test } from "claude-code/testing";
 
 import { boxPaint, schemeColors, schemeSvg, themeTokens, windowTokens } from "../lib/theme";
 import type { Tokens } from "../lib/theme";
+import { toggleSvg } from "../features/dnd-ui";
 
 function luminance(hex: string): number {
   const h = hex.replace("#", "");
@@ -94,4 +95,31 @@ test("window mode: a Svg names its colors once and switches them with prefers-co
   expect(svg).toContain("@media (prefers-color-scheme: dark){");
   expect(svg).toContain('[fill="success"]{fill:#9bb48a}');
   expect(schemeSvg('<svg><rect fill="#123456"/></svg>')).toBe('<svg><rect fill="#123456"/></svg>');
+});
+
+test("switch: a calm toggle beside a secondary button; on in the accent, off dimmed, both readable light and dark", () => {
+  const k = { t: windowTokens("dnd") } as never;
+  const on = toggleSvg(k, true);
+  const off = toggleSvg(k, false);
+  // theme keys, switched with the window's scheme; no fill of its own on the off track
+  expect(on).toContain('fill="claude"');
+  expect(on).toContain('fill="inverseText"');
+  expect(on).toContain("@media (prefers-color-scheme: dark){");
+  expect(off).toContain('fill="none"');
+  expect(off).toContain('stroke="inactive"');
+  expect(off).not.toContain('fill="claude"');
+  // the knob sits right when on, left when off
+  const cx = (svg: string) => Number(/<circle cx="([\d.]+)"/.exec(svg)?.[1]);
+  expect(cx(on)).toBeGreaterThan(cx(off));
+  const c = schemeColors("dnd");
+  const low: string[] = [];
+  for (const mode of ["light", "dark"] as const) {
+    if (contrast(c.inverseText![mode], c.claude![mode]) < 3) low.push(`${mode} knob on track`);
+    // a control's shape needs 3:1 against the window (WCAG 1.4.11)
+    for (const bg of WINDOW[mode]) {
+      if (contrast(c.claude![mode], bg) < 3) low.push(`${mode} on-track on ${bg}`);
+      if (contrast(c.inactive![mode], bg) < 3) low.push(`${mode} off-track on ${bg}`);
+    }
+  }
+  expect(low).toEqual([]);
 });

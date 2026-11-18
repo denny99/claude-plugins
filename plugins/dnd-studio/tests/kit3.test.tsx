@@ -32,6 +32,14 @@ test("kit v3: buttons are native with their glyph in front (if the action has on
   expect(
     (await ui.find({ type: "Button", key: "rule-buildLooks" }))?.text,
   ).toMatch(new RegExp(`^(${SWITCH_OFF}|${SWITCH_ON}) Bau-Looks · (an|aus)$`));
+  // the switch is calm: a secondary button (never a bright primary pill) with a small toggle naming its state
+  expect(
+    (await ui.find({ type: "Button", key: "rule-buildLooks" }))?.props.variant,
+  ).toBe("secondary");
+  const toggles = (await ui.findAll({ type: "Svg" })).filter((s) =>
+    /^(an|aus)$/.test(String(s.props.alt)),
+  );
+  expect(toggles.length).toBeGreaterThanOrEqual(2);
   // the health card has no second refresh: the header's Aktualisieren probes
   expect(await ui.find({ type: "Button", key: "probe" })).toBeUndefined();
   await ui.unmount();

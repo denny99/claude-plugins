@@ -21,6 +21,8 @@ import {
   gpuOf,
   clockTime,
   localDay,
+  personsNotes,
+  personsText,
 } from "../lib/model";
 import {
   patchCheck,
@@ -460,12 +462,15 @@ export async function recordInterjection(
   $: EngineInterface,
   text: string,
 ): Promise<Interjection | undefined> {
-  const clean = sanitize(text).trim();
+  // only what the person typed: the app's <system-reminder> blocks (session ids) and the like never land here
+  const clean = personsText(sanitize(text));
   if (!clean) return undefined;
   const now = await $.clock.now();
   const note: Interjection = { at: now, text: clean.slice(0, 600) };
+  // the first interjection of an evening starts its own debrief file (the last evening's stays where it is)
   const s = await patchEvening($, (e) => ({
     notes: [...e.notes, note].slice(-200),
+    notesFile: e.notes.length ? e.notesFile : "",
   }));
   try {
     let file = s.notesFile;
@@ -488,6 +493,21 @@ export async function recordInterjection(
 
 export async function clearInterjections($: EngineInterface): Promise<void> {
   await patchEvening($, () => ({ notes: [], notesFile: "" }));
+}
+
+/**
+ * Interjections belong to one evening. Once the table is read as no longer live (the evening ended: in Claude, in the
+ * Studio, by a profile switch there), the list is emptied: its lines are in the debrief file, which stays named in
+ * the card until the next evening's first interjection. Checked on the person's next prompt and each main turn, so a
+ * new table never shows the last evening's lines. A table never read yet (null) ends nothing.
+ */
+export async function endInterjections($: EngineInterface): Promise<boolean> {
+  const s = await readEvening($);
+  if (!s.notes.length) return false;
+  const view = await readTable($);
+  if (!view || isLive(view, await readInitiative($))) return false;
+  await patchEvening($, () => ({ notes: [] }));
+  return true;
 }
 
 /** Only what the person typed: the composer (or a remote bridge), no slash command, no meta or task notification. */
@@ -527,12 +547,31 @@ export function registerEvening(on: On): void {
 
   on("turn.start", async ($, e, next) => {
     try {
-      if (!e.agentId) await noteMainTurnStart($);
+      if (!e.agentId) {
+        await noteMainTurnStart($);
+        await endInterjections($);
+      }
     } catch {
       // timing never delays a turn
     }
     return next(e);
   });
+
+  // Another Studio profile is another evening: its interjections and debrief file are not this one's.
+  on(
+    "tool.call",
+    { tool: "mcp__plugin_dnd-studio_dnd-studio__profile" },
+    async ($, e, next) => {
+      const r = await next(e);
+      try {
+        if ((e as unknown as Obj).action === "use" && !("deny" in r) && !r.isError)
+          await clearInterjections($);
+      } catch {
+        // the list is never worth a lost answer
+      }
+      return r;
+    },
+  );
 
   on("prompt.submit", async ($, e, next) => {
     let context: string[] = [];
@@ -546,6 +585,7 @@ export function registerEvening(on: On): void {
         if ((await readEvening($)).wakePending)
           await patchEvening($, () => ({ wakePending: false }));
       } else if (isPersonsPrompt(e)) {
+        await endInterjections($);
         const s = await readEvening($);
         if (s.remindPending) {
           context = [s.remindListener ? NO_LISTENER_NOTE : NO_WATCHER_NOTE];
@@ -705,10 +745,12 @@ export function renderInterjections(
   k: Kit,
   s: EveningState,
 ): RenderElement[] {
+  // older entries may still carry the app's attached blocks: shown (and counted) as the person typed them
+  const notes = personsNotes(s.notes);
   const head = CardTitle(k, {
     icon: "chat",
     title: "Einwürfe für die Nachbesprechung",
-    count: s.notes.length,
+    count: notes.length,
   });
   const file = s.notesFile
     ? CopyButton(k, {
@@ -722,13 +764,21 @@ export function renderInterjections(
     "Alles, was du bei laufendem Tisch in den Chat tippst, landet hier für die Nachbesprechung nach dem Abend.",
     { faint: true },
   );
-  if (!s.notes.length)
+  if (!notes.length)
     return [
       head,
       what,
       Sentence(k, "Am laufenden Tisch noch nichts getippt.", { faint: true }),
+      ...(file
+        ? [
+            Sentence(k, "Die Einwürfe des letzten Abends stehen in dieser Datei:", {
+              faint: true,
+            }),
+            file,
+          ]
+        : []),
     ];
-  const shown = s.notes.slice(-Math.max(3, Math.min(10, k.rows - 8)));
+  const shown = notes.slice(-Math.max(3, Math.min(10, k.rows - 8)));
   return [
     head,
     what,

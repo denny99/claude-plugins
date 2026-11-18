@@ -18,7 +18,7 @@ import {
   readRuns,
   readTable,
 } from "../lib/state";
-import type { TableView } from "../types";
+import type { AgentRun, TableView } from "../types";
 import { fetchFromStudio } from "./review";
 
 const SCENE_PREFIX = "dnd-";
@@ -154,9 +154,24 @@ export async function wantedLook($: EngineInterface): Promise<WantedLook> {
     return `${PICTURE_PREFIX}${pic.key}`;
   }
   const runs = await readRuns($);
-  if (rules.buildLooks && runs.some((r) => r.state === "running"))
+  if (rules.buildLooks && buildOpen(runs, await $.clock.now()))
     return phaseLook(buildPhase(runs));
   return "";
+}
+
+/** A build left alone this long no longer counts as open (its look would otherwise stand for days). */
+const BUILD_IDLE_MS = 3 * 60 * 60 * 1000;
+
+/**
+ * A build is open while an agent runs, and between its phases (reading the plan, approving, waiting) as long as the
+ * last phase is not the fixes' end ("Done") and something happened in the last BUILD_IDLE_MS: then the look of the
+ * last reached phase stays instead of flickering back to the person's theme. Reset empties the runs.
+ */
+export function buildOpen(runs: AgentRun[], now: number): boolean {
+  if (runs.some((r) => r.state === "running")) return true;
+  if (!runs.length || buildPhase(runs) === "Done") return false;
+  const last = Math.max(...runs.map((r) => r.endedAt ?? r.startedAt));
+  return now - last < BUILD_IDLE_MS;
 }
 
 /** Sets or clears the theme when the wanted look changed; never touches a theme it did not set. */

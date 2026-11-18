@@ -270,6 +270,8 @@ export type ReviewItem = {
   id: string;
   /** Sent to Claude with "Ergebnis an Claude": shown greyed as done, no buttons. */
   sent?: boolean;
+  /** When it was sent (shown as local clock time). */
+  sentAt?: number;
   kind: ReviewKind;
   /** What it is for ("Torknarren"); for pictures and videos hidden until revealed. */
   name: string;

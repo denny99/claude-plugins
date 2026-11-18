@@ -14,6 +14,7 @@ import {
   renderBuild,
 } from "../features/build";
 import { refreshDiscord, registerEvening } from "../features/evening";
+import { registerLanguage } from "../features/language";
 import { clashText, healthText, probe, renderHealth } from "../features/health";
 import { pluginVersion } from "../lib/brand";
 import { registerLook } from "../features/look";
@@ -235,6 +236,7 @@ export const register: Register = (on, options) => {
   registerBuild(on);
   registerLook(on);
   registerEvening(on);
+  registerLanguage(on);
 
   on("session.start", async ($, e, next) => {
     // Each registration on its own: one that fails (an old user-level MCP server named "dnd-studio" takes this

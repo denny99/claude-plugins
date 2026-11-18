@@ -6,7 +6,7 @@
  */
 import type { EngineInterface, RenderElement } from "claude-code";
 
-import { agentLabel } from "../lib/model";
+import { agentLabel, clockTime } from "../lib/model";
 import { autoOpen } from "./dnd-ui";
 import { submitForPerson } from "./evening";
 import { createHost } from "../lib/host";
@@ -53,7 +53,7 @@ function line(i: ReviewItem): string {
       : i.verdict === "redo"
         ? `nochmal${i.note ? ` (${i.note})` : ""}`
         : "offen";
-  return `- [${i.id}] ${i.kind} ${i.name}${i.meta ? ` · ${i.meta}` : ""}: ${v}`;
+  return `- [${i.id}] ${i.kind} ${i.name}${i.meta ? ` · ${i.meta}` : ""}: ${v}${i.sent ? " (sent to Claude)" : ""}`;
 }
 
 /** The model tool `review`: add, list or clear the queue. */
@@ -540,7 +540,7 @@ export function resultPrompt(items: ReviewItem[]): string {
     parts.push("Nochmal machen:");
     for (const i of redo)
       parts.push(
-        `- ${i.name} (${i.kind}, ${i.source}) → ${i.agent}${i.note ? `; Notiz: „${i.note}“` : ""}`,
+        `- ${i.name} (${i.kind}, ${i.source}) → ${i.agent}${i.note ? `; Notiz: „${i.note}“` : "; ohne Notiz"}`,
       );
     const agents = [...new Set(redo.map((i) => i.agent))];
     parts.push(
@@ -550,20 +550,51 @@ export function resultPrompt(items: ReviewItem[]): string {
   return parts.join("\n");
 }
 
+/** What the person typed into a "Nochmal" note field without pressing "Notiz" (by item id): sent with the result. */
+const drafts = new Map<string, string>();
+
+/** The judged items not sent yet: what "Ergebnis an Claude" sends (never one twice). */
+export function unsent(items: ReviewItem[]): ReviewItem[] {
+  return items.filter((i) => i.verdict && !i.sent);
+}
+
 export async function sendResult($: EngineInterface): Promise<void> {
-  const r = await readReview($);
-  const judged = r.items.filter((i) => i.verdict && !i.sent);
+  const now = await $.clock.now();
+  let judged: ReviewItem[] = [];
+  // Marked sent BEFORE the prompt goes: $.prompt.submit settles only once the session takes the turn (or after it),
+  // and a second press meanwhile must find nothing left to send. A note typed but not confirmed goes along.
+  await patchReview($, (s) => {
+    const ids = new Set(unsent(s.items).map((i) => i.id));
+    const items = s.items.map((i): ReviewItem => {
+      if (!ids.has(i.id)) return i;
+      const draft = (drafts.get(i.id) ?? "").trim();
+      return {
+        ...i,
+        note: i.verdict === "redo" && !i.note && draft ? draft : i.note,
+        sent: true,
+        sentAt: now,
+      };
+    });
+    judged = items.filter((i) => ids.has(i.id));
+    return { items, sentAt: now };
+  });
   if (!judged.length) {
     $.ui.toast("Noch nichts beurteilt.");
     return;
   }
-  await submitForPerson($, resultPrompt(judged));
-  const now = await $.clock.now();
-  await patchReview($, (s) => ({
-    // Sent items stay in the list, greyed as "erledigt", until Claude adds the new version (same source replaces it).
-    items: s.items.map((i) => (i.verdict && !i.sent ? { ...i, sent: true } : i)),
-    sentAt: now,
-  }));
+  for (const i of judged) drafts.delete(i.id);
+  try {
+    await submitForPerson($, resultPrompt(judged));
+  } catch (err) {
+    // not delivered: the items are open again, nothing is lost
+    const back = new Set(judged.map((i) => i.id));
+    await patchReview($, (s) => ({
+      items: s.items.map((i) =>
+        back.has(i.id) ? { ...i, sent: false, sentAt: undefined } : i,
+      ),
+    }));
+    $.ui.toast(`✗ Nicht an Claude geschickt: ${errLine(err)}`);
+  }
 }
 
 export function openCount(r: ReviewState): number {
@@ -577,21 +608,25 @@ function itemRow(
   i: ReviewItem,
   playing: boolean,
 ): RenderElement[] {
-  if (i.sent)
+  if (i.sent) {
+    // done: one dimmed line, no pill, no buttons; it stays until Claude adds the new version (same source replaces it)
+    const name =
+      i.kind !== "sound" && !i.revealed
+        ? `${i.kind === "image" ? "Bild" : "Video"} (verdeckt)`
+        : i.name;
+    const what =
+      i.verdict === "redo"
+        ? i.note
+          ? `nochmal („${i.note}“)`
+          : "nochmal ohne Notiz"
+        : "passt";
+    const when = i.sentAt ? ` ${clockTime(i.sentAt)}` : "";
     return [
-      ListRow(k, {
-        key: `rv-${i.id}`,
-        icon:
-          i.kind === "sound" ? "speaker" : i.kind === "image" ? "camera" : "play",
-        tone: "neutral",
-        title:
-          i.kind !== "sound" && !i.revealed
-            ? `${i.kind === "image" ? "Bild" : "Video"} (verdeckt)`
-            : i.name,
-        meta: i.verdict === "redo" ? "an Claude: nochmal" : "an Claude: passt",
-        pill: { text: "erledigt", tone: "neutral", glyph: "✓" },
+      Sentence(k, `✓ ${name} · ${what} · an Claude geschickt${when}`, {
+        faint: true,
       }),
     ];
+  }
   const covered = i.kind !== "sound" && !i.revealed;
   const kindText =
     i.kind === "sound" ? "Klang" : i.kind === "image" ? "Bild" : "Video";
@@ -681,15 +716,27 @@ function itemRow(
     );
   if (i.verdict === "redo")
     out.push(
-      i.note
-        ? Sentence(k, `Notiz: „${i.note}“ → ${agentLabel(i.agent)}`, { faint: true })
-        : Input({
-            key: `rv-note-${i.id}`,
-            placeholder: "Was soll anders werden?",
-            submitLabel: "Notiz",
-            onSubmit: (v: string) =>
-              void patchItem($, i.id, { note: v.trim() }),
-          }),
+      ...(i.note
+        ? [Sentence(k, `Notiz: „${i.note}“ → ${agentLabel(i.agent)}`, { faint: true })]
+        : [
+            Input({
+              key: `rv-note-${i.id}`,
+              placeholder: "Was soll anders werden?",
+              submitLabel: "Notiz",
+              value: drafts.get(i.id) ?? "",
+              // what is typed goes with "Ergebnis an Claude" even without Enter
+              onInput: (v: string) => void drafts.set(i.id, v),
+              onSubmit: (v: string) => {
+                drafts.delete(i.id);
+                void patchItem($, i.id, { note: v.trim() });
+              },
+            }),
+            Sentence(
+              k,
+              "Was hier steht, geht mit „Ergebnis an Claude“ mit; leer geht es als „Nochmal ohne Notiz“.",
+              { faint: true },
+            ),
+          ]),
     );
   return out;
 }
@@ -709,6 +756,7 @@ export function renderReview(
       }),
     ];
   const done = r.items.filter((i) => i.verdict).length;
+  const toSend = unsent(r.items).length;
   const sounds = r.items.filter((i) => i.kind === "sound");
   const pictures = r.items.filter((i) => i.kind !== "sound");
   const out: RenderElement[] = [];
@@ -755,22 +803,32 @@ export function renderReview(
         ],
       }),
     );
-  out.push(
-    Actions(
-      k,
-      "rv-send-acts",
-      [
-        {
-          key: "rv-send",
-          label: "Ergebnis an Claude",
-          icon: "claude",
-          variant: "primary",
-          onPress: () => void sendResult($),
-        },
-      ],
-      1,
-    ) as RenderElement,
-  );
+  // only while something judged is not sent yet: nothing goes to Claude twice
+  if (toSend)
+    out.push(
+      Actions(
+        k,
+        "rv-send-acts",
+        [
+          {
+            key: "rv-send",
+            label: `Ergebnis an Claude (${toSend})`,
+            icon: "claude",
+            variant: "primary",
+            onPress: () => void sendResult($),
+          },
+        ],
+        1,
+      ) as RenderElement,
+    );
+  else if (r.items.some((i) => i.sent) && !r.items.some((i) => !i.verdict))
+    out.push(
+      Sentence(
+        k,
+        `Alles an Claude geschickt${r.sentAt ? ` (${clockTime(r.sentAt)})` : ""}.`,
+        { faint: true },
+      ),
+    );
   out.push(
     Sentence(
       k,
