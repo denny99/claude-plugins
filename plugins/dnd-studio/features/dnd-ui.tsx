@@ -88,6 +88,8 @@ export function Switch(
     text?: string;
     on: boolean;
     icon?: IconName;
+    /** Graphical: no card of its own (for a group of switches inside one card). */
+    bare?: boolean;
     onPress: () => void;
   },
 ): RenderElement {
@@ -110,9 +112,7 @@ export function Switch(
         ) : null}
       </Box>
     );
-  return Card(k, {
-    key: `${s.key}-card`,
-    children: [
+  const parts = [
       // Desktop paints `label`, not the children: both carry the same text (kit v3.1).
       <Button
         key={s.key}
@@ -123,8 +123,14 @@ export function Switch(
         {switchText(s.title, s.on)}
       </Button>,
       s.text ? Sentence(k, s.text, { faint: true }) : null,
-    ],
-  });
+  ];
+  if (s.bare)
+    return (
+      <Box key={`${s.key}-sw`} flexDirection="column" gap={0} minWidth={0}>
+        {parts}
+      </Box>
+    );
+  return Card(k, { key: `${s.key}-card`, children: parts });
 }
 
 /** The switch button's text, e.g. "◉ Zuhörer · an". */
@@ -137,8 +143,8 @@ export const SWITCH_ON = "\u25C9";
 export const SWITCH_OFF = "\u25CB";
 
 /**
- * A foldable section as a card: icon + title + count/pill on top, the rows when open, then its buttons with a
- * "Einklappen"/"Aufklappen" link (key `sec-<key>`). Terminal: the kit's v1 section (same toggle key).
+ * A foldable section as a card: icon + title + count/pill and a chevron knob (key `sec-<key>`) on top, its buttons
+ * under the title, the rows when open. Terminal: the kit's v1 section (same toggle key).
  */
 export function Fold(
   k: Kit,
@@ -164,29 +170,36 @@ export function Fold(
       actions: f.actions,
       children: f.children,
     });
-  const open = k.isOpen(f.key, f.defaultOpen ?? true);
-  const acts: Action[] = [
-    ...(f.actions ?? []),
-    {
-      key: `sec-${f.key}`,
-      label: open ? "Einklappen" : "Aufklappen",
-      variant: "link",
-      onPress: () => k.toggle(f.key),
-    },
-  ];
+  // One knob for every fold: a chevron button in the title row (▸ closed, ▾ open), closed unless the caller says so.
+  // The fold's own buttons sit right under the title, so they stay where the section starts (Pause up top).
+  const { Box, Button } = k;
+  const open = k.isOpen(f.key, f.defaultOpen ?? false);
+  const chevron = open ? "\u25BE" : "\u25B8";
   return Card(k, {
     key: f.key,
     tone: f.tone,
     children: [
-      CardTitle(k, {
-        icon: f.icon,
-        title: f.title,
-        count: f.pill ? undefined : f.count,
-        pill: f.pill,
-      }),
+      <Box key={`${f.key}-head`} flexDirection="row" alignItems="center" gap={1}>
+        <Box flexGrow={1} flexShrink={1} minWidth={0}>
+          {CardTitle(k, {
+            icon: f.icon,
+            title: f.title,
+            count: f.pill ? undefined : f.count,
+            pill: f.pill,
+          })}
+        </Box>
+        <Button
+          key={`sec-${f.key}`}
+          label={chevron}
+          variant="secondary"
+          onPress={() => k.toggle(f.key)}
+        >
+          {chevron}
+        </Button>
+      </Box>,
+      f.actions?.length ? Actions(k, `${f.key}-acts`, f.actions, 4) : null,
       ...(open ? f.children : []),
-      Actions(k, `${f.key}-acts`, acts, 4),
-    ],
+    ].filter((x): x is RenderElement => !!x),
   });
 }
 

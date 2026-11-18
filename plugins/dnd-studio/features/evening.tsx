@@ -595,8 +595,9 @@ export function bandEvening(
         watch: `Zuhörer wartet · ${skipped} übersprungen`,
         stale,
       };
+    // Woken is the normal hand-over, not a warning: the GM is answering now (the band turns back from orange).
     return {
-      watching: false,
+      watching: Boolean(l.returned && l.woke),
       watch:
         l.returned && l.woke
           ? `Zuhörer hat geweckt: ${l.why || "ein Zug"}`
@@ -887,6 +888,21 @@ export function renderDiscord(
         variant: "secondary",
         onPress: () => void refreshDiscord($),
       },
+      ...(atTable
+        ? [
+            {
+              key: "discord-leave",
+              label: "Verlassen",
+              icon: "power" as const,
+              variant: "secondary" as const,
+              confirm: "Discord wirklich verlassen?",
+              onPress: () =>
+                void discordAction($, "Bot hat Discord verlassen", {
+                  action: "leave",
+                }),
+            },
+          ]
+        : []),
       ...(info?.connected
         ? info.rooms.length > 1
           ? [

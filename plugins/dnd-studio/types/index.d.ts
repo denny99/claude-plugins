@@ -258,6 +258,8 @@ export type ReviewKind = "sound" | "image" | "video";
 export type ReviewVerdict = "" | "ok" | "redo";
 export type ReviewItem = {
   id: string;
+  /** Sent to Claude with "Ergebnis an Claude": shown greyed as done, no buttons. */
+  sent?: boolean;
   kind: ReviewKind;
   /** What it is for ("Torknarren"); for pictures and videos hidden until revealed. */
   name: string;

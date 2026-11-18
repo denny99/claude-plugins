@@ -34,9 +34,11 @@ import {
   type IconName,
 } from "./icons";
 import {
+  boxPaint,
   modeFromTheme,
   terminalColor,
   themeTokens,
+  windowTokens,
   type Brand,
   type Mode,
   type Tokens,
@@ -342,7 +344,10 @@ export async function kit(
     graphical,
     brand,
     mode,
-    t: themeTokens(brand, mode),
+    t:
+      graphical && opts.mode !== "dark" && opts.mode !== "light"
+        ? windowTokens(brand)
+        : themeTokens(brand, mode),
     s: KIT_STRINGS[opts.lang ?? "en"],
     state,
     isOpen: (key, defaultOpen = true) =>
@@ -480,7 +485,7 @@ function xmlText(text: string): string {
 }
 
 /** Pill geometry (CSS px): height, font size, side padding, icon size, estimated advance per character. */
-const PILL = { h: 20, font: 12, pad: 7, icon: 12, gap: 4, radius: 4 } as const;
+const PILL = { h: 20, font: 12, pad: 8, icon: 12, gap: 4, radius: 4 } as const;
 
 /** Estimated advance of one character at 12 px semibold system font (narrow, digits, capitals, rest). */
 function charWidth(c: string): number {
@@ -489,7 +494,7 @@ function charWidth(c: string): number {
   if (/[0-9]/.test(c)) return 6.9;
   if (/[mwMW]/.test(c)) return 9.6;
   if (/[A-ZÄÖÜ]/.test(c)) return 7.8;
-  return 6.6;
+  return 7.1;
 }
 
 /**
@@ -503,9 +508,8 @@ export function pillSvg(
   icon?: IconName,
 ): { source: string; width: number } {
   const iconW = icon ? PILL.icon + PILL.gap : 0;
-  const width = Math.ceil(
-    PILL.pad * 2 + iconW + [...text].reduce((w, c) => w + charWidth(c), 0),
-  );
+  const textW = [...text].reduce((w, c) => w + charWidth(c), 0);
+  const width = Math.ceil(PILL.pad * 2 + iconW + textW);
   const scale = PILL.icon / 24;
   const top = (PILL.h - PILL.icon) / 2;
   const mark = icon
@@ -514,8 +518,8 @@ export function pillSvg(
     : "";
   const source = svgDocument(
     `<svg viewBox="0 0 ${width} ${PILL.h}"><rect width="${width}" height="${PILL.h}" rx="${PILL.radius}" ` +
-      `fill="${bg}"></rect>${mark}<text x="${PILL.pad + iconW}" y="${PILL.h / 2 + PILL.font * 0.35}" ` +
-      `font-family="-apple-system, Segoe UI, sans-serif" font-size="${PILL.font}" font-weight="600" ` +
+      `fill="${bg}"></rect>${mark}<text x="${PILL.pad + iconW + textW / 2}" y="${PILL.h / 2 + PILL.font * 0.35}" ` +
+      `text-anchor="middle" font-family="-apple-system, Segoe UI, sans-serif" font-size="${PILL.font}" font-weight="600" ` +
       `fill="${fg}">${xmlText(text)}</text></svg>`,
   );
   return { source, width };
@@ -591,7 +595,9 @@ export function Card(
       flexDirection="column"
       gap={c.gap ?? 1}
       padding={1}
-      backgroundColor={fill}
+      minWidth={0}
+      flexShrink={1}
+      backgroundColor={boxPaint(fill)}
       borderStyle="round"
       borderColor={border}
     >
@@ -652,7 +658,11 @@ export function CardTitle(
           {sanitize(count)}
         </Text>
       ) : null}
-      {c.pill ? Pill(k, c.pill) : null}
+      {c.pill ? (
+        <Box paddingRight={1} flexShrink={0} alignSelf="center">
+          {Pill(k, c.pill)}
+        </Box>
+      ) : null}
     </Box>
   );
 }
@@ -673,18 +683,22 @@ export function Sentence(
         {wrapText(text, k.cols).join("\n")}
       </Text>
     );
+  // The Box keeps a long sentence inside the card: without minWidth 0 a flex child may grow past the pane.
+  const { Box } = k;
   return (
-    <Text
-      size="footnote"
-      color={
-        opts.tone
-          ? k.t.tones[opts.tone].fg
-          : ink(k, opts.faint ? "faint" : "muted")
-      }
-      wrap={opts.wrap ?? "wrap"}
-    >
-      {sanitize(text)}
-    </Text>
+    <Box flexDirection="column" flexShrink={1} minWidth={0}>
+      <Text
+        size="footnote"
+        color={
+          opts.tone
+            ? k.t.tones[opts.tone].fg
+            : ink(k, opts.faint ? "faint" : "muted")
+        }
+        wrap={opts.wrap ?? "wrap"}
+      >
+        {sanitize(text)}
+      </Text>
+    </Box>
   );
 }
 
@@ -794,7 +808,7 @@ function Rule(k: Kit): RenderElement | null {
   if (!Svg) return null;
   return (
     <Svg
-      source={`<svg xmlns="http://www.w3.org/2000/svg" width="4000" height="1" viewBox="0 0 4000 1" preserveAspectRatio="none"><rect width="4000" height="1" fill="${k.t.line}"/></svg>`}
+      source={svgDocument(`<svg width="4000" height="1" viewBox="0 0 4000 1" preserveAspectRatio="none"><rect width="4000" height="1" fill="${k.t.line}"/></svg>`)}
       alt="divider"
       height={1}
     />
@@ -962,7 +976,7 @@ export function Stepper(
               {mark}
             </Text>
           )}
-          {!last ? <Text color={k.t.line}>│</Text> : null}
+          {!last ? <Text color={k.t.faint}>│</Text> : null}
         </Box>
         <Box
           flexDirection="column"
@@ -1062,7 +1076,11 @@ export function ListRow(
             </Text>
           </Box>
         ) : null}
-        {r.pill ? Pill(k, r.pill) : null}
+        {r.pill ? (
+          <Box paddingRight={1} flexShrink={0} alignSelf="center">
+            {Pill(k, r.pill)}
+          </Box>
+        ) : null}
         {acts && !k.narrow ? acts : null}
       </Box>
       {acts && k.narrow ? acts : null}
@@ -1305,8 +1323,18 @@ export function ConfirmButton(
   },
 ): RenderElement {
   const { Box, Button } = k;
+  // Graphical: a real (secondary) button like its neighbours, not bare text; the terminal keeps the plain one.
   if (!k.isConfirming(a.key))
-    return (
+    return k.graphical ? (
+      <Button
+        key={a.key}
+        label={a.label}
+        variant="secondary"
+        onPress={() => k.askConfirm(a.key)}
+      >
+        {a.label}
+      </Button>
+    ) : (
       <Button key={a.key} plain onPress={() => k.askConfirm(a.key)}>
         {a.label}
       </Button>
@@ -1603,7 +1631,7 @@ export function LoadingState(
           key={`sk-${i}-${j}`}
           height={1}
           width={BAR_WIDTHS[(i + j) % BAR_WIDTHS.length]}
-          backgroundColor={k.t.line}
+          backgroundColor={boxPaint(k.t.line)}
         />
       )),
     }),

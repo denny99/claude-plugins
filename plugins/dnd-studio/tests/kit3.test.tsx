@@ -1,7 +1,8 @@
 /** Kit v3 in the D&D pane: native buttons with their glyph, the switch as one button, results Claude makes go to review. */
 import { expect, test } from "claude-code/testing";
 
-import { resetAutoOpen, SWITCH_OFF } from "../features/dnd-ui";
+import { resetAutoOpen, SWITCH_OFF, SWITCH_ON } from "../features/dnd-ui";
+import { findShown } from "./shown";
 import { glyphLabel } from "../lib/icons";
 import { pane, PREFIX, toolResult, world } from "./world";
 
@@ -24,9 +25,15 @@ test("kit v3: buttons are native with their glyph in front (if the action has on
 
   await $.command.run({ command: "dnd", args: "health" } as never);
   ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
+  // one place for the listener switch (Table tab); the health tab only says where it is
+  expect(await ui.find({ type: "Button", key: "switch-listener" })).toBeUndefined();
+  await ui.press({ key: "sec-settings" });
+  expect(await findShown(ui, /Ein- und ausschalten im Tisch-Tab/)).toBeDefined();
   expect(
-    (await ui.find({ type: "Button", key: "switch-listener" }))?.text,
-  ).toBe(`${SWITCH_OFF} Zuhörer · aus`);
+    (await ui.find({ type: "Button", key: "rule-buildLooks" }))?.text,
+  ).toMatch(new RegExp(`^(${SWITCH_OFF}|${SWITCH_ON}) Bau-Looks · (an|aus)$`));
+  // the health card has no second refresh: the header's Aktualisieren probes
+  expect(await ui.find({ type: "Button", key: "probe" })).toBeUndefined();
   await ui.unmount();
   await $.command.run({ command: "dnd", args: "table" } as never);
   const term = await $.ui.mount({ ...pane(90, 60), surface: "terminal" });

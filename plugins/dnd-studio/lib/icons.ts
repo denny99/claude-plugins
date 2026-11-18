@@ -6,6 +6,7 @@
 export const ICONS = {
   play: '<path d="M7 4v16l13-8z" fill="currentColor" stroke="none"></path>',
   stop: '<rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor" stroke="none"></rect>',
+  pause: '<rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"></rect><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"></rect>',
   refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"></path><path d="M21 3v5h-5"></path>',
   rerun: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path>',
   up: '<path d="M12 19V5"></path><path d="m6 11 6-6 6 6"></path>',
@@ -84,6 +85,8 @@ export const ICONS = {
   info: '<circle cx="12" cy="12" r="9"></circle><path d="M12 11v5M12 8h.01"></path>',
 } as const
 
+import { schemeSvg } from './theme'
+
 /** Name of a kit icon. */
 export type IconName = keyof typeof ICONS
 
@@ -91,6 +94,7 @@ export type IconName = keyof typeof ICONS
 export const TERM_GLYPHS: Partial<Record<IconName, string>> = {
   play: '▶',
   stop: '■',
+  pause: '❚❚',
   refresh: '⟳',
   rerun: '⟳',
   up: '↑',
@@ -126,6 +130,7 @@ const VS15 = '\uFE0E'
 export const ICON_GLYPHS: Partial<Record<IconName, string>> = {
   play: `▶${VS15}`,
   stop: '■',
+  pause: '❚❚',
   refresh: '⟳',
   rerun: '⟳',
   up: '↑',
@@ -149,9 +154,9 @@ export function glyphLabel(icon: IconName | undefined, label: string): string {
 /** The `<svg>` markup of an icon in one color (`currentColor` replaced), sized `size` CSS pixels. */
 export function iconSvg(name: IconName, color: string, size = 16): string {
   const body = (ICONS[name] ?? '').replace(/currentColor/g, color)
-  return (
+  return schemeSvg(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" ` +
-    `stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`
+    `stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`,
   )
 }
 
@@ -178,5 +183,5 @@ export function svgDocument(source: string): string {
   const hgt = vb?.[2]
   if (w && !/\swidth\s*=/.test(attrs)) attrs = `${attrs} width="${w}"`
   if (hgt && !/\sheight\s*=/.test(attrs)) attrs = `${attrs} height="${hgt}"`
-  return `<svg${attrs}>${src.slice(m[0].length)}`
+  return schemeSvg(`<svg${attrs}>${src.slice(m[0].length)}`)
 }

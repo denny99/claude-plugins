@@ -517,7 +517,7 @@ export function resultPrompt(items: ReviewItem[]): string {
 
 export async function sendResult($: EngineInterface): Promise<void> {
   const r = await readReview($);
-  const judged = r.items.filter((i) => i.verdict);
+  const judged = r.items.filter((i) => i.verdict && !i.sent);
   if (!judged.length) {
     $.ui.toast("Noch nichts beurteilt.");
     return;
@@ -525,7 +525,8 @@ export async function sendResult($: EngineInterface): Promise<void> {
   await submitForPerson($, resultPrompt(judged));
   const now = await $.clock.now();
   await patchReview($, (s) => ({
-    items: s.items.filter((i) => !i.verdict),
+    // Sent items stay in the list, greyed as "erledigt", until Claude adds the new version (same source replaces it).
+    items: s.items.map((i) => (i.verdict && !i.sent ? { ...i, sent: true } : i)),
     sentAt: now,
   }));
 }
@@ -541,6 +542,21 @@ function itemRow(
   i: ReviewItem,
   playing: boolean,
 ): RenderElement[] {
+  if (i.sent)
+    return [
+      ListRow(k, {
+        key: `rv-${i.id}`,
+        icon:
+          i.kind === "sound" ? "speaker" : i.kind === "image" ? "camera" : "play",
+        tone: "neutral",
+        title:
+          i.kind !== "sound" && !i.revealed
+            ? `${i.kind === "image" ? "Bild" : "Video"} (verdeckt)`
+            : i.name,
+        meta: i.verdict === "redo" ? "an Claude: nochmal" : "an Claude: passt",
+        pill: { text: "erledigt", tone: "neutral", glyph: "✓" },
+      }),
+    ];
   const covered = i.kind !== "sound" && !i.revealed;
   const kindText =
     i.kind === "sound" ? "Klang" : i.kind === "image" ? "Bild" : "Video";

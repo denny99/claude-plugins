@@ -755,6 +755,13 @@ export async function bandStatus($: EngineInterface): Promise<{
 
 type InputEl = (props: Record<string, unknown>) => RenderElement;
 
+/** The fight-order field's example from the real group: "z. B. Ada, Borin, Wolf 1". */
+export function orderExample(view: TableView): string {
+  const names = view.party.filter((h) => !h.foe).map((h) => h.name).slice(0, 3);
+  const foe = view.party.find((h) => h.foe)?.name ?? "Wolf 1";
+  return `Reihenfolge, z. B. ${[...(names.length ? names : ["Ada", "Borin"]), foe].join(", ")}`;
+}
+
 function ago(ms: number): string {
   const s = Math.round(ms / 1000);
   return s < 60
@@ -809,7 +816,8 @@ export function renderTable(
     view.paused ? "Pause" : "",
     isListenerMode(view) ? "Zuhörer an" : "",
   ].filter(Boolean);
-  out.push(Sentence(k, status.join(" · "), { faint: true }));
+  const running = isLive(view, ini);
+  if (running) out.push(Sentence(k, status.join(" · "), { faint: true }));
   const stranded = strandedTurns(
     view,
     ini,
@@ -860,6 +868,19 @@ export function renderTable(
   if (view.unheard)
     out.push(Sentence(k, `Ungehört: ${view.unheard}`, { tone: "warn" }));
 
+  // No table running: a quiet empty state instead of the full desk with live buttons; Discord stays to join early.
+  if (!running) {
+    out.push(
+      EmptyState(k, {
+        icon: "dice",
+        title: "Kein Tisch läuft",
+        text: "Claude bitten, den Abend zu beginnen (etwa „Wir spielen weiter“). Sobald das Spielerfenster oder Discord eine Szene zeigt, erscheint hier das Pult.",
+      }),
+    );
+    out.push(renderDiscord($, k, { evening, view, rules, now }));
+    return out;
+  }
+
   // Scene card: title in brass, the goal (not spoiler-safe), sound chips that play only on a press
   const { Box, Text } = k;
   out.push(
@@ -873,13 +894,15 @@ export function renderTable(
             ? { text: `Runde ${ini.round}`, tone: "accent", glyph: false }
             : undefined,
         }),
-        k.graphical ? (
-          <Text size="heading" weight="bold" color={k.t.accentTintText}>
-            {sanitize(view.scene?.title ?? "—")}
-          </Text>
-        ) : (
-          <Text bold>{truncate(view.scene?.title ?? "—", k.cols)}</Text>
-        ),
+        view.scene?.title
+          ? k.graphical
+            ? (
+                <Text size="heading" weight="bold" color={k.t.accentTintText}>
+                  {sanitize(view.scene.title)}
+                </Text>
+              )
+            : <Text bold>{truncate(view.scene.title, k.cols)}</Text>
+          : Sentence(k, "Noch keine Szene gezeigt", { faint: true }),
         view.scene?.notes && !rules.spoilerSafe
           ? Sentence(k, view.scene.notes)
           : null,
@@ -983,12 +1006,14 @@ export function renderTable(
               );
             })
           : [
-              Input({
-                key: "ini-order",
-                placeholder: "Reihenfolge: Thorin, Wolf 1, Mara",
-                submitLabel: "Start",
-                onSubmit: (v: string) => void startInitiative($, parseOrder(v)),
-              }),
+              <Box key="ini-order-box" flexDirection="column" width="100%" minWidth={0}>
+                {Input({
+                  key: "ini-order",
+                  placeholder: orderExample(view),
+                  submitLabel: "Start",
+                  onSubmit: (v: string) => void startInitiative($, parseOrder(v)),
+                })}
+              </Box>,
             ]),
         Actions(
           k,
@@ -1005,6 +1030,8 @@ export function renderTable(
                 {
                   key: "ini-end",
                   label: "Kampf beenden",
+                  icon: "x",
+                  variant: "secondary",
                   confirm: "Wirklich beenden?",
                   onPress: () => void endInitiative($),
                 },
@@ -1140,6 +1167,7 @@ export function renderTable(
       key: "dice",
       icon: "dice",
       title: "Würfel",
+      defaultOpen: false,
       count: view.rolls.length,
       children: rolls.length
         ? rolls.map((r, i) =>
@@ -1197,7 +1225,7 @@ export function renderTable(
           : {
               key: "pause-on",
               label: "Pause",
-              icon: "stop",
+              icon: "pause",
               variant: "secondary",
               onPress: () =>
                 void tableAction($, "Pause", "set_pause", { on: true }),
@@ -1231,17 +1259,6 @@ export function renderTable(
               onPress: () =>
                 void tableAction($, "Klang gestoppt", "play_sound", {
                   stop: true,
-                }),
-            },
-            {
-              key: "end-leave",
-              label: "Discord verlassen",
-              icon: "power",
-              variant: "secondary",
-              confirm: "Wirklich verlassen?",
-              onPress: () =>
-                void tableAction($, "Bot hat Discord verlassen", "discord", {
-                  action: "leave",
                 }),
             },
           ],

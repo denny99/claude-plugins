@@ -52,7 +52,7 @@ import {
   Stepper,
 } from "../lib/ui";
 import type { Kit, StepState } from "../lib/ui";
-import { Switch } from "./dnd-ui";
+import { openArgv } from "./review";
 import type {
   AcceptItem,
   AgentRun,
@@ -66,6 +66,26 @@ import type {
 const STORE_KEY = "runs";
 const PLAN_KEY = "plan-approval";
 const GPU_AGENTS = ["pnp-maler", "pnp-klang", "pnp-tischbereit"];
+
+/** The file's own name ("bauplan-krug.md"), not the temp path it lives under. */
+export function fileName(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
+}
+
+/** Opens a plan or findings file with the system's viewer; a refusal comes back as a toast. */
+async function openFile($: EngineInterface, path: string): Promise<void> {
+  const host = await createHost($);
+  const argv = openArgv(host.platform, path.replace(/^~(?=\/|\\|$)/, host.home));
+  if (!argv) {
+    $.ui.toast(`Kann hier nicht öffnen: ${fileName(path)}`);
+    return;
+  }
+  void $.process
+    .run(argv, {} as never)
+    .catch((err: unknown) =>
+      $.ui.toast(`Öffnen fehlgeschlagen: ${String(err).split("\n")[0]}`),
+    );
+}
 
 /** Loads the last plan sign-off kept in the store. */
 export async function loadPlanApproval($: EngineInterface): Promise<void> {
@@ -533,7 +553,7 @@ export async function renderBuild(
               planRun.campaign || campName
                 ? `Kampagne: ${planRun.campaign || campName}`
                 : "",
-              planRun.planFile ?? "",
+              planRun.planFile ? fileName(planRun.planFile) : "",
             ]
               .filter(Boolean)
               .join(" · "),
@@ -549,6 +569,11 @@ export async function renderBuild(
                     },
                     ...(planRun.planFile && !rules.spoilerSafe
                       ? [
+                          {
+                            key: "plan-open",
+                            label: "Öffnen",
+                            onPress: () => void openFile($, planRun.planFile!),
+                          },
                           {
                             key: "plan-show",
                             label: preview ? "Ausblenden" : "Zeigen",
@@ -583,7 +608,7 @@ export async function renderBuild(
                       ? "failed"
                       : "ok",
                 primary: `${agentLabel(r.agent)}${r.findings !== undefined ? ` · ${r.findings} Mängel` : ""}`,
-                secondary: r.findingsFile ?? "",
+                secondary: r.findingsFile ? fileName(r.findingsFile) : "",
               }),
             ),
             ...files.map((r) =>
@@ -595,6 +620,11 @@ export async function renderBuild(
                 actions: rules.spoilerSafe
                   ? []
                   : [
+                      {
+                        key: `open-${r.id}`,
+                        label: "Öffnen",
+                        onPress: () => void openFile($, r.findingsFile!),
+                      },
                       {
                         key: `show-${r.id}`,
                         label: preview ? "Ausblenden" : "Zeigen",
@@ -731,15 +761,5 @@ export async function renderBuild(
         2,
       ) as RenderElement,
     );
-  out.push(
-    Switch(k, {
-      key: "rule-buildLooks",
-      title: "Bau-Looks",
-      text: "Hintergrund wechselt mit dem Abschnitt.",
-      icon: "sliders",
-      on: rules.buildLooks,
-      onPress: () => void toggleRule($, "buildLooks").then(() => applyLook($)),
-    }),
-  );
   return out;
 }

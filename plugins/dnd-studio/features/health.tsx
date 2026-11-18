@@ -19,13 +19,11 @@ import {
   CardTitle,
   ListRow,
   ProblemCard,
-  Section,
   Sentence,
 } from "../lib/ui";
 import type { Kit } from "../lib/ui";
 import type { EveningState, Health, Rules, TableView } from "../types";
-import { Switch } from "./dnd-ui";
-import { setListener } from "./evening";
+import { Fold, Switch } from "./dnd-ui";
 
 export function portOf(options: PluginOptions): number {
   const p = Number(options.port);
@@ -250,13 +248,6 @@ export function renderHealth(
           "studio-acts",
           [
             {
-              key: "probe",
-              label: "Neu prüfen",
-              icon: "refresh",
-              variant: "primary",
-              onPress: () => void probe($, options),
-            },
-            {
               key: "reconfigure",
               label: health?.connected ? "Token ändern" : "Token eintragen",
               icon: "gear",
@@ -272,42 +263,51 @@ export function renderHealth(
       ].filter((x): x is RenderElement => !!x),
     }),
   );
+  // One card for every switch of the plugin, grouped: the listener is switched at the table (one place), the looks
+  // of the table and of the build sit together, then the table rules. Folded, like every other section.
   const listening = isListenerMode(d.view ?? null);
   out.push(
-    Switch(k, {
-      key: "switch-listener",
-      title: "Zuhörer",
-      text: "Hört im Discord mit und reagiert, wenn jemand die Spielleitung anspricht. Nur bei laufendem Tisch.",
-      icon: "mic",
-      on: listening,
-      onPress: () => void setListener($, listening ? "off" : "haiku"),
-    }),
-  );
-  out.push(
-    Switch(k, {
-      key: "rule-looks",
-      title: "Szenen-Looks",
-      text: "Hintergrund und Farben der App folgen der Szene am Tisch.",
-      icon: "moon",
-      on: rules.looks,
-      onPress: () => void toggleRule($, "looks").then(() => applyLook($)),
-    }),
-  );
-  out.push(
-    Section(k, {
-      key: "rules",
-      title: "Regeln",
-      collapsible: true,
-      defaultOpen: false,
-      children: RULES.map((r) =>
+    Fold(k, {
+      key: "settings",
+      icon: "sliders",
+      title: "Einstellungen",
+      children: [
+        CardTitle(k, { icon: "mic", title: "Zuhörer" }),
+        Sentence(
+          k,
+          `Zuhörer ist ${listening ? "an" : "aus"}. Ein- und ausschalten im Tisch-Tab (Karte „Zuhörer“), nur bei laufendem Tisch.`,
+          { faint: true },
+        ),
+        CardTitle(k, { icon: "moon", title: "Looks" }),
         Switch(k, {
-          key: `toggle-${r.key}`,
-          title: r.label,
-          text: r.text,
-          on: rules[r.key],
-          onPress: () => void toggleRule($, r.key).then(() => applyLook($)),
+          key: "rule-looks",
+          title: "Szenen-Looks",
+          text: "Hintergrund und Farben der App folgen der Szene am Tisch.",
+          on: rules.looks,
+          bare: true,
+          onPress: () => void toggleRule($, "looks").then(() => applyLook($)),
         }),
-      ),
+        Switch(k, {
+          key: "rule-buildLooks",
+          title: "Bau-Looks",
+          text: "Beim Bauen wechselt der Hintergrund mit dem Abschnitt.",
+          on: rules.buildLooks,
+          bare: true,
+          onPress: () =>
+            void toggleRule($, "buildLooks").then(() => applyLook($)),
+        }),
+        CardTitle(k, { icon: "list", title: "Regeln am Tisch" }),
+        ...RULES.map((r) =>
+          Switch(k, {
+            key: `toggle-${r.key}`,
+            title: r.label,
+            text: r.text,
+            on: rules[r.key],
+            bare: true,
+            onPress: () => void toggleRule($, r.key).then(() => applyLook($)),
+          }),
+        ),
+      ],
     }),
   );
   return out;

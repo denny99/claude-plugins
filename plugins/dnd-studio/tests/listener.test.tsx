@@ -131,9 +131,8 @@ test("listener mode: a running pnp-zuhoerer is the watcher, its return fills ban
       "z2t",
     ),
   );
-  expect(await bandText()).toContain(
-    "Zuhörer hat geweckt: Frage an die Spielleitung",
-  );
+  // the band cuts long hints with … (BAND_HINT_MAX); the whole reason is in the Table tab
+  expect(await bandText()).toContain("Zuhörer hat geweckt: Frage an die Spiel…");
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   for (const text of [
     /Zuletzt zurück: geweckt · Frage an die Spielleitung/,

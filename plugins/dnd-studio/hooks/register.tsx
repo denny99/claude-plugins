@@ -163,6 +163,10 @@ async function probeQuietly(
   }
 }
 
+/** Longest launcher status and hint on graphical surfaces (characters, "…" included). */
+export const BAND_STATUS_MAX = 40;
+export const BAND_HINT_MAX = 40;
+
 /**
  * The launcher row above the prompt (key launch:dnd-studio): the "D&D" chip while the Studio answers (or a table is
  * live), and at a live table its state as a button to the Table tab, hints after it. Null: nothing to show.
@@ -186,10 +190,14 @@ async function drawLauncher(
     }),
   ];
   if (table) {
-    // Desktop paints `label`, not the children: both carry the same text (kit v3.1).
-    const tableText = k.graphical
-      ? table.status
-      : truncate(table.status, Math.max(12, Math.floor(k.cols * 0.6)));
+    // Desktop paints `label`, not the children: both carry the same text (kit v3.1). The band is shared with other
+    // mods: a short line with "…" (no tooltip exists for a Button; the whole line is in the Table tab it opens).
+    const tableText = truncate(
+      table.status,
+      k.graphical
+        ? BAND_STATUS_MAX
+        : Math.max(12, Math.floor(k.cols * 0.6)),
+    );
     chips.push(
       <Button
         key="launch-dnd-table"
@@ -216,7 +224,12 @@ async function drawLauncher(
           }
           wrap="truncate-end"
         >
-          {truncate(hint.text, Math.max(12, Math.floor(k.cols * 0.4)))}
+          {truncate(
+            hint.text,
+            k.graphical
+              ? BAND_HINT_MAX
+              : Math.max(12, Math.floor(k.cols * 0.4)),
+          )}
         </Text>,
       );
   }

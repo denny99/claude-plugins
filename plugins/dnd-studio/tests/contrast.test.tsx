@@ -1,6 +1,6 @@
 import { expect, test } from "claude-code/testing";
 
-import { themeTokens } from "../lib/theme";
+import { boxPaint, schemeColors, schemeSvg, themeTokens, windowTokens } from "../lib/theme";
 import type { Tokens } from "../lib/theme";
 
 function luminance(hex: string): number {
@@ -42,4 +42,56 @@ test("D&D light: the brass is dark enough on the panel and the hairline is soft"
   const t = themeTokens("dnd", "light");
   expect(contrast(t.accent, t.bg)).toBeGreaterThanOrEqual(4.5);
   expect(contrast(t.line, t.bg)).toBeLessThan(1.5);
+});
+
+// The desktop window may be light while the engine's `theme` says dark: graphical surfaces follow the window.
+const WINDOW = { light: ["#ffffff", "#faf9f5", "#f4efe2"], dark: ["#1f1e1d", "#262624", "#0b1a15"] };
+
+test("window mode: cards paint no fill of their own, text and borders are theme keys", () => {
+  const t = windowTokens("dnd");
+  expect([t.card, t.bg, t.well, t.accentTint].map(boxPaint)).toEqual([
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+  ]);
+  expect(boxPaint(t.tones.ok.bg)).toBeUndefined();
+  expect([t.text, t.faint, t.tones.ok.fg, t.tones.bad.fg]).toEqual([
+    "text",
+    "inactive",
+    "success",
+    "error",
+  ]);
+});
+
+test("window mode: every Svg color reads at 4.5:1 on a light and a dark window, and on its own pill", () => {
+  const c = schemeColors("dnd");
+  const low: string[] = [];
+  for (const mode of ["light", "dark"] as const) {
+    for (const key of ["text", "inactive", "claude", "success", "warning", "error", "suggestion"])
+      for (const bg of WINDOW[mode])
+        if (contrast(c[key]![mode], bg) < 4.5) low.push(`${mode} ${key} on ${bg}`);
+    for (const [tone, fg] of [
+      ["ok", "success"],
+      ["warn", "warning"],
+      ["bad", "error"],
+      ["info", "suggestion"],
+      ["neutral", "inactive"],
+      ["accent", "claude"],
+    ] as const)
+      if (contrast(c[fg]![mode], c[`tone-${tone}-bg`]![mode]) < 4.5)
+        low.push(`${mode} pill ${tone}`);
+    // the header hairline stays soft
+    for (const bg of WINDOW[mode].slice(0, 2))
+      if (contrast(c.subtle![mode], bg) >= 2) low.push(`${mode} hairline too hard on ${bg}`);
+  }
+  expect(low).toEqual([]);
+});
+
+test("window mode: a Svg names its colors once and switches them with prefers-color-scheme", () => {
+  const svg = schemeSvg('<svg viewBox="0 0 10 10"><rect fill="tone-ok-bg"/><text fill="success">x</text></svg>');
+  expect(svg).toContain('[fill="success"]{fill:#3f6b2e}');
+  expect(svg).toContain("@media (prefers-color-scheme: dark){");
+  expect(svg).toContain('[fill="success"]{fill:#9bb48a}');
+  expect(schemeSvg('<svg><rect fill="#123456"/></svg>')).toBe('<svg><rect fill="#123456"/></svg>');
 });
