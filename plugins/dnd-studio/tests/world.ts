@@ -187,13 +187,13 @@ export function world(on: On, answers: Record<string, unknown> = {}): World {
   on("theme.set", () => ({ value: { isDrawn: true } as never }));
   on("theme.clear", () => ({ value: { isDrawn: true } as never }));
   on("session.start", (_, e) => ({ cwd: e.cwd }));
-  on("session.info", () => ({
-    value: { platform: "macos", isHosted: false } as never,
-  }));
-  on("env.get", (_, e) => ({
-    value: e.name === "HOME" ? "/Users/d" : "/usr/bin",
-  }));
-  on("process.hookEnv", () => ({ value: { CLAUDE_PLUGIN_DATA: "/data/dnd" } }));
+  on("session.id", () => ({ value: "s-1" }));
+  const env: Record<string, string> = {
+    HOME: "/Users/d",
+    PATH: "/usr/bin",
+    TMPDIR: "/var/tmp/",
+  };
+  on("env.get", (_, e) => ({ value: env[e.name] }));
   on("fs.write", (_, e) => {
     w.writes.push({ path: e.path, text: e.text });
     return { value: undefined };

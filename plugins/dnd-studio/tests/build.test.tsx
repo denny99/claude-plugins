@@ -32,8 +32,7 @@ test('the build cockpit tracks pnp agents and counts the reviewers’ findings',
   })
   on('ui.toast', () => ({ value: undefined }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('session.info', () => ({ value: { platform: 'macos', isHosted: false } as never }))
-  on('env.get', (_, e) => ({ value: e.name === 'HOME' ? '/Users/d' : '/usr/bin' }))
+  on('env.get', (_, e) => ({ value: ({ HOME: '/Users/d', PATH: '/usr/bin' } as Record<string, string>)[e.name] }))
   on('fs.read', (_, e) => {
     if (e.path === '/Users/d/kampagne/maengel-technik.md') return { value: '# Mängel\n\n1. Szene 2 ohne Bild\n2. Bartel ohne Stimme\n' }
     throw new Error('missing')
@@ -94,8 +93,7 @@ test('a theme another plugin set after ours is never cleared when our look goes 
   })
   on('ui.toast', () => ({ value: undefined }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('session.info', () => ({ value: { platform: 'macos', isHosted: false } as never }))
-  on('env.get', (_, e) => ({ value: e.name === 'HOME' ? '/Users/d' : '/usr/bin' }))
+  on('env.get', (_, e) => ({ value: ({ HOME: '/Users/d', PATH: '/usr/bin' } as Record<string, string>)[e.name] }))
   on('fs.read', () => {
     throw new Error('missing')
   })

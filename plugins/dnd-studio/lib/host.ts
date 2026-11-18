@@ -1,7 +1,7 @@
 /**
  * The Host: processes, files and HTTP, built from `$`, the same on macOS, Windows and Linux.
  *
- * Copied from ds-solutions-flow/lib/host.ts and made cross-platform: the OS comes from `$.session.info().platform`,
+ * Copied from ds-solutions-flow/lib/host.ts and made cross-platform: the OS comes from the environment (`detectPlatform`: OS, WSL_DISTRO_NAME, HOME),
  * PATH is split and joined with that OS's delimiter, and the extra tool folders are per OS. No POSIX-only command is
  * used in a shared path.
  */
@@ -94,11 +94,21 @@ let cached:
   | { platform: Platform; home: string; path: string; localAppData: string }
   | undefined;
 
+/** The OS, read off the environment (the engine has no platform call). */
+export async function detectPlatform($: EngineInterface): Promise<Platform> {
+  const read = (v: Promise<string | undefined>) => v.catch(() => undefined);
+  if ((await read($.env.get("OS"))) === "Windows_NT") return "windows";
+  if (await read($.env.get("WSL_DISTRO_NAME"))) return "wsl";
+  const home = (await read($.env.get("HOME"))) ?? "";
+  if (home.startsWith("/Users/")) return "macos";
+  if (home.startsWith("/")) return "linux";
+  return "unknown";
+}
+
 /** Builds the real Host from the `$` of the hook you are in. */
 export async function createHost($: EngineInterface): Promise<Host> {
   if (!cached) {
-    const info = await $.session.info();
-    const platform = (info.platform ?? "unknown") as Platform;
+    const platform = await detectPlatform($);
     const home =
       (platform === "windows"
         ? await $.env.get("USERPROFILE")

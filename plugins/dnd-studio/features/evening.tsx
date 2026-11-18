@@ -442,10 +442,15 @@ export async function setListener(
 
 // --- interjections -------------------------------------------------------------------------------------------------
 
-/** The plugin data folder (made by the call). */
+/** Where the debrief goes: the plugin data folder when the engine exports it, else `$TMPDIR/dnd-studio/<session>` ($.fs.write makes the folders). */
 async function dataDir($: EngineInterface): Promise<string> {
-  const env = await $.process.hookEnv();
-  return env.CLAUDE_PLUGIN_DATA ?? "";
+  const data = await $.env.get("CLAUDE_PLUGIN_DATA").catch(() => undefined);
+  if (data) return data;
+  const id = await $.session.id().catch(() => "session");
+  const tmp = await $.env.get("TMPDIR").catch(() => undefined);
+  const temp = tmp ? undefined : await $.env.get("TEMP").catch(() => undefined);
+  const base = (tmp || temp || "/tmp").replace(/[\\/]+$/, "");
+  return `${base}/dnd-studio/${id.replace(/[^\w.-]/g, "_")}`;
 }
 
 /** Keeps a line the person typed at the live table, and writes the debrief file in the plugin's data folder. */

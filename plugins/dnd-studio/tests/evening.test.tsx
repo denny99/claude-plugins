@@ -92,7 +92,7 @@ test("interjections at a live table go to the debrief list and file; other promp
   } as never);
 
   const file = w.writes.at(-1);
-  expect(file?.path).toBe("/data/dnd/debrief-das-tor-2023-11-14.md");
+  expect(file?.path).toBe("/var/tmp/dnd-studio/s-1/debrief-das-tor-2023-11-14.md");
   expect(file?.text).toContain("Mara war heute still");
   expect(file?.text).toContain("Tempo höher");
   expect(file?.text).not.toContain("vorher");
