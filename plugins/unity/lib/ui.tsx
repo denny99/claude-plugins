@@ -1668,13 +1668,15 @@ export function Tabs<T extends string>(
   )
 }
 
-// --- launcher strip above the prompt (Band v3: two fixed lines) ---
+// --- launcher strip above the prompt (Band v4: two fixed lines, both left-aligned) ---
 // Keep this section identical in every copy of the kit and in ds-usage-line's hooks/register.tsx (see README "Band").
 
 /** Key prefix that marks a plugin's band row as a launcher row (`launch:<plugin>@<version>`), so a merger can find it. */
 export const LAUNCH_PREFIX = 'launch:'
 /** The band layout this copy draws. A row keyed `…@<n>` with n above it hands the merge to a newer copy. */
-export const BAND_VERSION = 3
+export const BAND_VERSION = 4
+/** The plugin whose launcher row is the meter line (line 2): found by its key `launch:ds-usage-line@<n>`, any version. */
+export const METER_PLUGIN = 'ds-usage-line'
 /** The root key of a plugin's launcher row. */
 export const launchKey = (plugin: string): string => `${LAUNCH_PREFIX}${plugin}@${BAND_VERSION}`
 
@@ -1692,17 +1694,19 @@ export const LAUNCH_ROW = {
   overflow: 'hidden',
 } as const
 /**
- * Root props of a meter row (ds-usage-line, line 2): one line, right-aligned, never wraps. `justifyContent: 'flex-end'`
- * is what marks it as the meter line (`isTrailing`), as in v2. It fits itself to `bodyColumns` (drops "bis …", then
- * shortens its bars), so nothing on line 1 changes it.
+ * Root props of the meter row (ds-usage-line, line 2): one line, left-aligned, as wide as its content, never wraps.
+ * Its key (`launch:ds-usage-line@<n>`) marks it as the meter line (`isTrailing`), not its props. It fits itself to
+ * `bodyColumns` (drops "bis …", then shortens its bars), so nothing on line 1 changes it.
  */
-export const LAUNCH_END = {
+export const LAUNCH_METERS = {
   flexDirection: 'row',
   flexWrap: 'nowrap',
   alignItems: 'center',
-  justifyContent: 'flex-end',
+  justifyContent: 'flex-start',
   flexShrink: 0,
 } as const
+/** Space between the starters on line 1, inside a row and between rows alike: even gaps. */
+export const starterGap = (graphical: boolean): number | 'md' => (graphical ? 'md' : 2)
 
 export type LauncherChipProps = {
   key: string
@@ -1710,11 +1714,16 @@ export type LauncherChipProps = {
   icon?: IconName
   label: string
   /**
-   * A short state after the chip ("Gerät fehlt", "Freigabe wartet", "Call 15:30", "Runde 2"). Band v3: may stand
-   * always, keep it to a few words; it is the first thing cut with "…" when line 1 gets tight.
+   * A short state after the chip ("Gerät fehlt", "Tests laufen", "Call 15:30", "Runde 2"), a few words; the first thing
+   * cut with "…" when line 1 gets tight. Band v4: only drawn with a `tone` that says it matters (see `tone`).
    */
   status?: string
-  /** Colors the status, `warn`/`bad` only; any other tone (and none) draws it quiet. */
+  /**
+   * Whether and how the status stands. Band v4 rule: a quiet state shows no text, so each starter decides here.
+   * `warn`/`bad`: needs the person, drawn in color. `ok`/`info`: something really runs or waits ("Tests laufen",
+   * "App startet", "Tisch läuft", "Entwurf bereit"), drawn quiet. `neutral` or none: calm ("Editor bereit",
+   * "verbunden", "läuft nicht"), no text at all, only the name.
+   */
   tone?: Tone
   /** The chip that matters now: `variant: 'primary'` (at most one per row). */
   primary?: boolean
@@ -1723,11 +1732,14 @@ export type LauncherChipProps = {
 
 /** Whether a status tone is drawn in color: only what needs the person (warn, bad); the rest stays quiet. */
 const loud = (tone?: Tone): tone is 'warn' | 'bad' => tone === 'warn' || tone === 'bad'
+/** Whether a chip's status stands at all (Band v4): only with a tone that is not calm (`neutral`/none show no text). */
+export const showsStatus = (c: { status?: string; tone?: Tone }): boolean =>
+  !!c.status && (c.tone === 'warn' || c.tone === 'bad' || c.tone === 'ok' || c.tone === 'info')
 
 /**
- * One starter chip of line 1: a native Button with the bare name (pressable as a whole, no glyph) and its status
- * after it ("Flutter · Gerät fehlt"). The button never shrinks; the status is cut with "…". The terminal draws
- * `[ label ]` and the status dim.
+ * One starter chip of line 1: a native Button with the bare name (pressable as a whole, no glyph) and, when it
+ * matters (`showsStatus`), its status close after it ("Flutter · Gerät fehlt"). The button never shrinks; the status
+ * is cut with "…". The terminal draws `[ label ]` and the status dim.
  */
 export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
   const { Box, Text, Button } = k
@@ -1742,7 +1754,7 @@ export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
       {c.label}
     </Button>
   )
-  if (!c.status) return btn
+  if (!c.status || !showsStatus(c)) return btn
   const tone = loud(c.tone) ? c.tone : undefined
   const status = k.graphical ? (
     <Text size="footnote" color={tone ? k.t.tones[tone].fg : k.t.faint} wrap="truncate-end">
@@ -1759,7 +1771,7 @@ export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
       flexDirection="row"
       flexWrap="nowrap"
       alignItems="center"
-      gap={1}
+      gap={k.graphical ? 'xs' : 1}
       flexShrink={1}
       minWidth={0}
       overflow="hidden"
@@ -1774,12 +1786,12 @@ export function LauncherChip(k: Kit, c: LauncherChipProps): RenderElement {
 
 /**
  * A plugin's launcher row for its `AbovePrompt` hook: chips in one line that shrinks and clips (`LAUNCH_ROW`), keyed
- * `launch:<plugin>@3` so `mergeLauncherRows` (any installed plugin's) puts it on line 1 with every other starter.
+ * `launch:<plugin>@4` so `mergeLauncherRows` (any installed plugin's) puts it on line 1 with every other starter.
  */
 export function LauncherRow(k: Kit, r: { plugin: string; chips: Kids }): RenderElement {
   const { Box } = k
   return (
-    <Box key={launchKey(r.plugin)} {...LAUNCH_ROW} gap={k.graphical ? 2 : 1}>
+    <Box key={launchKey(r.plugin)} {...LAUNCH_ROW} gap={starterGap(k.graphical)}>
       {kids(r.chips)}
     </Box>
   )
@@ -1800,11 +1812,12 @@ export function isLauncherRow(row: BandRow): boolean {
 }
 
 /**
- * Whether a launcher row is the meter line (line 2): its root Box carries `justifyContent: 'flex-end'` (ds-usage-line,
- * `LAUNCH_END`; v2 usage rows too).
+ * Whether a launcher row is the meter line (line 2): its root key is `launch:ds-usage-line@<n>` (v2, v3 and v4 alike).
+ * Not its alignment: since v4 the meter line is left-aligned like the starters.
  */
 export function isTrailing(row: BandRow): boolean {
-  return rootProps(row)?.justifyContent === 'flex-end'
+  const key = rootProps(row)?.key
+  return typeof key === 'string' && key.startsWith(`${LAUNCH_PREFIX}${METER_PLUGIN}@`)
 }
 
 /** The band version a launcher row was drawn for: the `@<n>` of its key, 1 for a row keyed before v2. */
@@ -1882,18 +1895,25 @@ export function fitStarters<T extends BandRow>(starters: readonly T[], columns: 
   return { shown, hidden }
 }
 
+/** The fine rule between the lines on graphical surfaces: a 1-px hairline wider than any slot, clipped to it. */
+const HAIRLINE =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="4000" height="1" viewBox="0 0 4000 1" preserveAspectRatio="none">' +
+  '<style>rect{fill:rgba(0,0,0,.12)}@media (prefers-color-scheme: dark){rect{fill:rgba(255,255,255,.14)}}</style>' +
+  '<rect width="4000" height="1"/></svg>'
+
 /**
- * The `AbovePromptList` hook that lays the band out in **two fixed lines**:
+ * The `AbovePromptList` hook that lays the band out in **two fixed lines**, both left-aligned:
  *
  * 1. **Starters** of every mod, in their order, one line that never wraps: each row shrinks and clips by itself
  *    (`LAUNCH_ROW`), statuses go first with "…"; what does not fit at all moves into a quiet "+N" whose hover lists
  *    the names.
- * 2. a fine rule, then the **meter line** (`isTrailing`, ds-usage-line), which fits itself.
+ * 2. a hairline with inner margin, then the **meter line** (`isTrailing`, ds-usage-line), as wide as its content,
+ *    which fits itself.
  *
  * Without meters only line 1; with fewer than two launcher rows the hook passes (a lone row draws itself). Other rows
  * stay stacked under the two lines. Each launcher row goes through `next` alone (the engine lets a hook only reorder
- * and leave out rows and wrap what `next(e)` returns), so presses stay with the plugin that drew the chip. A v2 row
- * (`@2`) is drawn as it comes: a starter on line 1, a v2 usage row on line 2.
+ * and leave out rows and wrap what `next(e)` returns), so presses stay with the plugin that drew the chip. A v2 or v3
+ * row is drawn as it comes: a starter on line 1, an older usage row on line 2 (the column around it keeps it left).
  *
  * Several plugins carry a copy: a copy that finds a row keyed for a newer band version (`@<n>`) passes the rows
  * untouched, so the newest copy installed draws the band, whatever the chain's order.
@@ -1923,7 +1943,7 @@ export async function mergeLauncherRows(
   const meters: RenderElement[] = []
   for (const row of meterRows) meters.push(await only([row]))
   const rest = others.length ? await only(others) : null
-  const { Box, Text } = $.ui.resolve(e) as unknown as Els
+  const { Box, Text, Svg } = $.ui.resolve(e) as unknown as Els
   const graphical = String((e as { surface?: string }).surface ?? 'terminal') !== 'terminal'
   const names = hidden.map(row => starterLabels(row)[0] ?? row.plugin)
   const more = hidden.length ? (
@@ -1949,29 +1969,35 @@ export async function mergeLauncherRows(
   ) : null
   // Only flex props on boxes that hold other plugins' rows: the engine refuses `minWidth`/`overflow` there.
   const line1 = starters.length ? (
-    <Box key="launch-strip" flexDirection="row" flexWrap="nowrap" alignItems="center" columnGap={2}>
+    <Box key="launch-strip" flexDirection="row" flexWrap="nowrap" alignItems="center" columnGap={starterGap(graphical)}>
       {starters}
       {more}
     </Box>
   ) : null
+  // A hairline with inner margin: an Svg clipped to its slot on graphical surfaces (a Text of '─' is wider there than
+  // the slot and ends in "…"), a dim line two cells short of the width in the terminal.
   const rule =
     line1 && meters.length ? (
-      <Box key="launch-rule" flexDirection="row">
-        <Text
-          size="footnote"
-          color={graphical ? 'inactive' : undefined}
-          dimColor={graphical ? undefined : true}
-          wrap="truncate-end"
-        >
-          {'─'.repeat(Math.max(1, columns))}
-        </Text>
+      <Box key="launch-rule" flexDirection="row" paddingX={graphical ? 'sm' : 1} paddingY={graphical ? 'xs' : 0}>
+        {graphical && Svg ? (
+          <Svg source={HAIRLINE} alt="" height={1} />
+        ) : (
+          <Text dimColor>{'─'.repeat(Math.max(1, columns - 2))}</Text>
+        )}
       </Box>
     ) : null
+  // A column that sizes the meter row to its content: line 2 stands left and never stretches (older right-aligned
+  // usage rows too). Only flex props: it holds another plugin's row.
+  const line2 = meters.length ? (
+    <Box key="launch-meters" flexDirection="column" alignItems="flex-start">
+      {meters}
+    </Box>
+  ) : null
   return (
     <Box key="launch-band" flexDirection="column">
       {line1}
       {rule}
-      {meters}
+      {line2}
       {rest}
     </Box>
   )
