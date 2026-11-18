@@ -678,8 +678,40 @@ function item(
   };
 }
 
-/** Every §4 row the Studio can answer: campaign get, map list and the last prepare_table counts. */
+/** The rows each read list feeds: a list that could not be read leaves them "nicht geprüft". */
+const ROWS_OF_LIST: Record<string, string[]> = {
+  scenes: ["scenes", "start"],
+  places: ["maps", "pins", "start"],
+  npcs: ["npcs"],
+};
+
+/**
+ * Every §4 row the Studio can answer: campaign get, map list and the last prepare_table counts. `unread` names the
+ * lists (scenes, places, npcs) the check could not read: their rows say "nicht geprüft" (idle, no fix) instead of
+ * counting the overview's bare rows as all missing.
+ */
 export function acceptanceOf(
+  campaign: Obj,
+  mapList: Obj,
+  prepared: string,
+  unread: readonly string[] = [],
+): AcceptItem[] {
+  const skip = new Set(unread.flatMap((l) => ROWS_OF_LIST[l] ?? []));
+  return acceptanceRows(campaign, mapList, prepared).map((it) =>
+    skip.has(it.key)
+      ? {
+          ...it,
+          status: "idle",
+          counts: "nicht geprüft",
+          detail: "",
+          fix: "",
+          unchecked: true,
+        }
+      : it,
+  );
+}
+
+function acceptanceRows(
   campaign: Obj,
   mapList: Obj,
   prepared: string,

@@ -254,3 +254,92 @@ test("Build: an answer that is no campaign shows an error, not zero counts", asy
   expect(await findShown(ui, /Szenen mit Bild/)).toBeUndefined();
   await ui.unmount();
 });
+
+/** A Studio whose answers the engine cuts above `limit` characters (as it does at 100 000), with `scenes` behind `names`. */
+function cuttingStudio(
+  scenes: Record<string, unknown>[],
+  limit: number,
+): (a: Record<string, unknown>) => unknown[] {
+  const answer = (body: unknown) => {
+    const text = JSON.stringify(body);
+    return text.length > limit
+      ? [{ type: "text", text: text.slice(0, limit) }, CUT]
+      : [{ type: "text", text }];
+  };
+  return (a) => {
+    if (a.overview)
+      return answer({
+        ...CAMPAIGN,
+        scenes: scenes.map((s, i) => ({
+          n: i + 1,
+          title: s.title,
+          place: s.place,
+          chars: 100, // the overview's size understates the JSON (variants, sounds)
+          picture: true,
+        })),
+      });
+    const only = (a.only as string[] | undefined)?.[0];
+    if (only !== "scenes") return answer(CAMPAIGN);
+    const names = a.names as string[] | undefined;
+    const rows = scenes
+      .map((s, i) => ({ n: i + 1, ...s }))
+      .filter((s) => !names || names.some((w) => String(s.title).includes(w)));
+    return answer({ open: "Breeland", scenes: rows });
+  };
+}
+
+test("Build: a big scene list is read whole, its reads halved until each fits under the engine's cut", async ($, on) => {
+  const scenes = Array.from({ length: 20 }, (_, i) => ({
+    title: `Szene ${String(i + 1).padStart(2, "0")}`,
+    place: "Bree",
+    text: "x".repeat(1500),
+    notes: "Startfelder A1",
+    picture: "/view?s=1",
+  }));
+  const w = world(on, { campaign: cuttingStudio(scenes, 5000) });
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd", args: "build" } as never);
+  const reads = w.calls
+    .filter((c) => c.tool === "campaign" && Array.isArray(c.args.names))
+    .map((c) => (c.args.names as string[]).length);
+  // eight at a time are cut, then four, then two fit
+  expect(reads.slice(0, 3)).toEqual([8, 4, 2]);
+  const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
+  expect(
+    await findShown(ui, /Szenen mit Bild, Vorlesetext und Ablauf · 20\/20/),
+  ).toBeDefined();
+  expect(await findShown(ui, /Startfelder in den Szenen · 20\/20/)).toBeDefined();
+  expect(await findShown(ui, /nicht geprüft|zu groß/)).toBeUndefined();
+  await ui.unmount();
+});
+
+test("Build: a part that cannot be read leaves its rows unchecked and locks the fix button", async ($, on) => {
+  const scenes = [
+    { title: "Das Tor", place: "Bree", text: "x".repeat(3000), notes: "", picture: "" },
+    { title: "Im Wald", place: "Wald", text: "", notes: "", picture: "" },
+  ];
+  // even one scene is over the cut
+  world(on, { campaign: cuttingStudio(scenes, 2000) });
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd", args: "build" } as never);
+  const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
+  expect(await findShown(ui, /Kampagne \(Szenen\): Antwort zu groß/)).toBeDefined();
+  expect(
+    await findShown(ui, /Szenen mit Bild, Vorlesetext und Ablauf · nicht geprüft/),
+  ).toBeDefined();
+  expect(await findShown(ui, /Startfelder in den Szenen · nicht geprüft/)).toBeDefined();
+  expect(await findShown(ui, /0\/2/)).toBeUndefined();
+  // the other rows still count: maps, pins and NPCs are open, scenes are not
+  expect(await findShown(ui, "3 offen")).toBeDefined();
+  expect(
+    await ui.find({ type: "Button", text: /Offene Punkte beheben lassen/ }),
+  ).toBeUndefined();
+  expect(await findShown(ui, /ist gesperrt, bis jeder Teil/)).toBeDefined();
+  await ui.unmount();
+
+  const items = acceptanceOf(CAMPAIGN, MAPS, "", ["scenes"]);
+  const by = Object.fromEntries(items.map((i) => [i.key, i]));
+  expect(by.scenes).toMatchObject({ status: "idle", fix: "", unchecked: true });
+  expect(by.start).toMatchObject({ counts: "nicht geprüft", fix: "" });
+  expect(by.pins?.unchecked).toBeUndefined();
+});

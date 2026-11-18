@@ -103,7 +103,7 @@ test("review: a Studio path is fetched through results save before playing; verd
         type: "text",
         text: JSON.stringify(
           a.action === "list"
-            ? { results: [{ id: "77", kind: "sound", file: "dnd-dland/tor_01.mp3 [output]" }] }
+            ? [{ id: "77", kind: "sound", mode: "Sound", file: "dnd-dland/tor_01.mp3 [output]", time: "2026-11-14T08:14:13.558Z", viaMcp: true }]
             : { folder: "/var/tmp/dnd-studio-review", saved: [{ id: "77", path: "/var/tmp/dnd-studio-review/tor_01.mp3" }] },
         ),
       },
@@ -127,7 +127,7 @@ test("review: a Studio path is fetched through results save before playing; verd
 
   // the Studio cannot hand the file over: refused with a reason, nothing added
   w.answers.results = () => [
-    { type: "text", text: JSON.stringify({ results: [] }) },
+    { type: "text", text: "[]" },
   ];
   const refused = JSON.stringify(
     await $.tool.call({
@@ -137,7 +137,86 @@ test("review: a Studio path is fetched through results save before playing; verd
     } as never),
   );
   expect(refused).toContain("Nothing added");
-  expect(refused).toContain("no Studio result has the file dnd-dland/kr.mp3");
+  expect(refused).toContain("not reviewable: dnd-dland/kr.mp3 is no Studio result");
+});
+
+// results list as the Studio answers it: a bare JSON array (anonymised from a real answer)
+const LIST = [
+  {
+    id: "bf6c9fe5-74e8-452f-8cc7-3cb57c188867",
+    kind: "image",
+    mode: "Refine 2×",
+    title: "Weltkarte V3",
+    who: "Nobody",
+    file: "dnd-x/images/2026-11-14 0909 new a map 2x_00001_.png [output]",
+    time: "2026-11-14T08:14:13.558Z",
+    viaMcp: true,
+    parentId: "ba229d7c-031b-4964-855d-175e337cc720",
+  },
+  {
+    id: "ba229d7c-031b-4964-855d-175e337cc720",
+    kind: "sound",
+    mode: "Sound",
+    title: "Funk",
+    who: "Nobody",
+    file: "dnd-x\\sounds\\Funk_00001_.flac [output]",
+    time: "2026-11-14T08:10:45.771Z",
+    viaMcp: true,
+  },
+];
+
+test("review: a Studio file is found in the real results list (array answer), with or without [output], by id or id prefix; a file without result is not reviewable", async ($, on) => {
+  resetAutoOpen();
+  const w = world(on, {
+    results: (a: Record<string, unknown>) => [
+      {
+        type: "text",
+        text: JSON.stringify(
+          a.action === "list"
+            ? LIST.filter((r) => !a.name || r.file.toLowerCase().replace(/\\/g, "/").includes(String(a.name).toLowerCase()))
+            : { folder: "/t", saved: [{ id: (a.ids as string[])[0], file: `/t/${(a.ids as string[])[0]}.bin`, bytes: 9 }] },
+        ),
+      },
+    ],
+  });
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  const add = async (source: string) =>
+    JSON.stringify(
+      await $.tool.call({
+        tool: "mcp__dnd-studio__review",
+        action: "add",
+        items: [{ name: source, kind: "image", source }],
+      } as never),
+    );
+  const saves = () => w.calls.filter((c) => c.args.action === "save").map((c) => (c.args.ids as string[])[0]);
+
+  expect(await add("dnd-x/images/2026-11-14 0909 new a map 2x_00001_.png [output]")).toContain("1 added");
+  expect(await add("dnd-x/images/2026-11-14 0909 new a map 2x_00001_.png")).toContain("1 added");
+  expect(await add("dnd-x/sounds/funk_00001_.flac [output]")).toContain("1 added"); // Windows backslashes, other case
+  expect(saves()).toEqual([LIST[0]!.id, LIST[0]!.id, LIST[1]!.id]);
+
+  const before = w.calls.length;
+  expect(await add("BF6C9FE5-74E8-452F-8CC7-3CB57C188867")).toContain("1 added");
+  expect(w.calls.slice(before).map((c) => c.args.action)).toEqual(["save"]); // an id needs no list
+  expect(await add("ba229d7c")).toContain("1 added");
+  expect(saves().slice(-2)).toEqual(["bf6c9fe5-74e8-452f-8cc7-3cb57c188867", LIST[1]!.id]);
+
+  const refused = await add("dnd-x/funkrauschen_upload.mp3");
+  expect(refused).toContain("Nothing added");
+  expect(refused).toContain("not reviewable: dnd-x/funkrauschen_upload.mp3 is no Studio result");
+
+  // a result the person made by hand: results save refuses it, the reason says so
+  w.answers.results = (a: Record<string, unknown>) => [
+    {
+      type: "text",
+      text: JSON.stringify(
+        a.action === "list"
+          ? LIST
+          : { folder: "/t", saved: [], failed: [{ id: LIST[0]!.id, error: "not made through D&D Studio's MCP tools: its file stays the user's" }] },
+      ),
+    },
+  ];
+  expect(await add(LIST[0]!.id)).toContain("not reviewable: result bf6c9fe5");
 });
 
 test("review: Studio paths are told apart from local paths and URLs", () => {

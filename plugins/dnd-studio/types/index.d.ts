@@ -223,6 +223,8 @@ export type AcceptItem = {
   detail: string;
   /** The pnp agent that fixes it. */
   fix: string;
+  /** The list it needs could not be read: "nicht geprüft", never open, no fix (status idle). */
+  unchecked?: boolean;
 };
 
 export type GpuState = {

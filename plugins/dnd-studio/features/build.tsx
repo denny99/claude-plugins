@@ -244,17 +244,84 @@ const CHECK_LISTS = [
 ] as const;
 /** At most this many entries per `names` read when a whole list is too big for one answer. */
 const NAMES_PER_READ = 8;
+/**
+ * At most this many characters of entries (the overview's `chars`) per `names` read. An entry's JSON is about twice
+ * its `chars` (variants, sounds, files), and every answer repeats the campaign's summary and threads (~8k), so 25k
+ * keeps a read well under the engine's cut at 100 000 characters; a read cut anyway is halved.
+ */
+const CHARS_PER_READ = 25_000;
+/** A list whose entries' `chars` add up to more than this is never read whole (its JSON is about twice that). */
+const WHOLE_READ_MAX = 40_000;
+
+/** The overview's rows of one list in reads of at most NAMES_PER_READ entries and CHARS_PER_READ characters. */
+function readGroups(rows: unknown[], key: string): string[][] {
+  const groups: string[][] = [];
+  let group: string[] = [];
+  let size = 0;
+  for (const e of rows) {
+    const row = (e ?? {}) as Record<string, unknown>;
+    const title = String(row[key] ?? "");
+    if (!title) continue;
+    const chars = typeof row.chars === "number" ? row.chars : 0;
+    if (
+      group.length &&
+      (group.length >= NAMES_PER_READ || size + chars > CHARS_PER_READ)
+    ) {
+      groups.push(group);
+      group = [];
+      size = 0;
+    }
+    group.push(title);
+    size += chars;
+  }
+  if (group.length) groups.push(group);
+  return groups;
+}
+
+/**
+ * Reads the entries `want` of one list by name into `rows`; a read that is cut, unreadable or misses one of them is
+ * halved, down to one entry. False when a single entry still cannot be read.
+ */
+async function readByNames(
+  $: EngineInterface,
+  list: string,
+  key: string,
+  want: string[],
+  rows: Map<string, unknown>,
+): Promise<boolean> {
+  let got: unknown;
+  try {
+    got = (await studioCall($, "campaign", { only: [list], names: want }))[list];
+  } catch {
+    got = undefined;
+  }
+  if (Array.isArray(got)) {
+    const read = got.map((e) => (e ?? {}) as Record<string, unknown>);
+    const titles = new Set(read.map((r) => String(r[key] ?? "")));
+    if (want.every((t) => titles.has(t))) {
+      for (const row of read) rows.set(String(row.n ?? row[key]), row);
+      return true;
+    }
+  }
+  if (want.length < 2) return false;
+  const half = Math.ceil(want.length / 2);
+  return (
+    (await readByNames($, list, key, want.slice(0, half), rows)) &&
+    readByNames($, list, key, want.slice(half), rows)
+  );
+}
 
 /**
  * The open campaign for the check, read in parts: one whole `campaign get` of a big campaign is hundreds of KB, which
  * the engine cuts at its MCP output limit, so its JSON never parsed and every count read 0. The overview (names and
  * sizes) gives the name, threads, party_at and references; each checked list is read on its own (`only`), and a list
- * still too big is read a few entries at a time by name. Throws when the overview is no campaign; a list that cannot
- * be read lands in `errors`.
+ * still too big is read a few entries at a time by name (by their sizes, halved when still cut). Throws when the
+ * overview is no campaign; a list that cannot be read lands in `errors` and `unread`.
  */
 async function readWholeCampaign(
   $: EngineInterface,
   errors: string[],
+  unread: string[],
 ): Promise<Record<string, unknown>> {
   const base = await studioCall($, "campaign", { overview: true });
   if (!isCampaign(base))
@@ -265,31 +332,40 @@ async function readWholeCampaign(
     );
   const out: Record<string, unknown> = { ...base };
   for (const [list, key] of CHECK_LISTS) {
-    const whole = await studioCall($, "campaign", { only: [list] });
+    const listed = Array.isArray(base[list]) ? (base[list] as unknown[]) : [];
+    const chars = listed.reduce<number>((sum, e) => {
+      const c = (e as Record<string, unknown> | null)?.chars;
+      return sum + (typeof c === "number" ? c : 0);
+    }, 0);
+    // a list whose texts alone pass WHOLE_READ_MAX is always cut: read it by name at once
+    const whole =
+      chars > WHOLE_READ_MAX
+        ? ({} as Record<string, unknown>)
+        : await studioCall($, "campaign", { only: [list] }).catch(
+            () => ({}) as Record<string, unknown>,
+          );
     if (Array.isArray(whole[list])) {
       out[list] = whole[list];
       continue;
     }
-    const titles = (Array.isArray(base[list]) ? base[list] : [])
-      .map((e) => String((e as Record<string, unknown>)?.[key] ?? ""))
-      .filter(Boolean);
     const rows = new Map<string, unknown>();
-    let failed = false;
-    for (let i = 0; i < titles.length && !failed; i += NAMES_PER_READ) {
-      const want = titles.slice(i, i + NAMES_PER_READ);
-      const part = await studioCall($, "campaign", { only: [list], names: want });
-      const got = part[list];
-      if (!Array.isArray(got)) failed = true;
-      else
-        for (const e of got) {
-          const row = e as Record<string, unknown>;
-          rows.set(String(row.n ?? row[key]), row);
-        }
+    let ok = true;
+    for (const want of readGroups(
+      Array.isArray(base[list]) ? base[list] : [],
+      key,
+    ))
+      if (!(await readByNames($, list, key, want, rows))) {
+        ok = false;
+        break;
+      }
+    if (ok) out[list] = [...rows.values()];
+    else {
+      // the overview's rows still count; their details are unknown, so their rows are not checked
+      unread.push(list);
+      errors.push(
+        `Kampagne (${LIST_DE[list] ?? list}): Antwort zu groß oder unlesbar, diese Zeilen sind nicht geprüft`,
+      );
     }
-    if (failed) {
-      errors.push(`Kampagne (${LIST_DE[list] ?? list}): Antwort zu groß oder unlesbar`);
-      // the overview's rows still count; their details are unknown
-    } else out[list] = [...rows.values()];
   }
   return out;
 }
@@ -308,8 +384,9 @@ export async function refreshCampaign($: EngineInterface): Promise<void> {
   const now = await $.clock.now();
   let campaign: Record<string, unknown>;
   const errors: string[] = [];
+  const unread: string[] = [];
   try {
-    campaign = await readWholeCampaign($, errors);
+    campaign = await readWholeCampaign($, errors, unread);
   } catch (err) {
     $.ui.toast(`✗ Kampagne nicht gelesen: ${errText(err)}`);
     // no stale counts beside the error: what was read before is not this answer
@@ -348,7 +425,7 @@ export async function refreshCampaign($: EngineInterface): Promise<void> {
   }
   const live = await readLive($);
   await patchCheck($, () => ({
-    items: acceptanceOf(campaign, maps, live.prepared),
+    items: acceptanceOf(campaign, maps, live.prepared, unread),
     checkedAt: now,
     error: errors.join(" · "),
   }));
@@ -643,20 +720,26 @@ export async function renderBuild(
   const open = check.items.filter(
     (it) => it.status === "failed" || it.status === "warning",
   );
+  // A part of the campaign could not be read: its rows are not checked, and the fix waits for a full check.
+  const unchecked = check.items.filter((it) => it.unchecked);
+  const canFix = !unchecked.length && open.some((it) => it.fix);
   out.push(
     Card(k, {
       key: "check",
       children: [
         CardTitle(k, {
-          icon: campaign && open.length ? "alert" : "check",
+          icon:
+            campaign && (open.length || unchecked.length) ? "alert" : "check",
           tone: campaign && open.length ? "bad" : undefined,
           title: "Abnahme-Check",
           pill: campaign
             ? open.length
               ? { text: `${open.length} offen`, tone: "bad" }
-              : check.items.length
-                ? { text: "alles da", tone: "ok" }
-                : undefined
+              : unchecked.length
+                ? { text: `${unchecked.length} nicht geprüft`, tone: "neutral" }
+                : check.items.length
+                  ? { text: "alles da", tone: "ok" }
+                  : undefined
             : undefined,
           count: campName,
         }),
@@ -696,13 +779,19 @@ export async function renderBuild(
                       "Profil „Meine Familie“ ist offen: Schreiben wird abgelehnt.",
                   })
                 : null,
-              open.some((it) => it.fix)
+              unchecked.length && open.some((it) => it.fix)
                 ? Sentence(
+                    k,
+                    "„Offene Punkte beheben lassen“ ist gesperrt, bis jeder Teil der Kampagne gelesen ist: „Neu prüfen“ versucht es noch einmal.",
+                    { faint: true },
+                  )
+                : canFix
+                  ? Sentence(
                     k,
                     `„Offene Punkte beheben lassen“ bittet Claude, ${agentLabel(open.map((it) => it.fix).filter(Boolean).join(", ")).split(", ").filter((v, i, a) => a.indexOf(v) === i).join(", ")} zu starten. Sie schreiben und malen direkt in ${campName ? `„${campName}“` : "die offene Kampagne"}; danach wird neu geprüft.`,
                     { faint: true },
                   )
-                : null,
+                  : null,
             ]
           : [
               check.error
@@ -719,7 +808,7 @@ export async function renderBuild(
           k,
           "check-acts",
           [
-            ...(open.some((it) => it.fix)
+            ...(canFix
               ? [
                   {
                     key: "check-fix",

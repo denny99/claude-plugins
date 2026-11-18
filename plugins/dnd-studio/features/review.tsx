@@ -32,7 +32,7 @@ type InputEl = (props: Record<string, unknown>) => RenderElement;
 export const REVIEW_TOOL = "review";
 
 export const REVIEW_TOOL_DESCRIPTION =
-  "The review queue of the D&D pane (tab Prüfen): a person listens to new sounds and looks at new pictures/videos there and says ok or redo (with a note). action add + items puts new things in (each: name = what it is for, spoiler-free, e.g. 'Torknarren'; kind sound|image|video; source = local file path, http(s) URL, or a Studio result's file as the Studio names it (e.g. 'dnd-dland/x.mp3': fetched to this computer with results save, refused when that fails); meta = short facts like 'Geräusch · 4 s, Schleife'; agent = who redoes it, pnp-klang for sounds, pnp-maler for pictures; scene = optional, never shown before the person uncovers it). list (default) shows the queue with verdicts; clear empties it. The person's result arrives later as a prompt naming what passed and what to redo with which note.";
+  "The review queue of the D&D pane (tab Prüfen): a person listens to new sounds and looks at new pictures/videos there and says ok or redo (with a note). action add + items puts new things in (each: name = what it is for, spoiler-free, e.g. 'Torknarren'; kind sound|image|video; source = local file path, http(s) URL, or a Studio result's file as the Studio names it (e.g. 'dnd-dland/x.mp3', with or without ' [output]') or its result id: fetched to this computer with results save; refused as not reviewable when no result has the file (uploads, downloaded sounds: give their local path or URL) or it was not made through the Studio's tools; meta = short facts like 'Geräusch · 4 s, Schleife'; agent = who redoes it, pnp-klang for sounds, pnp-maler for pictures; scene = optional, never shown before the person uncovers it). list (default) shows the queue with verdicts; clear empties it. The person's result arrives later as a prompt naming what passed and what to redo with which note.";
 
 function str(v: unknown): string {
   return typeof v === "string"
@@ -102,7 +102,7 @@ export async function reviewTool(
     }
     const kept = items.filter((i) => !isStudioPath(i.source) || i.local);
     const why = refused.length
-      ? ` Refused (a Studio path, but its file could not be fetched to this computer; give a local path, or a result made through the Studio's tools): ${refused.join("; ")}.`
+      ? ` Refused (a Studio file or result id that could not be fetched to this computer): ${refused.join("; ")}.`
       : "";
     if (!kept.length) return `Nothing added.${why}`;
     items.splice(0, items.length, ...kept);
@@ -350,43 +350,78 @@ async function tempDir($: EngineInterface): Promise<string> {
   return `${(tmp || temp || "/tmp").replace(/[\\/]+$/, "")}/dnd-studio-review`;
 }
 
+/** A Studio result id: a full UUID ("bf6c9fe5-74e8-…"), or its first 8+ hex digits. */
+const RESULT_ID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+const RESULT_ID_PREFIX = /^[0-9a-f]{8}(?:-[0-9a-f]{0,4}){0,4}$/i;
+
+/** The rows of a results list answer: the Studio answers with a bare JSON array, which answerOf keeps as `{ text }`. */
+function resultRows(answer: Obj): Obj[] {
+  const rows: Obj[] = [];
+  const data =
+    typeof answer.text === "string" ? parsed(answer.text) ?? answer : answer;
+  walk(data, (o) => {
+    if (str(o.id) && (o.file !== undefined || o.kind !== undefined)) rows.push(o);
+  });
+  return rows;
+}
+
+/** The result id a Studio source names: an id itself, else the result whose file it is (results list). */
+async function resultIdOf($: EngineInterface, source: string): Promise<string> {
+  const s = source.trim();
+  if (RESULT_ID.test(s)) return s.toLowerCase();
+  if (RESULT_ID_PREFIX.test(s)) {
+    const rows = resultRows(
+      await studioCall($, "results", { action: "list", limit: 200, brief: true }),
+    );
+    const hit = rows.find((o) => str(o.id).toLowerCase().startsWith(s.toLowerCase()));
+    if (hit) return str(hit.id);
+    throw new Error(`no Studio result has the id ${s}`);
+  }
+  const file = studioFile(s).toLowerCase(); // ComfyUI may run on Windows: no case, no backslashes
+  const rows = resultRows(
+    await studioCall($, "results", {
+      action: "list",
+      name: baseName(file),
+      limit: 50,
+      brief: true,
+    }),
+  );
+  const hit = rows.find((o) => {
+    const f = studioFile(str(o.file ?? o.path)).toLowerCase();
+    return !!f && (f === file || f.endsWith(`/${file}`) || file.endsWith(`/${f}`));
+  });
+  if (hit) return str(hit.id);
+  throw new Error(
+    `not reviewable: ${studioFile(s)} is no Studio result (an upload or a downloaded sound, e.g. Pixabay); the Studio hands out only the files of its results (results save), so give the file's local path or URL instead`,
+  );
+}
+
 /**
- * Brings a Studio file to this computer: its result (by id, else found by file name in results list) saved with
- * results save into the user's temp. Resolves the local path; throws why not (not a result made through the Studio's
- * tools, no such result, save failed).
+ * Brings a Studio file to this computer: its result (an id given, else found by file name in results list) saved
+ * with results save into the user's temp. Resolves the local path; throws why not (no result has the file, not made
+ * through the Studio's tools, save failed).
  */
 export async function fetchFromStudio(
   $: EngineInterface,
   item: Pick<ReviewItem, "source" | "resultId" | "local">,
 ): Promise<string> {
   if (item.local) return item.local;
-  const file = studioFile(item.source);
-  let id = item.resultId ?? "";
-  if (!id) {
-    const list = await studioCall($, "results", {
-      action: "list",
-      name: baseName(file),
-      limit: 20,
-      brief: true,
-    });
-    walk(list, (o) => {
-      const f = studioFile(str(o.file ?? o.path));
-      if (!id && str(o.id) && f && (f === file || f.endsWith(`/${file}`)))
-        id = str(o.id);
-    });
-    if (!id) throw new Error(`no Studio result has the file ${file}`);
-  }
+  const id = item.resultId || (await resultIdOf($, item.source));
   const answer = await studioCall($, "results", {
     action: "save",
     ids: [id],
     folder: await tempDir($),
   });
   const saved = Array.isArray(answer.saved) ? (answer.saved as Obj[]) : [];
-  const path = str(saved[0]?.path ?? saved[0]?.file);
+  const path = str(saved[0]?.file ?? saved[0]?.path);
   if (path) return path;
   const failed = Array.isArray(answer.failed) ? (answer.failed as Obj[]) : [];
+  const why =
+    str(failed[0]?.error) || str(answer.text) || "results save saved nothing";
   throw new Error(
-    str(failed[0]?.error) || str(answer.text) || "results save saved nothing",
+    /not made through/i.test(why)
+      ? `not reviewable: result ${id} was not made through the Studio's tools, so the Studio keeps its file (${why})`
+      : why,
   );
 }
 
