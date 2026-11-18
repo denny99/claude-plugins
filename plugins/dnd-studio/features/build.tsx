@@ -22,6 +22,7 @@ import {
   PIPELINE,
   pnpAgentOf,
   reviewRounds,
+  localDateTime,
   stageState,
 } from "../lib/model";
 import {
@@ -86,23 +87,44 @@ export function isApproved(run: AgentRun, plan: PlanApproval | null): boolean {
   );
 }
 
-/** The person signs the plan off: recorded, and the main thread is told to go on building. */
+/** The prompt the plan's sign-off sends: German, names the campaign, and asks Claude to confirm it before writing. */
+export function approvalPrompt(file: string, campaign: string): string {
+  const where = campaign ? ` für die Kampagne „${campaign}“` : "";
+  return (
+    `Ich habe den Bauplan von pnp-architekt${file ? ` (${file})` : ""}${where} im D&D-Panel abgesegnet. ` +
+    `Bau damit weiter (pnp-kampagne: als Nächstes pnp-texter). ` +
+    `Sag mir vor dem ersten Schreibaufruf, in welche Kampagne du schreibst${campaign ? ` (sie muss „${campaign}“ sein)` : ""}, und warte auf mein Ja.`
+  );
+}
+
+/**
+ * The person signs the plan off (the pane asked first: "In ‚<Kampagne>‘ weiterbauen?"): recorded, and the main
+ * thread is told to go on building in that campaign.
+ */
 export async function approvePlan(
   $: EngineInterface,
   run: AgentRun,
+  campaign = "",
 ): Promise<void> {
   const plan: PlanApproval = {
     file: run.planFile ?? "",
-    campaign: run.campaign,
+    campaign: run.campaign || campaign,
     at: await $.clock.now(),
   };
   await patchCheck($, () => ({ plan }));
   await $.store.set(PLAN_KEY, plan);
-  $.ui.toast("✓ Plan approved");
-  await submitForPerson(
-    $,
-    `I approved the pnp-architekt plan${plan.file ? ` (${plan.file})` : ""} in the D&D pane. Continue the build with it (pnp-kampagne: pnp-texter next).`,
-  );
+  $.ui.toast("✓ Bauplan abgesegnet");
+  await submitForPerson($, approvalPrompt(plan.file, plan.campaign ?? ""));
+}
+
+/** Forgets the build's kept state: the agent runs and the plan's sign-off (pane and store). */
+export async function resetBuild($: EngineInterface): Promise<void> {
+  await patchRuns($, () => []);
+  await $.store.delete(STORE_KEY);
+  await patchCheck($, () => ({ plan: null }));
+  await $.store.delete(PLAN_KEY);
+  $.ui.toast("✓ Bau-Stand zurückgesetzt");
+  await applyLook($);
 }
 
 /** Loads the runs kept from earlier sessions (marks those still "running" as failed: their session is gone). */
@@ -390,6 +412,7 @@ export async function renderBuild(
 ): Promise<RenderElement[]> {
   const { runs, campaign, live, rules, check } = d;
   const preview = await readPreview($);
+  const campName = campaign?.name || (await campaignName($));
   const mine = campaign?.name
     ? runs.filter((r) => !r.campaign || r.campaign === campaign.name)
     : runs;
@@ -461,7 +484,7 @@ export async function renderBuild(
       children: [
         CardTitle(k, {
           icon: "hammer",
-          title: "Bau-Abschnitte",
+          title: campName ? `Bau-Abschnitte · ${campName}` : "Bau-Abschnitte",
           count: `${steps.filter((x) => x.state === "done").length} von ${steps.length} · Review-Runde ${reviewRounds(mine)}/3`,
         }),
         Stepper(k, { key: "stages", steps }),
@@ -497,9 +520,16 @@ export async function renderBuild(
                 : planRun.state === "failed"
                   ? "pnp-architekt ist gescheitert: neu starten"
                   : approved
-                    ? `Bauplan abgesegnet${check.plan?.at ? ` ${new Date(check.plan.at).toISOString().slice(0, 16).replace("T", " ")}` : ""}`
+                    ? `Bauplan abgesegnet${check.plan?.at ? ` ${localDateTime(check.plan.at)}` : ""}`
                     : "Bauplan wartet auf deine Freigabe",
-            secondary: planRun.planFile ?? "",
+            secondary: [
+              planRun.campaign || campName
+                ? `Kampagne: ${planRun.campaign || campName}`
+                : "",
+              planRun.planFile ?? "",
+            ]
+              .filter(Boolean)
+              .join(" · "),
             actions:
               planRun.state === "done" && !approved
                 ? [
@@ -507,7 +537,8 @@ export async function renderBuild(
                       key: "plan-approve",
                       label: "Bauplan absegnen",
                       primary: true,
-                      onPress: () => void approvePlan($, planRun),
+                      confirm: `In „${planRun.campaign || campName || "die offene Kampagne"}“ weiterbauen?`,
+                      onPress: () => void approvePlan($, planRun, campName),
                     },
                     ...(planRun.planFile && !rules.spoilerSafe
                       ? [
@@ -589,7 +620,7 @@ export async function renderBuild(
                 ? { text: "alles da", tone: "ok" }
                 : undefined
             : undefined,
-          count: campaign?.name ?? "",
+          count: campName,
         }),
         ...(campaign
           ? [
@@ -667,6 +698,24 @@ export async function renderBuild(
       ].filter((x): x is RenderElement => !!x),
     }),
   );
+  if (mine.length || check.plan)
+    out.push(
+      Actions(
+        k,
+        "build-reset",
+        [
+          {
+            key: "build-reset",
+            label: "Bau-Stand zurücksetzen",
+            icon: "x",
+            variant: "secondary",
+            confirm: "Wirklich zurücksetzen?",
+            onPress: () => void resetBuild($),
+          },
+        ],
+        2,
+      ) as RenderElement,
+    );
   out.push(
     Switch(k, {
       key: "rule-buildLooks",

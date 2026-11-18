@@ -142,6 +142,8 @@ export type World = {
   opened: string[];
   writes: { path: string; text: string }[];
   toasts: string[];
+  /** Theme calls: the backdrop scene of each set ("dnd-tavern"), "clear" for each clear. */
+  themes: string[];
   submitted: string[];
   store: Map<string, unknown>;
   answers: Record<string, unknown>;
@@ -153,6 +155,7 @@ export function world(on: On, answers: Record<string, unknown> = {}): World {
     calls: [],
     writes: [],
     toasts: [],
+    themes: [],
     submitted: [],
     opened: [],
     store: new Map(),
@@ -184,8 +187,18 @@ export function world(on: On, answers: Record<string, unknown> = {}): World {
     w.store.set(e.key, e.value);
     return { value: undefined };
   });
-  on("theme.set", () => ({ value: { isDrawn: true } as never }));
-  on("theme.clear", () => ({ value: { isDrawn: true } as never }));
+  on("store.delete", (_, e) => {
+    w.store.delete(e.key);
+    return { value: undefined };
+  });
+  on("theme.set", (_, e) => {
+    w.themes.push(String((e as { backdrop?: { scene?: string } }).backdrop?.scene));
+    return { value: { isDrawn: true } as never };
+  });
+  on("theme.clear", () => {
+    w.themes.push("clear");
+    return { value: { isDrawn: true } as never };
+  });
   on("session.start", (_, e) => ({ cwd: e.cwd }));
   on("session.id", () => ({ value: "s-1" }));
   const env: Record<string, string> = {

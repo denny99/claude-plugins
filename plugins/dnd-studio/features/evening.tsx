@@ -19,6 +19,8 @@ import {
   versionOf,
   whisperOf,
   gpuOf,
+  clockTime,
+  localDay,
 } from "../lib/model";
 import {
   patchCheck,
@@ -474,7 +476,7 @@ export async function recordInterjection(
     if (!file) {
       const dir = await dataDir($);
       if (!dir) return note;
-      file = `${dir.replace(/[\\/]+$/, "")}/debrief-${slug(title)}-${new Date(now).toISOString().slice(0, 10)}.md`;
+      file = `${dir.replace(/[\\/]+$/, "")}/debrief-${slug(title)}-${localDay(now)}.md`;
       await patchEvening($, () => ({ notesFile: file }));
     }
     await $.fs.write(file, debriefText(title, s.notes));
@@ -723,7 +725,7 @@ export function renderInterjections(
   return [
     head,
     ...shown.map((n) =>
-      Sentence(k, `${new Date(n.at).toISOString().slice(11, 16)} ${n.text}`, {
+      Sentence(k, `${clockTime(n.at)} ${n.text}`, {
         faint: true,
       }),
     ),

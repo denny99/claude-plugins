@@ -12,7 +12,7 @@ import { applyLook } from "./look";
 import { createHost, startArgv, startHint, tidyError } from "../lib/host";
 import { readClash, readHealth, setHealth, toggleRule } from "../lib/state";
 import { SERVER_KEY } from "../lib/studio";
-import { isListenerMode } from "../lib/model";
+import { clockTime, isListenerMode } from "../lib/model";
 import {
   Actions,
   Card,
@@ -196,7 +196,7 @@ export function renderHealth(
           icon: "stethoscope",
           title: "Zustand",
           count: health
-            ? new Date(health.checkedAt).toISOString().slice(11, 16)
+            ? clockTime(health.checkedAt)
             : "",
         }),
         ...(health

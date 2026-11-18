@@ -35,14 +35,19 @@ export function themeOf(id: LookId): ThemeSetArgs {
   };
 }
 
-/** The look the plugin wants now ('' none): GM scene looks first, then the build phase. */
+/**
+ * The look the plugin wants now ('' none: the person's own theme): a live table's scene with a picture first, then a
+ * running build's phase. A scene without a picture, or a table that ended, gets no look of its own.
+ */
 export async function wantedLook($: EngineInterface): Promise<LookId | ""> {
   const rules = await readRules($);
   const view = await readTable($);
-  if (isLive(view, await readInitiative($)))
-    return rules.looks
-      ? moodFor(view?.scene, (await readLook($)).overrides)
-      : "";
+  if (
+    rules.looks &&
+    view?.scene?.pictured &&
+    isLive(view, await readInitiative($))
+  )
+    return moodFor(view.scene, (await readLook($)).overrides);
   const runs = await readRuns($);
   if (rules.buildLooks && runs.some((r) => r.state === "running"))
     return phaseLook(buildPhase(runs));

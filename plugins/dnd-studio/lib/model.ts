@@ -134,7 +134,10 @@ function soundsOf(v: unknown): SceneSound[] {
 export function toTableView(state: Obj, campaign: Obj, now: number): TableView {
   const log = arr(state.log);
   const shown = obj(state.scene);
-  const title = str(shown.title);
+  const onWindow = str(shown.kind) !== "clear";
+  const title = onWindow ? str(shown.title) : "";
+  const pictured =
+    onWindow && (!!str(shown.picture) || !!shown.video || !!str(shown.clip));
   const scenes = arr(campaign.scenes).map(obj);
   const scene = scenes.find(
     (s) => str(s.title) === title || str(s.name) === title,
@@ -156,8 +159,14 @@ export function toTableView(state: Obj, campaign: Obj, now: number): TableView {
   return {
     fetchedAt: now,
     scene: title
-      ? { title, place, notes: scene ? str(scene.notes) : "" }
+      ? {
+          title,
+          place,
+          notes: scene ? str(scene.notes) : "",
+          pictured,
+        }
       : undefined,
+    shown: onWindow && (!!title || pictured),
     party: heroesOf(state),
     rolls: rollsOf(log),
     secrets: secretsOf(log),
@@ -176,9 +185,56 @@ export function toTableView(state: Obj, campaign: Obj, now: number): TableView {
   };
 }
 
-/** A table is live when the players' window or the Discord bot is there, or a fight runs. */
+/**
+ * A table is live when an evening really runs: a fight, or the players' window or the Discord bot there AND
+ * something of an evening on it (a scene shown, the players talking, a break, a spotlight, the listener on, turns
+ * waiting). An open window or a connected bot alone (a test, a build) is no evening.
+ */
 export function isLive(view: TableView | null, ini: Initiative): boolean {
-  return ini.isActive || !!view?.playersWindow || !!view?.discord;
+  if (ini.isActive) return true;
+  if (!view || (!view.playersWindow && !view.discord)) return false;
+  const listener = !!view.listener && view.listener !== "off";
+  return (
+    !!view.shown ||
+    view.listening ||
+    view.paused ||
+    !!view.spotlight ||
+    listener ||
+    view.turnsWaiting > 0
+  );
+}
+
+/** Turns the players gave that nobody will take: they wait, and no evening (or no watcher, no listener) is there. */
+export function strandedTurns(
+  view: TableView | null,
+  ini: Initiative,
+  watcherRunning: boolean,
+): number {
+  if (!view || view.turnsWaiting <= 0) return 0;
+  const listener = !!view.listener && view.listener !== "off";
+  const heard = view.discord || view.playersWindow;
+  return !isLive(view, ini) || !heard || (!listener && !watcherRunning)
+    ? view.turnsWaiting
+    : 0;
+}
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** The person's local clock time of `ms` ("12:10"): every time the pane shows goes through these three. */
+export function clockTime(ms: number): string {
+  const d = new Date(ms);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+/** The person's local day of `ms` ("2026-11-18"). */
+export function localDay(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/** The person's local day and time of `ms` ("2026-11-18 12:30"). */
+export function localDateTime(ms: number): string {
+  return `${localDay(ms)} ${clockTime(ms)}`;
 }
 
 /** "Thorin, Wolf 1; Mara" → names. */
@@ -743,7 +799,7 @@ export function debriefText(
     "",
     ...notes.map(
       (n) =>
-        `- ${new Date(n.at).toISOString().slice(11, 16)} ${n.text.replace(/\s+/g, " ")}`,
+        `- ${clockTime(n.at)} ${n.text.replace(/\s+/g, " ")}`,
     ),
     "",
   ].join("\n");

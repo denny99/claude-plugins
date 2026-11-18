@@ -418,7 +418,8 @@ export const register: Register = (on, options) => {
     const waiting = openCount(review);
     return PaneBody(k, {
       header: DndHeader(k, {
-        title: campaign?.name || view?.scene?.title || "Studio",
+        // one name, always: the open campaign, else the app (never a scene or profile)
+        title: campaign?.name || "D&D Studio",
         pill: tableLive
           ? { text: "am Tisch", tone: "ok", icon: "dice" }
           : building

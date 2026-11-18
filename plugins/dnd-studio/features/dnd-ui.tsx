@@ -54,7 +54,7 @@ export function DndHeader(
         width={LOGO_WIDTH}
         height={LOGO_HEIGHT}
       />
-      {k.narrow ? null : (
+      {k.narrow || /^D&D\b/.test(hd.title ?? "") ? null : (
         <Text size="caption" weight="bold" color={k.t.faint}>
           D&D
         </Text>

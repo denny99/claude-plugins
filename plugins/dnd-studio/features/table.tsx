@@ -26,6 +26,7 @@ import {
   currentTurn,
   isListenerMode,
   isLive,
+  strandedTurns,
   looksPrivate,
   parseOrder,
   toTableView,
@@ -39,6 +40,7 @@ import {
   readRules,
   readTable,
   setTable,
+  setCampaign,
 } from "../lib/state";
 import {
   Actions,
@@ -91,6 +93,7 @@ export async function refreshTable(
     await setTable($, toTableView(state, campaignCache ?? {}, now));
     await applyLook($);
     await checkTableOpen($);
+    await followLiveTable($);
   } catch (err) {
     const prev = await readTable($);
     await setTable($, {
@@ -99,6 +102,55 @@ export async function refreshTable(
       error: err instanceof Error ? err.message : String(err),
     });
   }
+}
+
+let followUntil = 0;
+
+/**
+ * While a table is live the pane re-reads it every LIVE_POLL_MS (one cheap table_state, no campaign), so an evening
+ * that ends outside Claude (the window closed in the Studio, the bot gone, the profile switched) takes its scene look,
+ * launcher line and watcher warning with it. One chain at a time; it stops at the first read that is not live.
+ */
+async function followLiveTable($: EngineInterface): Promise<void> {
+  if (!isLive(await readTable($), await readInitiative($))) return;
+  const now = await $.clock.now();
+  if (followUntil > now) return;
+  followUntil = now + LIVE_POLL_MS;
+  $.clock.after(LIVE_POLL_MS, () => {
+    followUntil = 0;
+    void refreshTable($, false);
+  });
+}
+
+const LIVE_POLL_MS = 30_000;
+
+/**
+ * Takes the turns that wait with nobody to answer them (wait_for_players quiet, one turn a call, a second at most
+ * each) and drops them: the Studio has no tool to discard a turn, wait_for_players is the only way to take one.
+ */
+export async function discardTurns(
+  $: EngineInterface,
+  count: number,
+): Promise<void> {
+  let taken = 0;
+  try {
+    for (let i = 0; i < count; i++) {
+      const r = await studioCall($, "wait_for_players", {
+        quiet: true,
+        timeout_seconds: 1,
+      });
+      if (r.finished !== true) break;
+      taken++;
+    }
+    $.ui.toast(
+      taken ? `✓ ${taken} ${taken === 1 ? "Zug" : "Züge"} verworfen` : "Kein Zug mehr da",
+    );
+  } catch (err) {
+    $.ui.toast(
+      `✗ wait_for_players: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`,
+    );
+  }
+  await refreshTable($, false);
 }
 
 /** One write to the table on a person's press; toasts the outcome and re-reads the table. */
@@ -410,6 +462,10 @@ export async function observe(
           prepared: `${String(json.made ?? json.done ?? "?")}/${String(json.total)}${json.failed ? `, ${Array.isArray(json.failed) ? json.failed.length : String(json.failed)} failed` : ""}`,
         }));
       break;
+    case "profile":
+      // another profile, another campaign: the header and the build forget the old one's name
+      if (input.action === "use") await setCampaign($, null);
+      break;
     case "table_state":
       if (Object.keys(json).length) {
         await setTable($, toTableView(json, campaignCache ?? {}, now));
@@ -427,6 +483,9 @@ export async function observe(
       "play_sound",
       "give_find",
       "set_pause",
+      "discord",
+      "open_players",
+      "profile",
     ].includes(tool)
   )
     $.clock.after(0, () => void refreshTable($, false));
@@ -578,6 +637,16 @@ export function registerTable(on: On): void {
     "tool.call",
     { tool: "mcp__plugin_dnd-studio_dnd-studio__discord" },
     ($, e, next) => watch($, e, next, "discord"),
+  ).catch(passThrough);
+  on(
+    "tool.call",
+    { tool: "mcp__plugin_dnd-studio_dnd-studio__open_players" },
+    ($, e, next) => watch($, e, next, "open_players"),
+  ).catch(passThrough);
+  on(
+    "tool.call",
+    { tool: "mcp__plugin_dnd-studio_dnd-studio__profile" },
+    ($, e, next) => watch($, e, next, "profile"),
   ).catch(passThrough);
   on(
     "tool.call",
@@ -741,6 +810,34 @@ export function renderTable(
     isListenerMode(view) ? "Zuhörer an" : "",
   ].filter(Boolean);
   out.push(Sentence(k, status.join(" · "), { faint: true }));
+  const stranded = strandedTurns(
+    view,
+    ini,
+    evening.watcher.state === "running",
+  );
+  if (stranded)
+    out.push(
+      Sentence(
+        k,
+        `⚠ ${stranded === 1 ? "1 Zug wartet" : `${stranded} Züge warten`}, keine Spielleitung hört zu`,
+        { tone: "warn" },
+      ),
+      Actions(
+        k,
+        "stranded",
+        [
+          {
+            key: "turns-drop",
+            label: stranded === 1 ? "Zug verwerfen" : "Züge verwerfen",
+            icon: "x",
+            variant: "secondary",
+            confirm: "Wirklich verwerfen?",
+            onPress: () => void discardTurns($, stranded),
+          },
+        ],
+        3,
+      ) as RenderElement,
+    );
   if (evening.stale)
     out.push(Sentence(k, `⚠ ${evening.stale}`, { tone: "bad" }));
   if (isLive(view, ini) && isListenerMode(view)) {

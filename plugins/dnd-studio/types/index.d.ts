@@ -38,7 +38,10 @@ export type SceneSound = {
 export type TableView = {
   fetchedAt: number;
   error?: string;
-  scene?: { title: string; place: string; notes: string };
+  /** The scene on the players' window; `pictured`: it has a picture or a clip (the scene look needs one). */
+  scene?: { title: string; place: string; notes: string; pictured?: boolean };
+  /** Something stands on the players' window (a show, not the bare felt after clear). */
+  shown?: boolean;
   party: Hero[];
   rolls: Roll[];
   secrets: Secret[];

@@ -149,10 +149,20 @@ test("Build: the plan is signed off by a press, recorded, and the main thread is
     await findShown(ui, /Bauplan wartet auf deine Freigabe/),
   ).toBeDefined();
   expect(w.submitted).toEqual([]);
+  // the Build tab names the campaign it builds
+  expect(await findShown(ui, /Bau-Abschnitte · Breeland/)).toBeDefined();
+  // two steps: the first press asks into which campaign, only the yes sends
+  await ui.press({ key: "plan-approve" });
+  expect(w.submitted).toEqual([]);
+  const yes = await ui.find({ type: "Button", text: /In „Breeland“ weiterbauen\?/ });
+  expect(yes).toBeDefined();
   await ui.press({ key: "plan-approve" });
   expect(w.submitted.length).toBe(1);
   expect(w.submitted[0]).toContain("~/kampagne/plan.md");
   expect(w.submitted[0]).toContain("pnp-texter");
+  expect(w.submitted[0]).toContain("Ich habe den Bauplan");
+  expect(w.submitted[0]).toContain("„Breeland“");
+  expect(w.submitted[0]).toContain("vor dem ersten Schreibaufruf");
   expect((w.store.get("plan-approval") as { file: string }).file).toBe(
     "~/kampagne/plan.md",
   );
