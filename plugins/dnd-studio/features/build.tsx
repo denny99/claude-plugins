@@ -42,6 +42,7 @@ import {
   setCampaign,
   setPreview,
   toggleRule,
+  isProtectedProfile,
 } from "../lib/state";
 import { isCampaign, studioCall } from "../lib/studio";
 import {
@@ -905,8 +906,8 @@ export async function renderBuild(
   // A part of the campaign could not be read: its rows are not checked, and the fix waits for a full check.
   const unchecked = check.items.filter((it) => it.unchecked);
   const canFix = !unchecked.length && open.some((it) => it.fix);
-  const family = /meine familie/i.test(live.profile)
-    ? "Profil „Meine Familie“ ist offen: Schreiben wird abgelehnt."
+  const family = isProtectedProfile(live.profile)
+    ? `Profil „${live.profile}“ ist geschützt: Schreiben wird abgelehnt.`
     : "";
   // One status: the read's error (it names the parts that were not read) before the profile's refusal.
   const checkStatus: StatusInfo | undefined = check.error

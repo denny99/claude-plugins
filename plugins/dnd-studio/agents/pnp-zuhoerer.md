@@ -18,7 +18,9 @@ deine Nachricht an die Spielleitung.
 scheiße“). Du weckst die Spielleitung mit einer Nachricht und hörst sofort weiter zu; du endest nicht nach einem
 Wecken. Jedes Ende ließ den Tisch taub, bis ein neuer Zuhörer lief. `SendMessage` ist vielleicht zurückgestellt: dann
 einmal zu Beginn `ToolSearch` mit `select:SendMessage` laden. Ebenfalls zu Beginn mit Bash `date +%s` deine Startzeit
-merken.
+merken. Gibt `date +%s` keine Zahl (Windows ohne Git Bash): stattdessen PowerShell
+`[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()`; geht auch das nicht, zählst du deine Weckungen, und die achte wird dein
+Ende (wie Punkt 5).
 
 ## Der Auftrag und die Lage
 

@@ -12,7 +12,7 @@ Private plugin for D&D Studio (the desktop app in `dnd-character-creator`). It b
   - **Zustand / Health**: problems first (app not running → *Studio öffnen*; an old user-level MCP server holding the plugin's names), then Studio-App (version, port), connection to Claude, plugin version, Discord bot, name clash; one card per settings group with switches: **Hintergründe** (incl. **Tisch-Hintergrund**) and **Regeln am Tisch**. No token button.
 - **A launcher row above the prompt** (key `launch:dnd-studio@3`, put by `mergeLauncherRows` into line 1 of the band with the other mods' starters, the usage meter below; Band v3: two fixed lines, a short status is allowed, colour only for warn/bad): the chip *D&D* (opens the pane) while the Studio answers; at a live table its status reads „Tisch läuft · Runde 3“ (without a fight „Tisch läuft“) and the chip opens the Tisch tab, where scene, round and turn stand in full. After it at most one hint, and only a warning: the most urgent of watcher („Spieler ungehört“ / „kein Zuhörer“), silence after a finished turn (12 s), Discord/unheard warnings and „Claude neu starten“ when the Studio's version changed during the session or it refused arguments Claude's tool list offered. A main-thread turn that ends at a live table without a watcher gets a toast and a note on the next prompt.
 - **Notes on the model's own table calls** (never blocking): secret turns → whisper only, cut-in lines, unplayed sounds, maps without markers, reminders after a new scene, repeated entry writes, `make_sound` at a live table costs GPU time.
-- **Two hard guards** (each can be switched off): a handout or secret for one player on the shared window (`show_players`/`give_find`), and `talk_npc` at a live table. Writes are also refused while the profile "Meine Familie" is open.
+- **Two hard guards** (each can be switched off): a handout or secret for one player on the shared window (`show_players`/`give_find`), and `talk_npc` at a live table. Writes are also refused while a protected profile is open (option `protectedProfiles`, default "Meine Familie": the profile with real saved evenings; set your own or leave it empty).
 - **Table backdrop** (desktop and mobile apps; the terminal takes only the colors): while a table is live the theme and an animated pixel backdrop stand behind the chat: the standard pixel game table (map, candle, dice, miniatures; switch *Tisch-Hintergrund*). A scene with a picture will show that picture as its backdrop (`scenePictureLook` in features/look.tsx; until it makes one, the game table stands). Nothing is guessed from a scene's title or notes. While a build runs the look follows the pipeline phase (switch *Bau-Looks*). The plugin clears only a theme it set itself; another theme mod (such as ds-seasons) comes back after `/reload-plugins` or a restart.
 
 ## Listener mode (open mic, `pnp-zuhoerer`)
@@ -52,7 +52,9 @@ An older MCP server named `dnd-studio` at user level (the Studio's former setup 
 
 - The app installs per user to `%LOCALAPPDATA%\Programs\DnD Studio`; *Start app* on the Health tab starts it from there.
 - The server listens on 127.0.0.1 only. From WSL it is reachable only with mirrored networking.
-- Everything else works the same; no shell or POSIX command is used.
+- Everything else works the same, except waiting for the players at a live table: the watcher and the listener run the
+  Studio's watch command (`curl` to 127.0.0.1) and the listener its clock (`date +%s`) through Claude Code's Bash tool,
+  which on Windows needs Git for Windows (Git Bash). Not tested on Windows yet.
 
 ## Changing it
 
@@ -61,7 +63,9 @@ claude plugin validate plugins/dnd-studio
 claude plugin test plugins/dnd-studio
 ```
 
-The skills and agents here are the source of truth; edit them here, not in `~/.claude`.
+The skills and agents here are the source of truth; edit them here, not in `~/.claude` or the installed plugin folder
+(an update overwrites it). Without a checkout of this repo, table lessons from a debrief go to `pnp-regeln.md` in your
+campaign folder instead (skill `pnp-spielleiter`, `references/nach-dem-abend.md`).
 
 ## Privacy
 

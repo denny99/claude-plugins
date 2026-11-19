@@ -43,6 +43,7 @@ import {
   setTable,
   setCampaign,
   profileName,
+  isProtectedProfile,
 } from "../lib/state";
 import {
   Card,
@@ -571,8 +572,11 @@ async function guardReason(
     isLive(await readTable($), await readInitiative($))
   )
     return "The table is live: speak the NPC yourself with say_line (voice = the NPC); talk_npc is for preparation. Rule toggle: /dnd → Health → Rules.";
-  if (rules.denyFamily && /meine familie/i.test((await readLive($)).profile))
-    return 'The open Studio profile is "Meine Familie", which is never changed: switch the profile first.';
+  if (rules.denyFamily) {
+    const profile = (await readLive($)).profile;
+    if (isProtectedProfile(profile))
+      return `The open Studio profile "${profile}" is on this computer's protected list (plugin option protectedProfiles: real saved evenings), which is never changed: switch to another profile first.`;
+  }
   return undefined;
 }
 

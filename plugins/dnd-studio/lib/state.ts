@@ -29,6 +29,28 @@ import {
 } from "./model";
 import { EMPTY_PROGRESS } from "./progress";
 
+// --- protected profiles (userConfig protectedProfiles): profiles whose saved evenings Claude never changes ---------
+
+let protectedProfiles = ["meine familie"];
+
+/** userConfig `protectedProfiles`: comma-separated names, matched case-insensitively as a part of the profile name. */
+export function configureProtectedProfiles(value: unknown): void {
+  if (typeof value !== "string") {
+    protectedProfiles = ["meine familie"];
+    return;
+  }
+  protectedProfiles = value
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** The open profile is on this computer's protected list. */
+export function isProtectedProfile(profile: string | undefined): boolean {
+  const p = (profile ?? "").toLowerCase();
+  return !!p && protectedProfiles.some((n) => p.includes(n));
+}
+
 export const DEFAULT_RULES: Rules = {
   annotate: true,
   denyLeaks: true,

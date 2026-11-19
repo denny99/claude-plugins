@@ -19,5 +19,10 @@ Gehört zu Skill `pnp-spielleiter`, Abschnitt 7: was nach dem Abschied kommt, we
    Rechner oder wer sonst mit dir arbeitet: Was lief gut, was war seltsam, wo hast du gestockt oder gewartet, was hat
    eine Szene, ein NPC, ein Wurf, ein Klang nicht getragen? Erst deine eigene Liste (die Zwischenrufe des Abends,
    im Skill Abschnitt 7, und was dir im `log` auffällt: lange Pausen, Wiederholungen, vergessene Klänge, Widersprüche), dann
-   fragen, was ihm aufgefallen ist. Gemeinsam entscheiden, was eine Regel wird; die schreibst du in diesen Skill oder
-   in `pnp-kampagne`, mit Datum und Zitat wie die übrigen Spieltest-Lehren, und committest erst nach seinem OK.
+   fragen, was ihm aufgefallen ist. Gemeinsam entscheiden, was eine Regel wird, und sie mit Datum und Zitat wie die übrigen Spieltest-Lehren
+   festhalten, erst nach seinem OK. Wohin: Gilt sie nur für diese Kampagne, in ihren Leitfaden (`campaign set`).
+   Sonst in die Datei `pnp-regeln.md` im Arbeitsordner dieser Sitzung (anlegen, wenn sie fehlt; je Regel eine Zeile
+   unter einer Überschrift `pnp-spielleiter` oder `pnp-kampagne`); beide Skills lesen sie zu Beginn. **Nie** in den
+   installierten Skill schreiben: Der Plugin-Ordner wird beim nächsten Update überschrieben. Nur wenn das Quell-Repo
+   des Plugins in dieser Sitzung ausgecheckt ist (`plugins/dnd-studio/skills/…`), schreibst du sie dort in den Skill
+   und committest nach seinem OK.
