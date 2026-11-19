@@ -3,7 +3,7 @@
 import { expect } from "claude-code/testing";
 import { test } from "./limits";
 
-import { rollsOfAnswer } from "../features/transcript";
+import { outputText, rollsOfAnswer } from "../features/transcript";
 import { kitRuleLines } from "./kit-rules";
 import { findShown } from "./shown";
 import { toolResult, world } from "./world";
@@ -82,6 +82,16 @@ test("rollsOfAnswer reads one roll on top and a list of rolls", () => {
     { who: "B", total: "12", hidden: true },
   ]);
   expect(rollsOfAnswer("not json")).toEqual([]);
+  // The Studio's real answer for one roll: the roll sits under `result`.
+  expect(
+    rollsOfAnswer(
+      '{"result":{"kind":"roll","who":"Spielleitung","label":"Probe","total":12,"verdict":""},"held":false}',
+    ).map((r) => [r.who, r.label, r.total]),
+  ).toEqual([["Spielleitung", "Probe", "12"]]);
+  // The stored result handed over as an object, not as text.
+  expect(
+    rollsOfAnswer(outputText({ result: { who: "A", total: 7 }, held: false })).map((r) => r.total),
+  ).toEqual(["7"]);
 });
 
 test("results get: a reviewed picture gets „Passt“ / „Nochmal“ under the Studio's own result; a press sets the verdict", async ($, on) => {
