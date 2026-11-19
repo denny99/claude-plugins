@@ -13,7 +13,7 @@ import { draftConfig, draftJson } from './init'
 import { registerLauncher } from './launcher'
 import { REVIEW_TOOLS, registerReview } from './review/register'
 import { BRIDGE_GIT_URL, BRIDGE_README, openPane, PANE_ID, renderPane } from './pane'
-import { CARD_TOOLS, recordTestsCall, renderTestsResult } from './transcript'
+import { CARD_TOOLS, recordTestsCall, renderTestsResult, renderTestsUse } from './transcript'
 import {
   affectedTests,
   batchTarget,
@@ -450,5 +450,9 @@ export function registerUnity(on: On, options: Options): void {
   // --- transcript: a test run's result as a card at the tool's own result row (the pane keeps the lasting state) ---
   on('ui.render', { component: 'ToolResult', plugin: '*', props: { tool: CARD_TOOLS } }, async ($, e, next) =>
     renderTestsResult($, e, next, options),
+  ).catch(($, e, next) => next(e))
+  // desktop asks for ToolUse instead (the app keeps its row): the same card under it
+  on('ui.render', { component: 'ToolUse', plugin: '*' }, async ($, e, next) =>
+    renderTestsUse($, e, next, options),
   ).catch(($, e, next) => next(e))
 }

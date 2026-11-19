@@ -1,6 +1,6 @@
 /**
  * Cards in the transcript: the result of `unity_run_tests` / `unity_test_results` drawn as a card at the tool's own
- * result row (ToolResult). The pane keeps the lasting state (editor, last run, starts); the card answers the call.
+ * result row (ToolResult; on desktop under the app's ToolUse row). The pane keeps the lasting state (editor, last run, starts); the card answers the call.
  *
  * The tool.call hook records which run a call answered (per `tool_use_id`); the render reads that record and, while
  * the model still holds the same run, the live model (a run that was still going when the call returned fills in).
@@ -87,6 +87,22 @@ export async function recordTestsCall(
   })
 }
 
+/** The card of a call (shared by the ToolResult and the ToolUse hook); undefined when this call answered no run. */
+export async function testsCardOf(
+  $: EngineInterface,
+  e: RenderInput<'ToolResult'> | RenderInput<'ToolUse'>,
+  options: Options,
+): Promise<RenderElement | undefined> {
+  const id = e.props.tool_use_id || e.requestId
+  const saved = (await read($, cardsAtom)).tests[id]
+  if (!saved) return undefined
+  const m = await readModel($)
+  // the same run still in the model: its live state (a run that was running when the call returned is done now)
+  const live = m.tests && m.tests.runId === saved.runId ? recordOf(m.tests as TestRun) : undefined
+  const k = await kit($, e as never, { lang: 'de' })
+  return testsCard($, k, live ?? saved, id, options)
+}
+
 /** Draws the card at the tool's result row; anything it does not know (no record, an error, ctrl+o) stays as it was. */
 export async function renderTestsResult(
   $: EngineInterface,
@@ -96,14 +112,32 @@ export async function renderTestsResult(
 ): Promise<RenderElement> {
   const props = e.props
   if (props.isErrored || props.isExpanded) return next(e)
-  const id = props.tool_use_id || e.requestId
-  const saved = (await read($, cardsAtom)).tests[id]
-  if (!saved) return next(e)
-  const m = await readModel($)
-  // the same run still in the model: its live state (a run that was running when the call returned is done now)
-  const live = m.tests && m.tests.runId === saved.runId ? recordOf(m.tests as TestRun) : undefined
-  const k = await kit($, e as never, { lang: 'de' })
-  return testsCard($, k, live ?? saved, id, options)
+  return (await testsCardOf($, e, options)) ?? next(e)
+}
+
+/**
+ * Desktop: the app keeps the tool row as its own and never asks for ToolResult, it asks for ToolUse. The app's row
+ * stays, the card stands under it. Terminal and mobile stay with the ToolResult hook; a running, failed or
+ * interrupted call keeps the app's row alone.
+ */
+export async function renderTestsUse(
+  $: EngineInterface,
+  e: RenderInput<'ToolUse'>,
+  next: (e: RenderInput<'ToolUse'>) => Promise<RenderElement>,
+  options: Options,
+): Promise<RenderElement> {
+  if (e.surface !== 'desktop' || !CARD_TOOLS.test(String(e.props.tool ?? ''))) return next(e)
+  const p = e.props
+  if (p.isRunning || p.isErrored || p.isInterrupted) return next(e)
+  const card = await testsCardOf($, e, options)
+  if (!card) return next(e)
+  const { Box } = await kit($, e as never, { lang: 'de' })
+  return (
+    <Box flexDirection="column">
+      {await next(e)}
+      {card}
+    </Box>
+  )
 }
 
 /** The card (exported for tests): count as pill, the red tests as rows, one main action into the pane's Tests tab. */

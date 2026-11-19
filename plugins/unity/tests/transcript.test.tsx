@@ -68,3 +68,56 @@ test('ctrl+o (expanded) keeps the plain result', async ($, on) => {
   expect(await findShown(open as never, 'Testlauf')).toBeUndefined()
   await open.unmount()
 })
+
+// Desktop asks for ToolUse, not ToolResult, while the tool row is its own: the app's row stays, the card under it.
+const useRow = (tool: string, id: string, extra: Record<string, unknown> = {}) =>
+  ({
+    plugin: 'unity',
+    component: 'ToolUse',
+    requestId: id,
+    props: {
+      tool_use_id: id,
+      tool,
+      input: {},
+      output: 'text',
+      isRunning: false,
+      isErrored: false,
+      isInterrupted: false,
+      ...extra,
+    },
+  }) as const
+
+const engineOnly = (drawn: unknown) => expect(drawn).toMatchObject({ type: 'engine' })
+
+test('desktop ToolUse: the app row stays, the run card under it; terminal and a running call keep the row alone', async ($, on) => {
+  const world = fakeWorld(on)
+  await $.session.start(start)
+  await settle(world, $.tool.call({ tool: 'mcp__unity__unity_run_tests', tool_use_id: 'toolu_use1', mode: 'EditMode' }))
+  const desk = await $.ui.mount({ ...useRow('mcp__unity__unity_run_tests', 'toolu_use1'), surface: 'desktop' })
+  const tree = (await desk.drawn()) as { type: string; children: { type: string; props?: { key?: string } }[] }
+  expect(tree.type).toBe('Box')
+  expect(tree.children[0]).toMatchObject({ type: 'engine' })
+  expect(tree.children[1]?.props?.key).toBe('tcard-olu_use1')
+  expect(await findShown(desk as never, 'Testlauf')).toBeDefined()
+  expect(await findShown(desk as never, /1 rot/)).toBeDefined()
+  expect(kitRuleLines(await desk.drawn())).toEqual([])
+  await desk.unmount()
+  const term = await $.ui.mount({ ...useRow('mcp__unity__unity_run_tests', 'toolu_use1'), surface: 'terminal' })
+  engineOnly(await term.drawn())
+  await term.unmount()
+  const running = await $.ui.mount({
+    ...useRow('mcp__unity__unity_run_tests', 'toolu_use1', { isRunning: true }),
+    surface: 'desktop',
+  })
+  engineOnly(await running.drawn())
+  await running.unmount()
+  // unknown call and foreign tool: the app's row alone
+  for (const [tool, id] of [
+    ['mcp__unity__unity_run_tests', 'toolu_none'],
+    ['mcp__other__run_tests', 'toolu_use1'],
+  ] as const) {
+    const ui = await $.ui.mount({ ...useRow(tool, id), surface: 'desktop' })
+    engineOnly(await ui.drawn())
+    await ui.unmount()
+  }
+})
