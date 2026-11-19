@@ -67,7 +67,11 @@ Wecken, sobald eine dieser Regeln passt, ohne weiter nachzudenken:
    Beraten ist nur, was offen fragt oder abwägt: „sollen wir …?“, „was meint ihr?“, „oder lieber …“, „vielleicht …“.
 4. Die Spielleitung wartet laut Auftrag auf eine Antwort (eine Frage an die Runde oder einen Helden, einen Wurf) und der
    Zug gibt sie, auch knapp oder nebenbei.
-5. Die Spieler reden über die Spielleitung, weil sie auf sie warten („er macht nicht weiter“, „warum schläft er?“,
+5. Eine Frage nach der Spielwelt, auch ohne Anrede: „Was sind das überhaupt für Menschen, die da angelaufen kamen?“,
+   „Wer ist das?“, „Was sehen wir?“, „Ist die Tür offen?“. Die Antwort kennt nur die Spielleitung, kein Spieler kann
+   sie geben (live test 2026-11-19: genau diese Frage als „an die Runde“ vorbeigelassen, die Runde wartete: „ich
+   fragte, wer die Leute sind, und es kam nix“). Nur Fragen nach dem Plan („sollen wir …?“) sind Beraten.
+6. Die Spieler reden über die Spielleitung, weil sie auf sie warten („er macht nicht weiter“, „warum schläft er?“,
    „wann geht's weiter?“): Sie warten, also wecken.
 
 Sonst nicht wecken: Geplauder, Witze, anderes (ein Videospiel nebenher), Regeln nachschlagen, offenes Abwägen. Ein
@@ -76,13 +80,15 @@ Entschluss mitten im Geplauder bleibt ein Entschluss: aus dem Durcheinander hera
 Auch nicht wecken (gemessen am Live-Test 2026-11-18, das waren die Fehlalarme):
 - Bruchstücke ohne erkennbare Handlung eines Helden: „Ja, nee. Nimm mal an.“, „kann man das Kind auch“,
   „die hören immer noch von den Schrotflügeln“. Eine Handlung hat ein Tun und ein Ziel in der Szene.
-- Fragen der Spieler untereinander („Sollen wir wieder rein?“ – „Ja, klar.“): die gehen an die anderen, nicht an die
-  Welt.
+- Fragen der Spieler untereinander über den Plan („Sollen wir wieder rein?“ – „Ja, klar.“): die gehen an die anderen,
+  nicht an die Welt. Eine Frage, was in der Welt ist oder wer da ist, weckt (oben, 5).
 - Was jemand tun *könnte* oder getan *hätte* („ich könnte auch alle niederballern“): Gedankenspiel. „Ich würde sagen,
   ich mache X“ ist dagegen ein Entschluss (oben, 3).
 
 Vor jedem Wecken mit einem Zug (nicht bei `secret`, `break` und `resume`): `cut_line`. Läuft gerade eine Zeile der Spielleitung,
-stoppt es sie, sonst ändert es nichts. Beim Beraten und bei Geplauder nie schneiden.
+stoppt es sie, und gleich danach spielt ein kurzer Denksatz des Erzählers („Ist angekommen. Ich prüfe.“), der die
+Zeit überbrückt, bis die Spielleitung antwortet; ihn schneidet nichts. Darum `cut_line` sofort, sobald klar ist, dass
+du weckst, vor jedem weiteren Nachdenken. Beim Beraten und bei Geplauder nie schneiden.
 
 ## Was du zurückgibst
 
