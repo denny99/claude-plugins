@@ -9,13 +9,13 @@
       "name": "dnd-studio",
       "source": "./plugins/dnd-studio",
       "description": "D&D Studio: GM screen, table backdrop, build cockpit, the pnp-* skills and agents, and the Studio's MCP server.",
-      "version": "0.8.0"
+      "version": "0.8.1"
     },
     {
       "name": "unity",
       "source": "./plugins/unity",
       "description": "Unity for any project on macOS and Windows: compile gate after C# edits, editor console, EditMode/PlayMode tests, Play/Stop and Game view screenshots via a file-queue editor bridge, batchmode jobs when no editor holds the project.",
-      "version": "0.8.1"
+      "version": "0.8.2"
     }
   ]
 }
