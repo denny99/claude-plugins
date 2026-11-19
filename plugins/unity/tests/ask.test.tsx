@@ -14,7 +14,14 @@ async function turnStart($: Turns, id: string, text = ''): Promise<void> {
   await $.turn.start({ text, turnId: id } as never)
 }
 async function turnEnd($: Turns, id: string, extra: Record<string, unknown> = {}): Promise<void> {
-  await $.turn.complete({ answer: 'ok', durationMs: 1, isAborted: false, turnId: id, reason: 'answer', ...extra } as never)
+  await $.turn.complete({
+    answer: 'ok',
+    durationMs: 1,
+    isAborted: false,
+    turnId: id,
+    reason: 'answer',
+    ...extra,
+  } as never)
 }
 /** The engine frames a plugin's prompt before the turn carries it. */
 const framed = (prompt: string) => `The unity plugin sent a message:\n\n${prompt}`
@@ -31,11 +38,13 @@ async function compileErrorPane($: Engine, on: On) {
   )
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   const label = async (key = 'cfix-0') => String((await ui.find({ type: 'Button', key }))?.props.label ?? '')
-  return { world, ui, label }
+  // the quiet pill „geschickt“ after the button while the prompt is on its way (a Svg pill on the desktop: its `alt`)
+  const sent = async () => (await ui.findAll({ type: 'Svg' })).some(el => el.props.alt === 'geschickt')
+  return { world, ui, label, sent }
 }
 
 test('two presses across a turn end that is not the answer give exactly one prompt; the answer frees the button', async ($, on) => {
-  const { world, ui, label } = await compileErrorPane($, on)
+  const { world, ui, label, sent } = await compileErrorPane($, on)
   expect(await label()).toMatch(/Claude reparieren lassen/)
 
   await turnStart($, 'busy', 'Denny fragt etwas anderes') // Claude works on something else
@@ -43,7 +52,8 @@ test('two presses across a turn end that is not the answer give exactly one prom
   // the toast comes at once, before Claude has seen anything
   expect(world.prompts).toHaveLength(1)
   expect(world.toasts).toContain('An Claude geschickt – kommt nach der laufenden Antwort.')
-  expect(await label()).toMatch(/Wartet auf Claude/)
+  expect(await label()).toMatch(/Claude reparieren lassen/)
+  expect(await sent()).toBe(true)
 
   await turnEnd($, 'busy') // the running turn ends, the task still waits in the queue
   await settle(world, ui.press({ key: 'cfix-0' }))
@@ -55,34 +65,37 @@ test('two presses across a turn end that is not the answer give exactly one prom
 
   // the turn that carries the prompt: bound, a subagent's end releases nothing, its own end answers it
   await turnStart($, 't1', framed(world.prompts[0] ?? ''))
-  expect(await label()).toMatch(/An Claude geschickt/)
+  expect(await sent()).toBe(true)
   await turnEnd($, 'sub', { agentId: 'a1' })
-  expect(await label()).toMatch(/An Claude geschickt/)
+  expect(await sent()).toBe(true)
   await turnEnd($, 't1')
-  expect(await label()).toMatch(/Nochmal schicken/)
+  expect(await label()).toMatch(/Claude reparieren lassen/)
+  expect(await sent()).toBe(false)
   await settle(world, ui.press({ key: 'cfix-0' })) // sending again is a choice
   expect(world.prompts).toHaveLength(2)
   await ui.unmount()
 })
 
 test('a double press while Claude is idle sends once and toasts „An Claude geschickt.“ at once', async ($, on) => {
-  const { world, ui, label } = await compileErrorPane($, on)
+  const { world, ui, label, sent } = await compileErrorPane($, on)
   await Promise.all([ui.press({ key: 'cfix-0' }), ui.press({ key: 'cfix-0' })])
   expect(world.prompts).toHaveLength(1)
   expect(world.toasts).toContain('An Claude geschickt.')
-  expect(await label()).toMatch(/An Claude geschickt/)
+  expect(await sent()).toBe(true)
   await ui.unmount()
 })
 
 test('an interrupt frees a queued task: it never arrived, the button is back to normal', async ($, on) => {
-  const { world, ui, label } = await compileErrorPane($, on)
+  const { world, ui, label, sent } = await compileErrorPane($, on)
   await turnStart($, 'busy', 'etwas anderes')
   await settle(world, ui.press({ key: 'cfix-0' }))
   await turnEnd($, 'sub', { agentId: 'a1', isAborted: true, reason: 'aborted' }) // a subagent's abort: nothing
-  expect(await label()).toMatch(/Wartet auf Claude/)
+  expect(await label()).toMatch(/Claude reparieren lassen/)
+  expect(await sent()).toBe(true)
   await turnEnd($, 'busy', { isAborted: true, reason: 'aborted', answer: '' })
   expect(world.toasts).toContain('Abgebrochen – nicht bei Claude angekommen. Der Knopf ist wieder frei.')
   expect(await label()).toMatch(/Claude reparieren lassen/)
+  expect(await sent()).toBe(false)
   await settle(world, ui.press({ key: 'cfix-0' }))
   expect(world.prompts).toHaveLength(2)
   await ui.unmount()
@@ -101,6 +114,7 @@ test('screenshot (prompt made after the capture) and console „all to Claude“
   })
   await $.session.start(start)
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const sentPill = async () => (await ui.findAll({ type: 'Svg' })).some(el => el.props.alt === 'geschickt')
   await settle(world, ui.press({ key: 'refresh' }))
   await settle(world, ui.press({ key: 'editor-acts-more' }))
   await settle(world, ui.press({ key: 'shot' }))
@@ -113,10 +127,10 @@ test('screenshot (prompt made after the capture) and console „all to Claude“
   await settle(world, ui.press({ key: 'console-fix-all' }))
   await settle(world, ui.press({ key: 'console-fix-all' }))
   expect(world.prompts.filter(p => p.includes('Value 0 is out of range'))).toHaveLength(1)
-  expect(String((await ui.find({ type: 'Button', key: 'console-fix-all' }))?.props.label)).toMatch(/An Claude geschickt/)
+  expect(await sentPill()).toBe(true)
   await turnStart($, 't', framed(world.prompts.join('\n\n'))) // the engine merges both waiting prompts
   await turnEnd($, 't')
-  expect(String((await ui.find({ type: 'Button', key: 'console-fix-all' }))?.props.label)).toMatch(/Nochmal schicken/)
+  expect(await sentPill()).toBe(false)
   await ui.unmount()
 })
 
@@ -127,13 +141,14 @@ test('perf „Claude analysieren lassen“ and Ziel „Entwurf erstellen“ use 
   await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
   await settle(world, $.command.run({ command: 'unity', args: '' } as never))
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const sentPill = async () => (await ui.findAll({ type: 'Svg' })).some(el => el.props.alt === 'geschickt')
   await settle(world, ui.press({ key: 'tab-perf' }))
   await ui.press({ key: 'perf-10' })
   for (let i = 0; i < 12 && !(await ui.find({ type: 'Button', key: 'perf-ask' })); i++) await world.clock.advance(500)
   await settle(world, ui.press({ key: 'perf-ask' }))
   await settle(world, ui.press({ key: 'perf-ask' }))
   expect(world.prompts).toHaveLength(1)
-  expect(String((await ui.find({ type: 'Button', key: 'perf-ask' }))?.props.label)).toMatch(/An Claude geschickt/)
+  expect(await sentPill()).toBe(true)
 
   if (!(await ui.find({ type: 'Button', key: 'tab-target' }))) await settle(world, ui.press({ key: 'tab-more' }))
   await settle(world, ui.press({ key: 'tab-target' }))

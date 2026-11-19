@@ -162,20 +162,28 @@ test('Rückfrage und Statuszeile: ein Druck verschiebt nichts (Zeile bleibt eine
     const ui = await mountBoard($, `jump-${surface}`, surface, 80)
     const t = trees[surface]!
     const line = (tree: unknown) => findEl(tree, el => (el as ElP).props?.key === 'infra-status')
-    // the status line is there before and after the press, with the same box; blank, then the question in one line
-    expect(line(t.idle)).toBeDefined()
-    expect(textOf(line(t.idle))).toBe(STATUS_BLANK)
+    // the terminal holds the line before and after the press, with the same box (blank, then the question in one
+    // line); a graphical surface draws no empty line (kit: no hole under the header), the question makes it appear
+    if (surface === 'desktop') expect(line(t.idle)).toBeUndefined()
+    else {
+      expect(line(t.idle)).toBeDefined()
+      expect(textOf(line(t.idle))).toBe(STATUS_BLANK)
+    }
     // (the terminal cuts it at the body width; the kit then also toasts it in full)
     if (surface === 'desktop') expect(textOf(line(t.asked))).toBe(QUESTION)
     else expect(textOf(line(t.asked))).toMatch(/^ImporterMS auf 7\.26\.0 ziehen und neu starten\? .*…$/)
-    expect({ ...(line(t.asked) as ElP).props }).toEqual({ ...(line(t.idle) as ElP).props })
+    if (surface !== 'desktop') expect({ ...(line(t.asked) as ElP).props }).toEqual({ ...(line(t.idle) as ElP).props })
     // the question stands nowhere else: not in the row, not in a button
     expect(textOf(t.rowAsked)).not.toContain('neu starten?')
     // in place of the one button: two short ones in one row, the action label and ✕
     const pair = findEl(t.rowAsked, el => (el as ElP).props?.key === 'upd-ImporterMS-ask') as ElP
     expect((pair.props as { flexDirection?: string }).flexDirection).toBe('row')
     const both = (pair.children ?? []).filter(c => (c as El0).type === 'Button') as ElP[]
-    expect(both.map(b => String(b.props?.label ?? textOf(b)))).toEqual(['Aktualisieren', '✕'])
+    // graphical: „Abbrechen“ (kit: a ✕ is only the terminal's short cancel)
+    expect(both.map(b => String(b.props?.label ?? textOf(b)))).toEqual([
+      'Aktualisieren',
+      surface === 'desktop' ? 'Abbrechen' : '✕',
+    ])
     expect(both.map(b => b.props?.key)).toEqual(['upd-ImporterMS', 'upd-ImporterMS-cancel'])
     // the row keeps its shape: the same boxes with the same number of children, only the button became the pair
     const BTN = '{"type":"Button","n":0,"kids":[]}'

@@ -14,8 +14,9 @@ test("kit v3: buttons are native with their glyph in front (if the action has on
   expect((await ui.find({ type: "Button", key: "listener-on" }))?.text).toBe(
     glyphLabel("mic", "Zuhörer an"),
   );
+  // the kit puts no glyph before „Aktualisieren“ / „Neu laden“ any more
   expect((await ui.find({ type: "Button", key: "discord-status" }))?.text).toBe(
-    glyphLabel("refresh", "Aktualisieren"),
+    "Aktualisieren",
   );
   // nothing graphical inside or beside a button: the engine drops a Svg in a Button
   expect(
@@ -26,9 +27,13 @@ test("kit v3: buttons are native with their glyph in front (if the action has on
   await $.command.run({ command: "dnd", args: "health" } as never);
   ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
   // one place for the listener switch (Table tab); the health tab only says where it is
-  expect(await ui.find({ type: "Button", key: "switch-listener" })).toBeUndefined();
+  expect(
+    await ui.find({ type: "Button", key: "switch-listener" }),
+  ).toBeUndefined();
   await ui.press({ key: "sec-settings" });
-  expect(await findShown(ui, /Ein- und ausschalten im Tisch-Tab/)).toBeDefined();
+  expect(
+    await findShown(ui, /Ein- und ausschalten im Tisch-Tab/),
+  ).toBeDefined();
   expect(
     (await ui.find({ type: "Button", key: "rule-buildLooks" }))?.text,
   ).toMatch(new RegExp(`^(${SWITCH_OFF}|${SWITCH_ON}) Bau-Looks · (an|aus)$`));
