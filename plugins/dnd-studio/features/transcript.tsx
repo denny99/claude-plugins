@@ -1,6 +1,6 @@
 /**
  * Cards in the transcript (the game master's place; the players see their own window): a roll's answer as a card at
- * `roll_dice`'s result row, and the review actions under a reviewed picture that `results get` shows. The pane keeps
+ * `roll_dice`'s result row (on desktop under the app's ToolUse row), and the review actions under a reviewed picture that `results get` shows. The pane keeps
  * the lasting state (the evening's dice, the review list).
  *
  * Nothing here sends anything to the players' window or Discord: the roll card only reads the answer, the picture
@@ -221,6 +221,45 @@ function verdictActions($: EngineInterface, i: ReviewItem): Action[] {
   ];
 }
 
+type CardInput = RenderInput<"ToolResult"> | RenderInput<"ToolUse">;
+
+/** The roll card of a call (shared by the ToolResult and the ToolUse hook); undefined when the answer has no roll. */
+async function rollCardOf(
+  $: EngineInterface,
+  e: CardInput,
+): Promise<RenderElement | undefined> {
+  const p = e.props;
+  const rolls = rollsOfAnswer(outputText(p.output));
+  if (!rolls.length) return undefined;
+  const k = await kit($, e as unknown as RenderInput<"Pane">, {
+    brand: "dnd",
+    lang: "de",
+  });
+  return rollCard(
+    k,
+    rolls,
+    (await readRules($)).spoilerSafe,
+    (p.tool_use_id || e.requestId).slice(-8),
+  );
+}
+
+/** The verdict card under a reviewed picture (shared by both hooks); undefined when the answer shows none. */
+async function pictureCardOf(
+  $: EngineInterface,
+  e: CardInput,
+): Promise<RenderElement | undefined> {
+  const items = reviewedIn(
+    outputText(e.props.output),
+    (await readReview($)).items,
+  );
+  if (!items.length) return undefined;
+  const k = await kit($, e as unknown as RenderInput<"Pane">, {
+    brand: "dnd",
+    lang: "de",
+  });
+  return pictureCard($, k, items);
+}
+
 export function registerTranscript(on: On): void {
   on(
     "ui.render",
@@ -228,18 +267,7 @@ export function registerTranscript(on: On): void {
     async ($, e, next) => {
       const p = e.props;
       if (p.isErrored || p.isExpanded) return next(e);
-      const rolls = rollsOfAnswer(outputText(p.output));
-      if (!rolls.length) return next(e);
-      const k = await kit($, e as unknown as RenderInput<"Pane">, {
-        brand: "dnd",
-        lang: "de",
-      });
-      return rollCard(
-        k,
-        rolls,
-        (await readRules($)).spoilerSafe,
-        (p.tool_use_id || e.requestId).slice(-8),
-      );
+      return (await rollCardOf($, e)) ?? next(e);
     },
   ).catch(($, e, next) => next(e));
 
@@ -247,23 +275,48 @@ export function registerTranscript(on: On): void {
     "ui.render",
     { component: "ToolResult", plugin: "*", props: { tool: RESULTS_TOOL } },
     async ($, e, next) => {
-      const p = e.props;
-      if (p.isErrored) return next(e);
-      const items = reviewedIn(
-        outputText(p.output),
-        (await readReview($)).items,
-      );
-      if (!items.length) return next(e);
-      const k = await kit($, e as unknown as RenderInput<"Pane">, {
+      if (e.props.isErrored) return next(e);
+      const card = await pictureCardOf($, e);
+      if (!card) return next(e);
+      const { Box } = await kit($, e as unknown as RenderInput<"Pane">, {
         brand: "dnd",
         lang: "de",
       });
-      const { Box } = k;
       // the Studio's own result (the preview picture) stays; the verdict stands under it
       return (
         <Box flexDirection="column" gap={1}>
           {await next(e)}
-          {pictureCard($, k, items)}
+          {card}
+        </Box>
+      );
+    },
+  ).catch(($, e, next) => next(e));
+
+  // Desktop: the app keeps the tool row as its own and never asks for ToolResult, it asks for ToolUse. The app's
+  // row stays, the same card stands under it. Terminal and mobile stay with the ToolResult hooks above; a running,
+  // failed or interrupted call keeps the app's row alone.
+  on(
+    "ui.render",
+    { component: "ToolUse", plugin: "*" },
+    async ($, e, next) => {
+      if (e.surface !== "desktop") return next(e);
+      const tool = String(e.props.tool ?? "");
+      if (tool !== ROLL_TOOL && tool !== RESULTS_TOOL) return next(e);
+      const p = e.props;
+      if (p.isRunning || p.isErrored || p.isInterrupted) return next(e);
+      const card =
+        tool === ROLL_TOOL
+          ? await rollCardOf($, e)
+          : await pictureCardOf($, e);
+      if (!card) return next(e);
+      const { Box } = await kit($, e as unknown as RenderInput<"Pane">, {
+        brand: "dnd",
+        lang: "de",
+      });
+      return (
+        <Box flexDirection="column">
+          {await next(e)}
+          {card}
         </Box>
       );
     },

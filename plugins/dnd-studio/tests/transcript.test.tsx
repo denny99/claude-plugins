@@ -108,3 +108,116 @@ test("results get: a reviewed picture gets „Passt“ / „Nochmal“ under the
   expect((await other.findAll({ type: "Button" })).some((b) => /^pic-/.test(String(b.props.key)))).toBe(false);
   await other.unmount();
 });
+
+// Desktop asks for ToolUse, not ToolResult, while the tool row is its own: the app's row stays, the card under it.
+const useRow = (
+  tool: string,
+  id: string,
+  output: unknown,
+  extra: Record<string, unknown> = {},
+) =>
+  ({
+    plugin: "dnd-studio",
+    component: "ToolUse",
+    requestId: id,
+    props: {
+      tool_use_id: id,
+      tool,
+      input: {},
+      output,
+      isRunning: false,
+      isErrored: false,
+      isInterrupted: false,
+      ...extra,
+    },
+  }) as const;
+
+type Drawn = { type: string; children?: Drawn[]; props?: { key?: string } };
+
+test("desktop ToolUse: roll_dice keeps the app row with the card under it; terminal and a running call keep the row alone", async ($, on) => {
+  world(on);
+  await $.session.start(start);
+  const open = text(
+    JSON.stringify({ who: "Thorin", label: "Athletik", total: 17 }),
+  );
+  const desk = await $.ui.mount({
+    ...useRow(ROLL, "toolu_use1", open),
+    surface: "desktop",
+  });
+  const tree = (await desk.drawn()) as Drawn;
+  expect(tree.type).toBe("Box");
+  expect(tree.children?.[0]).toMatchObject({ type: "engine" });
+  expect(tree.children).toHaveLength(2);
+  expect(await findShown(desk, "Wurf")).toBeDefined();
+  expect(await findShown(desk, /17/)).toBeDefined();
+  expect(kitRuleLines(await desk.drawn())).toEqual([]);
+  await desk.unmount();
+  // a hidden roll stays covered here too
+  const secret = text(
+    JSON.stringify({
+      rolls: [
+        { who: "Brann", label: "Heimlichkeit", total: 4, whisper: "Brann" },
+      ],
+    }),
+  );
+  const hid = await $.ui.mount({
+    ...useRow(ROLL, "toolu_use2", secret),
+    surface: "desktop",
+  });
+  expect(await findShown(hid, /verdeckter Wurf/)).toBeDefined();
+  expect(await findShown(hid, /^4\b|· 4/)).toBeUndefined();
+  await hid.unmount();
+  const term = await $.ui.mount({
+    ...useRow(ROLL, "toolu_use1", open),
+    surface: "terminal",
+  });
+  expect(await term.drawn()).toMatchObject({ type: "engine" });
+  await term.unmount();
+  const running = await $.ui.mount({
+    ...useRow(ROLL, "toolu_use1", open, { isRunning: true }),
+    surface: "desktop",
+  });
+  expect(await running.drawn()).toMatchObject({ type: "engine" });
+  await running.unmount();
+  // a foreign tool and an unreadable answer: the app's row alone
+  for (const [tool, out] of [
+    ["mcp__other__roll_dice", open],
+    [ROLL, text("no dice")],
+  ] as const) {
+    const ui = await $.ui.mount({
+      ...useRow(tool, "toolu_use3", out),
+      surface: "desktop",
+    });
+    expect(await ui.drawn()).toMatchObject({ type: "engine" });
+    await ui.unmount();
+  }
+});
+
+test("desktop ToolUse: results get keeps the app row with „Passt“ / „Nochmal“ under it", async ($, on) => {
+  world(on);
+  on("tool.call", (_, e) =>
+    e.tool === RESULTS
+      ? (toolResult([{ id: "res-42", file: "/out/brann.png", time: 1_700_000_000_500, who: "pnp-maler", prompt: "x" }]) as never)
+      : (toolResult({ ok: true }) as never),
+  );
+  await $.session.start(start);
+  await $.tool.call({ tool: RESULTS, input: { action: "list" } } as never);
+  const got = text(JSON.stringify({ id: "res-42", prompt: "Brann am Tor" }));
+  const ui = await $.ui.mount({
+    ...useRow(RESULTS, "toolu_res9", got),
+    surface: "desktop",
+  });
+  const tree = (await ui.drawn()) as Drawn;
+  expect(tree.children?.[0]).toMatchObject({ type: "engine" });
+  const ok = (await ui.findAll({ type: "Button" })).find((b) =>
+    /^pic-ok-/.test(String(b.props.key)),
+  );
+  expect(ok?.props.label).toContain("Passt");
+  await ui.unmount();
+  const term = await $.ui.mount({
+    ...useRow(RESULTS, "toolu_res9", got),
+    surface: "terminal",
+  });
+  expect(await term.drawn()).toMatchObject({ type: "engine" });
+  await term.unmount();
+});
