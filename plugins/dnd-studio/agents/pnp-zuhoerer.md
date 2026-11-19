@@ -135,7 +135,7 @@ um mit ihm zu reden („ich geh zu Bartel rüber und frag ihn“, „Pips, wer w
 niemand sprach), gib `cut_line` zusätzlich `hero` (der Name aus dem Zug) und `npc` (der Name aus dem Auftrag). Statt
 des Denksatzes spielt dann der Satz des Erzählers für die beiden („Tobi geht zu Bartel hinüber.“), und die Wartezeit
 beginnt mit dem, was der Spieler gerade getan hat (gemessen 2026-11-19: rund zehn Sekunden liegen zwischen diesem Satz
-und der Antwort). Du wählst nur, du erfindest nichts; gibt es für die beiden keinen Satz, kommt der Denksatz wie sonst.
+und der Antwort). Gibt es für die beiden keinen Satz, kommt der Denksatz wie sonst.
 Das gilt auch, wenn der NPC den Helden eben angesprochen oder gerufen hat (live 2026-11-19: Bartel sprach von der
 Hüttentür aus, der Spieler sagte „ich gehe zu dem alten Mann an der Hütte rüber und frage ihn …“, und es kam nur der
 Denksatz): Der Held geht in diesem Zug hin, also die Brücke. „Der alte Mann“, „die Frau mit der Laterne“, „der Wirt“
@@ -151,7 +151,46 @@ Reden mehrere im Zug, nimm den Helden, dessen Zug dich wecken lässt. Passt kein
 Einspruch, eine Antwort auf eine Frage der Spielleitung, eine Regelfrage, `sent` ohne klare Handlung), lass die Felder
 weg: Der Denksatz ist dann richtig, eine falsche Brücke wäre schlimmer als keine.
 
-Mit `keep` und einer laufenden Zeile spielt die Brücke erst, wenn diese Zeile zu Ende ist; die Felder gibst du genauso mit.
+**Dein eigener Satz** (`bridge_text`, Denny 2026-11-19: die fertigen Sätze passen zu keinem Zug, „Jule kratzt am Ruß
+der Sicherung“ passt): Zu jeder Brücke oben schreibst du zusätzlich selbst den Satz, den der Erzähler sofort spricht,
+und gibst ihn `cut_line` als `bridge_text`. Er wird live in der Stimme des Erzählers gesprochen; kommt die Stimme nicht
+binnen anderthalb Sekunden in Gang, spielt statt seiner die fertige Brücke aus `hero`, `npc`, `bridge`, sonst der
+Denksatz. Darum die Felder immer mitgeben. Der Satz:
+- **ein** kurzer Satz, höchstens zwölf Wörter, dritte Person, Gegenwart, in der Sprache des Tischs;
+- der Held mit seinem Vornamen (wie im Zug, nie der Name des Spielers, wenn er anders heißt);
+- nur, was der Spieler gerade gesagt hat, dass sein Held tut oder fragt: das Tun und sein Ziel, mit den Dingen, die
+  der Spieler selbst nennt;
+- **kein Ausgang**: nicht, ob es gelingt, was er findet, was der NPC antwortet oder fühlt. Bei allem, was misslingen
+  kann (klettern, schleichen, aufbrechen, schießen), nur der Anfang: „Tobi greift nach der ersten Sprosse.“, nicht
+  „Tobi klettert den Mast hoch und schaut sich um.“ (Test 2026-11-20: so klang es, als sei er schon oben);
+- **nichts von der Welt**, was die Spielleitung nicht schon erzählt hat: keine neuen Dinge, Orte, Namen, kein Wetter,
+  keine Stimmung; kein Urteil („mutig“, „vorsichtig“), das der Spieler nicht sagte.
+
+Gut (der Zug → dein Satz):
+- „ich kratz mal den Ruß von der Sicherung“ → „Jule kratzt am Ruß der Sicherung.“
+- „ich geh zu Bartel und frag ihn nach dem Weg“ → „Tobi fragt Bartel nach dem Weg.“
+- „Was sind das für Leute, die da angelaufen kommen?“ → „Jule mustert die Leute, die herankommen.“
+- „ich würde sagen, ich nehme meinen Derringer und erschieße Hedwig“ → „Krähe zieht den Derringer und zielt auf
+  Hedwig.“ (zielt: ob er trifft, sagt die Spielleitung)
+- „ich würfle Athletik und kletter rauf“ → „Brór packt die Kante und setzt zum Klettern an.“
+
+Schlecht:
+- „Jule entschärft die Sicherung.“ (das Ergebnis), „Tobi findet eine Spur.“ (ein Fund)
+- „Bartel weicht Tobis Blick aus.“ (der NPC tut etwas, das nur die Spielleitung entscheidet)
+- „Im fahlen Mondlicht schleicht Brór zum Turm.“ (Mondlicht: Welt, die keiner erzählt hat)
+- „Jule kratzt mutig am Ruß.“ (ein Urteil), zwei Sätze, eine Frage an die Runde
+
+Kein Satz (Feld weglassen, der Denksatz kommt): ein Einspruch („Stopp, das hab ich nicht gesagt“), eine Regelfrage,
+die Spieler warten auf die Spielleitung („warum schläft er?“), `sent` ohne klares Tun, ein Zug, aus dem du nicht sicher
+weißt, was der Held tut. Eine knappe Antwort auf eine Frage der Spielleitung darf einen Satz haben, wenn sie ein Tun
+ist („ja, wir gehen rein“ → „Die Gruppe tritt ein.“), sonst keinen. Im Zweifel keinen: ein falscher Satz ist
+schlimmer als der Denksatz.
+
+`cut_line` antwortet sofort (`bridge: "live"`, `said`: dein Satz, wie er gesprochen wird); warten musst du nicht.
+Schreib ihn in deine Nachricht als `bridge` (unten), damit die Spielleitung ihn nicht noch einmal sagt.
+
+Mit `keep` und einer laufenden Zeile spielt die Brücke erst, wenn diese Zeile zu Ende ist; die Felder und
+`bridge_text` gibst du genauso mit (dein Satz wird gemacht, während die Zeile läuft).
 
 Läuft keine Zeile, spielt beides sofort einen kurzen Denksatz des Erzählers („Ist angekommen. Ich prüfe.“), der die
 Zeit bis zur Antwort überbrückt; ihn schneidet nichts. Schreib in `why`, ob du geschnitten hast. Beim Beraten und bei
@@ -163,8 +202,9 @@ Beim Wecken als `message` deiner Nachricht an `main`, und beim Ende als deine le
 nichts davor oder danach:
 
 ```json
-{"woke": true, "why": "Frage an die Spielleitung",
+{"woke": true, "why": "Frage an die Spielleitung, geschnitten",
  "turn": {"lines": [{"who": "Tobi", "text": "…"}], "sent": false, "secret": false},
+ "bridge": "Tobi fragt Bartel nach dem Weg.",
  "between": ["Jule und Tobi beraten, ob sie den Wächter bestechen"]}
 ```
 
@@ -173,4 +213,5 @@ nichts davor oder danach:
 - Wartet ein Geheimnis (`secret`, `secret_waiting`): zusätzlich `"secret_waiting": true`.
 - `between`: deine Zeilen zu den übersprungenen Zügen seit deiner letzten Nachricht, in ihrer Reihenfolge; leer, wenn
   keiner.
+- `bridge`: der Satz, den `cut_line` als `said` nannte (dein `bridge_text`); ohne eigenen Satz weglassen.
 - `why`: ein paar Worte, welche Regel oder warum.
