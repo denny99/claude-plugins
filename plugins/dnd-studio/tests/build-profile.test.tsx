@@ -2,7 +2,8 @@
  * Runde 3 [2 live]: the build (runs, plan sign-off) belongs to a campaign in a Studio profile, not to the campaign's
  * name alone. A new campaign of an old name starts at 0, a deleted profile takes its build along.
  */
-import { expect, test } from "claude-code/testing";
+import { expect } from "claude-code/testing";
+import { test } from "./limits";
 
 import { isApproved, runsOf, sameBuild } from "../features/build";
 import type { AgentRun } from "../types";

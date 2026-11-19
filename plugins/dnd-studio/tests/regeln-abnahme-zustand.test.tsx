@@ -1,5 +1,6 @@
 /** The design rules (tests/kit-rules.ts) on the tabs Abnahme and Zustand, drawn on the desktop in their main states. */
-import { expect, test } from "claude-code/testing";
+import { expect } from "claude-code/testing";
+import { test } from "./limits";
 
 import { resetAutoOpen } from "../features/dnd-ui";
 import { kitRuleLines } from "./kit-rules";

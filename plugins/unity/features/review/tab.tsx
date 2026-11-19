@@ -567,7 +567,10 @@ function questionsBody(
               key: `rv-done-${q.id}`,
               title: q.title,
               status: 'ok',
-              meta: [a.choice, ago(a.time, now)].filter(Boolean).join(' · '),
+              // the verdict stands once, in the pill (R8); the meta keeps only a chosen option or comment
+              meta: [a.choice && a.choice.toLowerCase() !== verdictText(a.verdict).toLowerCase() ? a.choice : '', ago(a.time, now)]
+                .filter(Boolean)
+                .join(' · '),
               pill: { text: verdictText(a.verdict), tone: verdictTone(a.verdict) },
             })
           }),

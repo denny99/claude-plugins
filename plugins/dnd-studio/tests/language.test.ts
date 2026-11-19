@@ -1,4 +1,5 @@
-import { expect, test } from "claude-code/testing";
+import { expect } from "claude-code/testing";
+import { test } from "./limits";
 
 import { withLanguage } from "../features/language";
 import { PREFIX, toolResult, world } from "./world";

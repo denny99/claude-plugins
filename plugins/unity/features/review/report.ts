@@ -6,7 +6,7 @@
 import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
 import type { ReviewReportState, ReviewUiState } from '../../types'
-import { Actions, askClaude, Card, CardTitle, ProblemCard, Sentence, type Action, type Kit } from '../../lib/ui'
+import { Actions, askClaude, Card, CardTitle, ProblemCard, Segment, Sentence, Toggle, type Action, type Kit } from '../../lib/ui'
 import type { IconName } from '../../lib/icons'
 import { join } from '../../lib/path'
 import * as play from '../../lib/play'
@@ -293,16 +293,19 @@ export async function reportCard(
         { key: 'rv-report-cancel', label: 'Abbrechen', onPress: () => void patchReview($, { report: undefined }) },
       ],
     })
-  const kinds: Action[] = REPORT_KINDS.map(x => ({
-    key: `rv-kind-${x.id.replace(/\W+/g, '-').toLowerCase()}`,
-    label: x.id,
-    icon: r.kind === x.id ? 'check' : x.icon,
-    variant: 'secondary',
-    onPress: () => void (async () => {
-      await flushNote($)
-      await patchReport($, () => ({ kind: x.id }))
-    })(),
-  }))
+  // the kind is a choice, not an action (R1): a Segment, keys `rv-kind-<id>` as before
+  const kindId = (id: string) => id.replace(/\W+/g, '-').toLowerCase()
+  const kinds = Segment(k, {
+    key: 'rv-kind',
+    options: REPORT_KINDS.map(x => ({ id: kindId(x.id), label: x.id })),
+    active: r.kind ? kindId(r.kind) : undefined,
+    onSelect: id =>
+      void (async () => {
+        const kind = REPORT_KINDS.find(x => kindId(x.id) === id)?.id
+        await flushNote($)
+        await patchReport($, () => ({ kind }))
+      })(),
+  })
   const forced = r.kind === 'Ruckelt'
   return Card(k, {
     key: 'rv-report',
@@ -314,7 +317,7 @@ export async function reportCard(
       }),
       r.facts.length ? Sentence(k, r.facts.join(' · '), { faint: true }) : null,
       Sentence(k, 'Was ist es?'),
-      Actions(k, 'rv-kinds', kinds, 5),
+      kinds,
       Input
         ? Input({
             key: 'rv-report-note',
@@ -341,22 +344,15 @@ export async function reportCard(
             { faint: true, wrap: 'wrap' },
           )
         : null,
+      // measuring along is a setting of this report (R1): a Toggle, not an action
       r.busy
         ? null
-        : Actions(
-            k,
-            'rv-measure',
-            [
-              {
-                key: 'rv-measure-toggle',
-                label: `${MEASURE_SECONDS} s mitmessen`,
-                icon: r.measure || forced ? 'check' : 'gauge',
-                variant: 'secondary',
-                onPress: () => void patchReport($, x => ({ measure: !x.measure })),
-              },
-            ],
-            1,
-          ),
+        : Toggle(k, {
+            key: 'rv-measure-toggle',
+            label: `${MEASURE_SECONDS} s mitmessen`,
+            on: r.measure || forced,
+            onToggle: () => void patchReport($, x => ({ measure: !x.measure })),
+          }),
       r.busy
         ? null
         : Actions(

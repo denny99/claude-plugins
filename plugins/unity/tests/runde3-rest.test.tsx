@@ -1,6 +1,7 @@
 // Runde 3, Rest: „Unity vorn“ steht am Klang (nicht nur als Toast), „Problem melden“ sagt, wenn das Bild ohne
 // UI-Toolkit-Oberfläche ist (Karte und Prompt).
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './limits'
 
 import { FRONT_JXA } from '../lib/front'
 import { resetHostEnv } from '../lib/host'

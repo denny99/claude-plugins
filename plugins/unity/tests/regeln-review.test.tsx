@@ -1,5 +1,6 @@
 // Design rules (kit-rules.ts) on the Review tab: frame, question cards, Klänge, Ideen, Laufend, the picture viewer.
-import { expect, test, type Engine } from 'claude-code/testing'
+import { expect, type Engine } from 'claude-code/testing'
+import { test } from './limits'
 
 import { kitRuleLines } from './kit-rules'
 import { findShown, reveal } from './shown'

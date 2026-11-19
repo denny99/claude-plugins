@@ -1,5 +1,6 @@
 // Design rules (kit-rules.ts) on the tabs Konsole and Ziel, the setup view and the pane's empty state.
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './limits'
 
 import { kitRuleLines } from './kit-rules'
 import { findShown } from './shown'

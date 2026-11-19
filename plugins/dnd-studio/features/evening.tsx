@@ -42,7 +42,6 @@ import {
   askTurnStart,
   isAsked,
   Card,
-  CopyButton,
   sanitize,
   ListRow,
   Sentence,
@@ -795,13 +794,16 @@ export function renderInterjections(
   // older entries may still carry the app's attached blocks: shown (and counted) as the person typed them
   const notes = personsNotes(s.notes);
   const shown = notes.slice(-Math.max(3, Math.min(10, k.rows - 8)));
-  const file = s.notesFile
-    ? CopyButton(k, {
+  // the file of last evening's notes: a text action in the one action row (R2), not a knob inside the content
+  const notesFile = s.notesFile;
+  const file: Action | null = notesFile
+    ? {
         key: "notes-file",
-        text: s.notesFile,
         label: "Datei kopieren",
-        show: !k.graphical,
-      })
+        variant: "link",
+        onPress: ((e?: { surface?: string }) =>
+          k.copy(notesFile, e?.surface)) as () => void,
+      }
     : null;
   return Card(k, {
     key: "notes",
@@ -816,7 +818,6 @@ export function renderInterjections(
               faint: true,
             }),
           ]),
-      file,
     ],
     hint: "Was du bei laufendem Tisch in den Chat tippst, steht hier für die Nachbesprechung.",
     actions: notes.length
@@ -831,8 +832,11 @@ export function renderInterjections(
             confirmWord: "Leeren",
             onPress: () => void clearInterjections($),
           },
+          ...(file ? [file] : []),
         ]
-      : [],
+      : file
+        ? [file]
+        : [],
   });
 }
 

@@ -1,5 +1,6 @@
 // Paket 4a der Befunde: Konsole, Tests, Review, Leistung, Aufgaben, Zeichen auf Knöpfen.
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './limits'
 
 import { collapseConsole, consoleOrigin } from '../features/pane/common'
 import { jobTasks } from '../features/pane/overview'

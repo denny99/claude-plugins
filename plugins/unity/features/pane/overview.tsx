@@ -46,15 +46,17 @@ import { shotUiNote, shotUiPrompt, type ShotUi } from '../../lib/play'
 export function overviewTab($: EngineInterface, k: Kit, m: UnityModel, options: Options, now: number): RenderElement {
   const { Box } = k
   const target = targetSentence(m)
+  const jobs = jobsCard($, k, m, options)
   return (
     <Box flexDirection="column" gap={1}>
       {bridgeOutdated(m) ? bridgeUpdateCard($, k, m, options) : null}
       {editorCard($, k, m, options, now)}
       {testsCard($, k, m, options, now)}
       {consoleCard($, k, m)}
-      {jobsCard($, k, m, options)}
-      {/* The header's "Ziel" knob opens the target tab; here only where runs go. */}
-      {Sentence(k, target.text, { faint: true, tone: target.ok ? undefined : 'warn' })}
+      {jobs}
+      {/* Where runs go: the hint of the tasks card (R7: never a loose sentence at the tab end); without tasks only a
+          warning is worth a line of its own, the header's „Ziel“ tab says the rest. */}
+      {!jobs && !target.ok ? Sentence(k, target.text, { faint: true, tone: 'warn' }) : null}
     </Box>
   )
 }
@@ -480,8 +482,10 @@ export function jobsCard($: EngineInterface, k: Kit, m: UnityModel, options: Opt
   const latest = [...m.jobs].reverse()
   const runningCount = m.jobs.filter(j => j.status === 'running').length
   const head = latest[0]
+  const where = targetSentence(m)
   return Card(k, {
     key: 'jobs',
+    hint: where.text,
     title: {
       icon: 'list',
       title: 'Aufgaben',

@@ -1,5 +1,6 @@
 // Paket 2 der Befunde: Hell-Modus mit Kontrast, schmales Panel, feste Tab-Leiste, „Mehr“ als Untermenü.
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './limits'
 
 import { pillSvg } from '../lib/ui'
 import { boxPaint, schemeColors, schemeSvg, themeTokens, windowTokens, type Tokens } from '../lib/theme'

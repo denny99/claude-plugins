@@ -1,6 +1,7 @@
 // Runde 2 aus dem Live-Test: Klangliste friert die App ein (a), Bridge-Version (b), Testfortschritt (c),
 // Screenshot ohne Fokus + deutsche Fehler (d), Problem melden verliert die Notiz (e), Bereichsfilter als Kommandozeile (f).
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './limits'
 
 import { parseSounds } from '../lib/play'
 import { keptSound, SOUND_PAGE, soundGroups } from '../features/review/tab'

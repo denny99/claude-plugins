@@ -1,6 +1,7 @@
 // The Build tab keeps the kit's design rules in its main states (one primary per card, every button ranked, the action
 // row last, no card in a card, labels of at most three words), and its file rows fold their own preview.
-import { expect, test } from "claude-code/testing";
+import { expect } from "claude-code/testing";
+import { test } from "./limits";
 
 import { kitRuleLines } from "./kit-rules";
 import { findShown } from "./shown";

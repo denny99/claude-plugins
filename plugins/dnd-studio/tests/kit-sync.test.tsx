@@ -1,5 +1,6 @@
 // Kit sync K1–K5: the copy of the shared UI kit in this mod carries the new helpers and fixed words.
-import { expect, test } from "claude-code/testing";
+import { expect } from "claude-code/testing";
+import { test } from "./limits";
 
 import {
   KIT_STRINGS,

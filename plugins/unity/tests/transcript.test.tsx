@@ -1,6 +1,7 @@
 // A test run's result as a card at the tool's own result row (ToolResult); foreign tools and unknown calls stay as
 // they were, the main action leads into the pane's Tests tab.
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './limits'
 
 import { kitRuleLines } from './kit-rules'
 import { findShown } from './shown'

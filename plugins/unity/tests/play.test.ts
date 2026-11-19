@@ -1,4 +1,5 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect } from 'claude-code/testing'
+import { test } from './limits'
 
 import { sendCommand, type BridgeCommand, type BridgeResult } from '../lib/bridge'
 import type { Host } from '../lib/host'

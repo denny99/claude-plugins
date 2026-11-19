@@ -1,6 +1,7 @@
 // Design rules (R1–R3, R6) on the tabs Übersicht, Tests and Leistung in their main states, plus what the rework
 // changed on purpose (measuring left the overview, tasks are rows, a missing spot needs no sentence).
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './limits'
 
 import { kitRuleLines } from './kit-rules'
 import { findShown } from './shown'

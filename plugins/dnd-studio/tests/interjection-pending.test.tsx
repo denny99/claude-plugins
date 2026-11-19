@@ -2,7 +2,8 @@
  * Runde 3 [5.3]: every line typed at a live table is an interjection, also while a pane button's prompt still waits in
  * the queue (live: „passt“ and a message sent into a running turn went missing). A plugin's own prompt never is one.
  */
-import { expect, test } from "claude-code/testing";
+import { expect } from "claude-code/testing";
+import { test } from "./limits";
 
 import { isPersonsPrompt } from "../features/evening";
 import { resetAutoOpen } from "../features/dnd-ui";

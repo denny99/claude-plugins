@@ -1,6 +1,7 @@
 // Runde 3 aus dem Live-Test: ein Knopfdruck in Claude schickt Unity in den Hintergrund. Messen lief gedrosselt (4/5),
 // Klänge blieben stumm oder wurden auf Englisch abgelehnt (6), Screenshots ohne UI-Toolkit-Oberfläche (13).
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './limits'
 
 import { BRIDGE_VERSION, readStatus } from '../lib/bridge'
 import { activatePid, FRONT_JXA } from '../lib/front'

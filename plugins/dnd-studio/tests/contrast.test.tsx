@@ -1,4 +1,5 @@
-import { expect, test } from "claude-code/testing";
+import { expect } from "claude-code/testing";
+import { test } from "./limits";
 
 import { boxPaint, schemeColors, schemeSvg, themeTokens, windowTokens } from "../lib/theme";
 import type { Tokens } from "../lib/theme";

@@ -1,5 +1,6 @@
 // Band v4 (two fixed lines above the prompt, both left-aligned). Same file in every plugin that carries the kit's launcher section.
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './limits'
 import type { RenderElement } from 'claude-code'
 import {
   BAND_VERSION,

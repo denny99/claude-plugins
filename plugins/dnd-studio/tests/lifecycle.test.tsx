@@ -1,5 +1,6 @@
 /** State and lifecycle: local times, when a table is live, the table backdrop, stranded turns, build reset, pause. */
-import { expect, test } from "claude-code/testing";
+import { expect } from "claude-code/testing";
+import { test } from "./limits";
 
 import {
   clockTime,

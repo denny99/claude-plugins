@@ -1,6 +1,7 @@
 // Buttons that hand Claude a prompt (kit „ask Claude“, lock v2): a toast at once, the pill „geschickt“ after the
 // button (its label stays), and the same task goes once until Claude answered *that* prompt, not only until some turn ended.
-import { expect, test } from "claude-code/testing";
+import { expect } from "claude-code/testing";
+import { test } from "./limits";
 
 import { pane, world } from "./world";
 
