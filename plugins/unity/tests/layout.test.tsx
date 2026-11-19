@@ -52,14 +52,15 @@ test('console tab: warnings go to Claude one by one and all at once, clear sits 
   await settle(world, ui.press({ key: 'refresh' }))
   await settle(world, ui.press({ key: 'tab-console' }))
   await settle(world, ui.press({ key: 'con-filter-warning' }))
-  expect((await ui.find({ type: 'Button', key: 'console-clear' }))?.props.label).toBe('⌫ Leeren')
+  expect((await ui.find({ type: 'Button', key: 'console-clear' }))?.props.label).toBe('Leeren')
   expect(await ui.find({ type: 'Button', key: 'fix-3' })).toBeDefined()
   expect(await ui.find({ type: 'Button', key: 'fix-1' })).toBeUndefined() // collapsed into seq 2
   expect((await findShown(ui, /^×2/))?.text).toBeDefined()
   expect((await findShown(ui, /^In Plan\.cs:12$/))?.text).toBeDefined()
-  // Befund 29/105: a row's text wraps; the time / count never gets cut.
+  // Befund 29/105: the time / count never gets cut. The new kit's ListRow is one line (title cut at the end), the
+  // wrapping row of the old unity copy is gone.
   const long = (await ui.findAll({ type: 'Text' })).find(t => String(t.text).startsWith('Assets/Zoo/Plan.cs'))
-  expect(long?.props.wrap).toBe('wrap')
+  expect(long?.props.wrap).toBe('truncate-end')
   await settle(world, ui.press({ key: 'console-fix-all' }))
   expect(world.prompts.at(-1)).toContain('[×2] Value 0 is out of range')
   await ui.unmount()

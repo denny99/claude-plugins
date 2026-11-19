@@ -19,6 +19,25 @@
  *
  * v1 calls keep their exact output: the v2 look (icons, button variants, overflow tabs, collapsed logs, card states)
  * switches on only through the new fields (`icon`, `variant`, `maxVisible`, `collapsed`, object forms of the states).
+ *
+ * Places, not only parts (design rules R1–R10, kit 3): the kit decides where things stand.
+ * - Rank of a button (R1): every `Action` names its `variant`: `primary` (one per card, the action the card is for),
+ *   `secondary` (triggers something), `link` (shows, opens, reloads, folds). A two-step action keeps its look while it
+ *   asks; `danger` is secondary with ⚠ and never primary. `Actions` takes `{ primary, secondary, links }`, orders them
+ *   and hides text actions behind "…" first. Fixed helpers: `reloadAction` („Neu laden“), `openAction` („↗ Öffnen“),
+ *   `askAction` (label stays, „geschickt“ is a pill). Marks before a label only ↑ ↓ ↗ ▶ ⚠ (never ✓).
+ * - A list row (R3): `ListRow` shows at most two actions on the right; `details` (and every further action) unfolds
+ *   under the row behind the text action „Details“ / „Schließen“ at a fixed place. `indent` draws trees, `check` a row
+ *   to tick. Meta keeps a minimum width and moves under the title on narrow bodies.
+ * - Forms, filters, switches (R1, R4): `Field` (label | field | button, one input per row), `SelectRow` (a select
+ *   that cuts long values in the middle), `Form` (values, selects and fields in one label grid), `SearchField` (no
+ *   label, an example as placeholder), `Segment` (a filter switch that never uses `primary`), `Toggle` (a setting as a
+ *   row with its state on the right).
+ * - Words (R6, R10): the fixed words are in `KIT_STRINGS` (reload, open, details, close, cancel, askClaude), foreign
+ *   status words go through `translateStatus`. `tests/kit-rules.ts` counts the rules on a drawing (copy it too).
+ * - A card (R2): `Card(k, { title, filter, children, empty, hint, status, actions })` lays its parts out in that one
+ *   order; the status line is always there when the card has actions, the action row is its last line. A `KeyValue`
+ *   or `ErrorState` in a card has no frame of its own.
  */
 import { atom, read, update } from 'claude-code'
 import type { RenderInput, EngineInterface, RenderElement } from 'claude-code'
@@ -141,6 +160,10 @@ type Els = {
   /** Absent on the terminal. */
   Svg?: El
   Progress?: El
+  /** Form elements and the engine's link; absent where a surface has none (the kit then falls back or leaves out). */
+  Input?: El
+  Select?: El
+  Link?: El
 }
 
 /** Kit texts; `lang` picks the set. English is the v1 wording. */
@@ -158,6 +181,22 @@ export type KitStrings = {
   showMore: (hidden: number) => string
   showLess: string
   wrong: string
+  /** Fixed words (R6): re-read the pane's data, open something external, a sent prompt's state. */
+  reload: string
+  open: string
+  sent: string
+  /** Folds an unfolded row or view again (R6: „Details“ / „Schließen“). */
+  close: string
+  /** The button of a search field, and a setting's two states and its text action. */
+  search: string
+  on: string
+  off: string
+  toggle: string
+  /** The deed of a setting's text action: what a press does (`Toggle`). */
+  turnOn: string
+  turnOff: string
+  /** The one label of a button that hands Claude a task (R6). */
+  askClaude: string
 }
 
 export const KIT_STRINGS: Record<'en' | 'de', KitStrings> = {
@@ -175,12 +214,23 @@ export const KIT_STRINGS: Record<'en' | 'de', KitStrings> = {
     showMore: n => `Show more (${n} earlier)`,
     showLess: 'Show less',
     wrong: 'Something went wrong.',
+    reload: 'Reload',
+    open: 'Open',
+    sent: 'sent',
+    close: 'Close',
+    search: 'Search',
+    on: 'on',
+    off: 'off',
+    toggle: 'Switch',
+    turnOn: 'Turn on',
+    turnOff: 'Turn off',
+    askClaude: 'Ask Claude',
   },
   de: {
     cancel: 'Abbrechen',
     really: label => `Wirklich ${label.toLowerCase()}?`,
     details: 'Details',
-    hideDetails: 'Details ausblenden',
+    hideDetails: 'Schließen',
     retry: 'Erneut versuchen',
     more: 'Mehr',
     log: 'Log',
@@ -190,6 +240,17 @@ export const KIT_STRINGS: Record<'en' | 'de', KitStrings> = {
     showMore: n => `Mehr zeigen (${n} frühere)`,
     showLess: 'Weniger',
     wrong: 'Etwas ist schiefgegangen.',
+    reload: 'Neu laden',
+    open: 'Öffnen',
+    sent: 'geschickt',
+    close: 'Schließen',
+    search: 'Suchen',
+    on: 'an',
+    off: 'aus',
+    toggle: 'Umschalten',
+    turnOn: 'Einschalten',
+    turnOff: 'Ausschalten',
+    askClaude: 'An Claude',
   },
 }
 
@@ -225,8 +286,6 @@ export type Kit = Els & {
   /** Kit texts. */
   s: KitStrings
   state: UiKitState
-  /** Prompts sent to Claude whose answer has not ended yet (section „ask Claude“); read here so a render redraws. */
-  asked: AskedState
   isOpen: (key: string, defaultOpen?: boolean) => boolean
   toggle: (key: string) => void
   isMore: (key: string) => boolean
@@ -253,6 +312,12 @@ export type Kit = Els & {
   toggleLogMore: (key: string) => void
   /** Copies text to the clipboard of the surface a press came from. */
   copy: (text: string, surface?: string) => void
+  /** Runs `fn` after `ms` (the engine's clock); absent in a kit built without `$`: then a caller runs it at once. */
+  later?: (ms: number, fn: () => void) => void
+  /** Prompts sent to Claude whose answer has not ended yet (section „ask Claude“); read here so a render redraws. */
+  asked: AskedState
+  /** The render input this kit was built for: what every kit of one drawing shares (a pane and its parts). */
+  draw?: object
 }
 
 function flip(list: string[], key: string): string[] {
@@ -326,6 +391,9 @@ export async function kit(
     Button: els.Button,
     Svg: els.Svg,
     Progress: els.Progress,
+    Input: els.Input,
+    Select: els.Select,
+    Link: els.Link,
     cols,
     rows,
     compact: surface === 'mobile' || cols < 60,
@@ -373,7 +441,15 @@ export async function kit(
     isLogMore: key => state.logMore.includes(key),
     toggleLogMore: key => void patchUi($, s => ({ logMore: flip(s.logMore, key) })),
     copy: (text, at) => void copyText($, text, at),
+    later: (ms, fn) => {
+      try {
+        $.clock.after(ms, fn)
+      } catch {
+        fn()
+      }
+    },
     asked: await read($, askedAtom),
+    draw: typeof e === 'object' && e !== null ? e : undefined,
   }
 }
 
@@ -387,6 +463,49 @@ function kids(children: Kids | undefined): RenderElement[] {
 }
 
 /** A tone's text color on this surface: brand hex when painted, a theme key on the terminal. */
+/**
+ * The gap between the lines of a wrapped row of buttons or pills on graphical surfaces (seen in the app: the lines of a
+ * wrapped action row touched). The terminal keeps its `gap`.
+ */
+function lineGap(k: Kit): { rowGap?: Space } {
+  return k.graphical ? { rowGap: 'sm' } : {}
+}
+
+type DrawnNode = { props?: { key?: unknown }; children?: unknown[] }
+
+/** Whether a drawn tree holds an element with this key (a card looks for the two-step button that asks). */
+function holdsKey(node: unknown, key: string): boolean {
+  if (!node || typeof node !== 'object') return false
+  if (Array.isArray(node)) return node.some(n => holdsKey(n, key))
+  const el = node as DrawnNode
+  return el.props?.key === key || (el.children ?? []).some(c => holdsKey(c, key))
+}
+
+/**
+ * The states (one per drawing) in which a card shows the pending two-step question: `PaneBody`, built after its
+ * cards, then leaves the question out of its own line, so it stands once.
+ */
+const QUESTION_IN_CARD = new WeakSet<object>()
+/**
+ * The same claim per drawing (the render input, `k.draw`) and button key: a pane whose parts each build a kit of their
+ * own (the hub and its tabs) reads the kit state once per kit, so the state object of the card's kit is not the pane's.
+ */
+const QUESTION_IN_DRAW = new WeakMap<object, Set<string>>()
+
+function claimQuestion(k: Kit, key: string): void {
+  QUESTION_IN_CARD.add(k.state as object)
+  if (!k.draw) return
+  const keys = QUESTION_IN_DRAW.get(k.draw) ?? new Set<string>()
+  keys.add(key)
+  QUESTION_IN_DRAW.set(k.draw, keys)
+}
+
+function questionClaimed(k: Kit): boolean {
+  if (QUESTION_IN_CARD.has(k.state as object)) return true
+  const pending = k.state.confirm
+  return pending !== undefined && !!k.draw && !!QUESTION_IN_DRAW.get(k.draw)?.has(pending)
+}
+
 export function toneColor(k: Kit, tone: Tone): string | undefined {
   return k.graphical ? k.t.tones[tone].fg : terminalColor(k.brand, tone)
 }
@@ -557,13 +676,106 @@ export function Pill(k: Kit, p: PillProps & { shrink?: boolean }): RenderElement
   )
 }
 
-/** A card: framed, filled, rounded box (tone tints it, e.g. `bad` for a problem). The terminal draws no frame. */
-export function Card(k: Kit, c: { key?: string; tone?: Tone; gap?: number; children: Kids }): RenderElement {
+/**
+ * What a framed block (KeyValue, the v2 ErrorState) is drawn as inside a card: no frame of its own (R2: no card in a
+ * card). `Card` swaps its direct children for these.
+ */
+const IN_CARD = new WeakMap<object, RenderElement>()
+
+/** The frameless form of a child when it sits in a card. */
+function inCard(child: RenderElement): RenderElement {
+  return typeof child === 'object' && child !== null ? (IN_CARD.get(child as object) ?? child) : child
+}
+
+export type CardTitleProps = {
+  icon?: IconName
+  /** A name, not a sentence. */
+  title: string
+  /** One quiet line under the title (what the card is about, a time span). */
+  subtitle?: string
+  /** Right of the title: a number, or (instead) a status pill. With both, the pill stands. */
+  count?: number | string
+  pill?: PillProps
+  tone?: Tone
+}
+
+export type CardProps = {
+  key?: string
+  tone?: Tone
+  gap?: number
+  /** The title row (R2): a name, or the full `CardTitle` props. */
+  title?: string | CardTitleProps
+  /** Under the title: the card's switch or search field (`Segment`, `SearchField`). */
+  filter?: Kid
+  /** The content. */
+  children?: Kids
+  /** A calm sentence drawn instead of the content when there is none (R8). */
+  empty?: string
+  /** At most one hint, pale, above the status line (R7). No instructions, no button names. */
+  hint?: string
+  /**
+   * The card's status line: „läuft“, result, error and the question of the two-step button it holds (in its actions
+   * or in its content). Graphical surfaces draw it only when it says something; the terminal keeps one (blank) row
+   * whenever the card has `actions`. `false` leaves it out.
+   */
+  status?: StatusInfo | string | null | false
+  /** The one action row, the card's last line (R2), by rank; a list is sorted by rank. */
+  actions?: Action[] | ActionGroups
+  /** How many actions stand before "…" (3). */
+  maxActions?: number
+  /** The actions stay in the order given (a list, or the groups main → secondary → text) instead of sorted by rank. */
+  keepOrder?: boolean
+}
+
+/**
+ * A card: framed, filled, rounded box (tone tints it, e.g. `bad` for a problem). The terminal draws no frame.
+ *
+ * Give it its parts by name and the kit puts them in the one order every card has (R2): `title` → `filter` →
+ * content (`children`, or the `empty` sentence) → `hint` → `status` → `actions`. A card built from free `children`
+ * alone keeps working as before. A `KeyValue` or a v2 `ErrorState` among the children loses its own frame.
+ */
+export function Card(k: Kit, c: CardProps): RenderElement {
   const { Box } = k
+  const body = kids(c.children).map(inCard)
+  const given = c.actions ? (Array.isArray(c.actions) ? c.actions : rankedActions(c.actions)) : []
+  const acts = c.keepOrder ? given : sortByRank(given)
+  const id = c.key ?? 'card'
+  let status: RenderElement | null = null
+  if (!k.graphical) {
+    if (c.status !== false && (c.status !== undefined || acts.length))
+      status = StatusLine(k, { key: `${id}-status`, status: c.status, keys: acts.map(a => a.key) })
+  } else if (c.status !== false) {
+    // No reserved empty line (seen in the app: a hole above every action row): the line is drawn only when it says
+    // something. The question of a two-step button stands in the card that holds the button, in its action row or
+    // in its content (a list row), and then nowhere else.
+    const pending = k.state.confirm
+    const asks =
+      pending !== undefined &&
+      !!(k.state as UiState).confirmText &&
+      (acts.some(a => a.key === pending) || holdsKey(body, pending))
+    const text = typeof c.status === 'string' ? c.status : c.status?.text
+    if (asks && pending !== undefined) claimQuestion(k, pending)
+    if (asks || text)
+      status = StatusLine(k, {
+        key: `${id}-status`,
+        status: c.status,
+        keys: asks && pending !== undefined ? [pending] : [],
+      })
+  }
+  const parts: Kid[] = [
+    c.title !== undefined
+      ? CardTitle(k, typeof c.title === 'string' ? { title: c.title, tone: c.tone } : c.title)
+      : null,
+    c.filter ?? null,
+    ...(body.length ? body : c.empty ? [Sentence(k, c.empty, { faint: true })] : []),
+    c.hint ? Sentence(k, c.hint, { faint: true }) : null,
+    status,
+    acts.length ? Actions(k, id, acts, c.maxActions ?? 3) : null,
+  ]
   if (!k.graphical)
     return (
       <Box key={c.key} flexDirection="column">
-        {kids(c.children)}
+        {kids(parts)}
       </Box>
     )
   const fill = c.tone ? k.t.tones[c.tone].bg : k.t.card
@@ -580,21 +792,21 @@ export function Card(k: Kit, c: { key?: string; tone?: Tone; gap?: number; child
       borderStyle="round"
       borderColor={border}
     >
-      {kids(c.children)}
+      {kids(parts)}
     </Box>
   )
 }
 
-/** Card title row: icon left, title, then a count (dim) or a pill on the right. */
-export function CardTitle(
-  k: Kit,
-  c: { icon?: IconName; title: string; count?: number | string; pill?: PillProps; tone?: Tone },
-): RenderElement {
+/**
+ * Card title row: icon left, title, directly after it a quiet count ("Stapel · 2") or (instead) a pill on the right;
+ * `subtitle` is a quiet line of its own under it.
+ */
+export function CardTitle(k: Kit, c: CardTitleProps): RenderElement {
   const { Box, Text } = k
-  const count = c.count === undefined || c.count === '' ? '' : String(c.count)
+  const count = c.pill || c.count === undefined || c.count === '' ? '' : String(c.count)
   if (!k.graphical) {
     const room = Math.max(4, k.cols - (count ? [...count].length + 1 : 0) - (c.pill ? [...c.pill.text].length + 4 : 0))
-    return (
+    const row = (
       <Box flexDirection="row" gap={1}>
         <Text bold color={c.tone ? terminalColor(k.brand, c.tone) : undefined}>
           {truncate(c.title, room)}
@@ -603,49 +815,39 @@ export function CardTitle(
         {c.pill ? Pill(k, c.pill) : null}
       </Box>
     )
-  }
-  // A one-word title ("Projekt-Einstellungen") cannot wrap, and a desktop glyph is wider than a body column: in a
-  // narrow body it ran under the pill. When title, icon and pill do not fit one row, the pill goes below the title.
-  const need =
-    Math.ceil([...c.title].length * 1.2) + (c.icon ? 3 : 0) + (count ? [...count].length + 1 : 0) +
-    (c.pill ? [...c.pill.text].length + 6 : 0)
-  if (c.pill && need > k.cols)
+    if (!c.subtitle) return row
     return (
-      <Box flexDirection="column" gap={0}>
-        <Box flexDirection="row" alignItems="center" gap={1}>
-          {c.icon ? Icon(k, c.icon, { tone: c.tone, color: c.tone ? undefined : k.t.faint }) : null}
-          <Box flexGrow={1} flexShrink={1} minWidth={0}>
-            <Text weight="bold" color={c.tone ? k.t.tones[c.tone].fg : k.t.text} wrap="wrap">
-              {sanitize(c.title)}
-            </Text>
-          </Box>
-          {count ? (
-            <Text size="caption" color={k.t.faint}>
-              {sanitize(count)}
-            </Text>
-          ) : null}
-        </Box>
-        <Box flexDirection="row">{Pill(k, c.pill)}</Box>
+      <Box flexDirection="column">
+        {row}
+        <Text dimColor>{truncate(c.subtitle, k.cols)}</Text>
       </Box>
     )
-  return (
+  }
+  const row = (
     <Box flexDirection="row" alignItems="center" gap={1}>
       {c.icon ? Icon(k, c.icon, { tone: c.tone, color: c.tone ? undefined : k.t.faint }) : null}
-      <Box flexGrow={1} flexShrink={1} minWidth={0}>
-        <Text weight="bold" color={c.tone ? k.t.tones[c.tone].fg : k.t.text} wrap="wrap">
+      <Box flexShrink={1} minWidth={0}>
+        <Text weight="bold" color={c.tone ? k.t.tones[c.tone].fg : k.t.text} wrap="truncate-end">
           {sanitize(c.title)}
         </Text>
       </Box>
+      {/* one form for a count: the quiet number directly after the title ("Stapel · 2"), never at the far right */}
       {count ? (
         <Text size="caption" color={k.t.faint}>
-          {sanitize(count)}
+          {`· ${sanitize(count)}`}
         </Text>
       ) : null}
-      {c.pill ? (
-        <Box paddingRight={1} flexShrink={0} alignSelf="center">
-          {Pill(k, c.pill)}
-        </Box>
-      ) : null}
+      <Box flexGrow={1} />
+      {c.pill ? Pill(k, c.pill) : null}
+    </Box>
+  )
+  if (!c.subtitle) return row
+  return (
+    <Box flexDirection="column" gap={0}>
+      {row}
+      <Text size="footnote" color={k.t.faint} wrap="wrap">
+        {sanitize(c.subtitle)}
+      </Text>
     </Box>
   )
 }
@@ -688,9 +890,15 @@ export type IconAction = {
 }
 
 /**
- * A header knob: a native Button, pressable as a whole. Graphical: "<glyph> <label>" (compact bodies: the glyph alone,
- * `label` stays its accessible name), `variant` secondary unless the action says primary. Terminal: a one-glyph
- * Button named by `label`, plain unless primary.
+ * Icons whose glyph never stands before a label: the labelled knob shows the label alone (before a label stand only
+ * the marks with a fixed meaning, ↑ ↓ ↗ ▶ ⚠). Names, not `IconName`: a copy of the kit may have icons this one lacks.
+ */
+const LABEL_ONLY_ICONS: readonly string[] = ['refresh', 'rotate', 'copy', 'log']
+
+/**
+ * A header knob: a native Button, pressable as a whole. Graphical: "<glyph> <label>" (the label alone for a reload,
+ * copy or log knob; compact bodies: the glyph alone, `label` stays its accessible name), `variant` secondary unless
+ * the action says primary. Terminal: a one-glyph Button named by `label`, plain unless primary.
  */
 export function IconButton(k: Kit, a: IconAction): RenderElement {
   const { Button } = k
@@ -707,8 +915,9 @@ export function IconButton(k: Kit, a: IconAction): RenderElement {
       </Button>
     )
   const glyph = ICON_GLYPHS[a.icon]
-  // A desktop draws `label` in place of the children: the glyph must be in the label itself.
-  const shown = k.compact && glyph ? glyph : glyphLabel(a.icon, a.label)
+  // A desktop draws `label` in place of the children: the glyph must be in the label itself. A reload, copy or log
+  // knob with its label shows the label alone; the icon-only (compact) form keeps its glyph.
+  const shown = k.compact && glyph ? glyph : LABEL_ONLY_ICONS.includes(a.icon) ? a.label : glyphLabel(a.icon, a.label)
   return (
     <Button key={a.key} label={shown} variant={a.variant ?? 'secondary'} onPress={a.onPress}>
       {shown}
@@ -765,11 +974,12 @@ export function PaneHeader(
       hd.logo
     ) : null
   return (
-    <Box flexDirection="row" alignItems="center" gap={1} flexWrap="wrap">
+    // minHeight: the row is as high with knobs as without (seen: the header moved by some pixels with a button)
+    <Box flexDirection="row" alignItems="center" gap={1} flexWrap="nowrap" minWidth={0} minHeight={HEADER_ROWS}>
       {logo}
       {hd.label && !k.narrow ? (
         <Text size="caption" weight="bold" color={k.t.faint}>
-          {sanitize(hd.label).toUpperCase()}
+          {sanitize(hd.label)}
         </Text>
       ) : null}
       <Box flexShrink={1} minWidth={0}>
@@ -783,10 +993,19 @@ export function PaneHeader(
         </Box>
       ) : null}
       <Box flexGrow={1} />
-      {knobs}
+      {/* one row that never wraps: the title is cut, the knobs stay together on the right (seen live: a knob alone on
+          a second line under the logo) */}
+      <Box flexDirection="row" alignItems="center" gap={1} flexShrink={0}>
+        {knobs}
+      </Box>
     </Box>
   )
 }
+
+/** Rows the graphical pane header is at least high: room for a knob, so a header without one is as high. */
+export const HEADER_ROWS = 2
+/** Rows a framed button takes on graphical surfaces: a box that stands in for one keeps the row this high. */
+export const KNOB_ROWS = HEADER_ROWS
 
 /** A hairline across the body: an Svg wider than any pane, clipped to the slot (graphical surfaces only). */
 function Rule(k: Kit): RenderElement | null {
@@ -818,17 +1037,31 @@ export function PaneBody(
     header?: RenderElement | null
     gap?: Space
     /**
-     * The pane's fixed status line under the header: always one row, so nothing below moves when a press writes into
-     * it. It shows the question of a pending two-step button, else this status ("läuft …", a result, an error), else
-     * stays blank. `false` leaves the line out (a pane that places `StatusLine` itself).
+     * The pane's status line under the header. It shows the question of a pending two-step button that sits in no
+     * card (a card shows its own), else this status ("läuft …", a result, an error). Graphical surfaces draw no line
+     * when there is nothing to say; the terminal keeps one blank row. `false` leaves the line out (a pane that
+     * places `StatusLine` itself).
      */
     status?: StatusInfo | string | null | false
+    /** `false`: the pane's line shows no two-step question (its cards have `actions` and show their own). */
+    question?: false
     children: Kids
   },
 ): RenderElement {
   const { Box } = k
+  // Graphical: no reserved empty line under the header (seen in the app: a hole); the line is drawn when there is a
+  // status or a question no card shows (a card holding the asking button has claimed it while it was built).
+  const asks =
+    b.question !== false && k.state.confirm !== undefined && !!(k.state as UiState).confirmText && !questionClaimed(k)
+  const said = typeof b.status === 'string' ? b.status : b.status ? b.status.text : ''
   const line =
-    b.status === false ? null : StatusLine(k, { key: b.key ? `${b.key}-status` : undefined, status: b.status })
+    b.status === false || (k.graphical && !asks && !said)
+      ? null
+      : StatusLine(k, {
+          key: b.key ? `${b.key}-status` : undefined,
+          status: b.status,
+          question: k.graphical && !asks ? false : b.question,
+        })
   if (!k.graphical)
     return (
       <Box key={b.key} flexDirection="column" gap={b.gap ?? 1}>
@@ -867,13 +1100,25 @@ export const STATUS_BLANK = '\u00a0'
  */
 export function StatusLine(
   k: Kit,
-  s: { key?: string; status?: StatusInfo | string | null; scope?: string } = {},
+  s: {
+    key?: string
+    status?: StatusInfo | string | null
+    scope?: string
+    /** Only the questions of these two-step buttons (a card passes its own actions' keys). */
+    keys?: readonly string[]
+    /** `false`: never a question here (a pane whose cards show their own). */
+    question?: false
+  } = {},
 ): RenderElement {
   const { Box, Text } = k
   const pending = k.state.confirm
   const asked = (k.state as UiState).confirmText
-  const question =
-    pending !== undefined && asked && (s.scope === undefined || pending.startsWith(s.scope)) ? asked : undefined
+  const mine =
+    pending !== undefined &&
+    s.question !== false &&
+    (s.scope === undefined || pending.startsWith(s.scope)) &&
+    (s.keys === undefined || s.keys.includes(pending))
+  const question = mine && asked ? asked : undefined
   const given = typeof s.status === 'string' ? { text: s.status } : (s.status ?? undefined)
   const info: StatusInfo | undefined = question ? { text: question, tone: 'warn' } : given?.text ? given : undefined
   const tone = info ? (info.tone ?? (info.running ? 'warn' : undefined)) : undefined
@@ -924,13 +1169,22 @@ export function ProblemCard(
   })
 }
 
-export type StepState = 'done' | 'active' | 'todo' | 'failed'
+/** `warn`: a step that was blocked and later released; drawn yellow with „⚠“ (a number there reads as a second active step). */
+export type StepState = 'done' | 'active' | 'todo' | 'failed' | 'warn'
 
 export type Step = { key?: string; title: string; detail?: string; state: StepState; body?: RenderElement | null }
 
-const STEP_TONE: Record<StepState, Tone> = { done: 'ok', active: 'accent', todo: 'neutral', failed: 'bad' }
+const STEP_TONE: Record<StepState, Tone> = {
+  done: 'ok',
+  active: 'accent',
+  todo: 'neutral',
+  failed: 'bad',
+  warn: 'warn',
+}
 
 const STEP_MARK = 22
+/** Width of the rail between two step marks: a share of the mark's column (about 2 px). */
+export const STEP_RAIL = '8%'
 
 /** The round step mark: a filled circle with the number (or ✓ ✗) centred in it. */
 export function stepMarkSvg(mark: string, fg: string, bg: string): string {
@@ -943,7 +1197,7 @@ export function stepMarkSvg(mark: string, fg: string, bg: string): string {
   )
 }
 
-/** Steps with a rail: ✓ done, ● (or the number) active, ○ todo, ✗ failed; an active step may carry a body card. */
+/** Steps with a rail: ✓ done, ● (or the number) active, ○ todo, ✗ failed, ⚠ warn; an active step may carry a body card. */
 export function Stepper(k: Kit, s: { key?: string; steps: Step[] }): RenderElement {
   const { Box, Text } = k
   const rows = s.steps.map((step, i) => {
@@ -953,11 +1207,13 @@ export function Stepper(k: Kit, s: { key?: string; steps: Step[] }): RenderEleme
         ? '✓'
         : step.state === 'failed'
           ? '✗'
-          : k.graphical
-            ? String(i + 1)
-            : step.state === 'active'
-              ? '●'
-              : '○'
+          : step.state === 'warn'
+            ? '⚠'
+            : k.graphical
+              ? String(i + 1)
+              : step.state === 'active'
+                ? '●'
+                : '○'
     if (!k.graphical) {
       const color = step.state === 'todo' ? undefined : terminalColor(k.brand, STEP_TONE[step.state])
       return (
@@ -988,7 +1244,8 @@ export function Stepper(k: Kit, s: { key?: string; steps: Step[] }): RenderEleme
               {mark}
             </Text>
           )}
-          {!last ? <Text color={k.t.faint}>│</Text> : null}
+          {/* the rail fills the row's whole height (a single „│“ left a hole under a step with a card or two lines) */}
+          {!last ? <Box flexGrow={1} width={STEP_RAIL} minHeight={1} backgroundColor={boxPaint(k.t.line)} /> : null}
         </Box>
         <Box flexDirection="column" flexGrow={1} flexShrink={1} gap={0} paddingBottom={last ? 0 : 1}>
           <Text
@@ -1014,82 +1271,271 @@ export function Stepper(k: Kit, s: { key?: string; steps: Step[] }): RenderEleme
   )
 }
 
+/** How many actions a list row shows on its right (R3); the rest stands under the row behind „Details“. */
+export const ROW_ACTIONS = 2
+/** How much faster than the title a row's meta shrinks: it yields first, the title is cut only once it is gone. */
+export const META_YIELDS = 1000
+/** Pixels of a list row's icon; the opened details stand that far in (plus the row's gap). */
+const ROW_ICON = 14
+/** Cells one level of `indent` moves a row to the right (trees). */
+const INDENT = 2
+
+export type ListRowProps = {
+  key: string
+  /** The title is text, never a button (R3): opening goes through `details`, choosing through an action. */
+  title: string
+  status?: Status
+  icon?: IconName
+  tone?: Tone
+  /** Pale, beside the title; narrow bodies put it under the title instead of dropping it. */
+  meta?: string
+  /**
+   * Columns in place of `meta` (R3): fixed-width cells after the title (`width` in cells, key `${key}-cell-${i}`), so
+   * the same cell of every row of a list starts at the same place. Give every row of the list the same cells (an empty
+   * text holds the place). Narrow bodies and the terminal join the texts with " · " into the meta line (unless `meta`
+   * is given).
+   */
+  cells?: { text: string; width: number }[]
+  pill?: PillProps
+  /** Cells kept for the pill, also in a row without one (key `${key}-pill-slot`): the columns before it stay in line. */
+  pillWidth?: number
+  /** `end`: the pill stands at the right end of its place (`pillWidth`), where a title pill of the card ends. */
+  pillAlign?: 'end'
+  /** A column head (graphical): the title and cells dim, no icon, the title where the other rows' titles start. */
+  head?: boolean
+  /**
+   * At most two short actions stand on the right (by rank; ≤ 2 words each). Further ones move under the row, behind
+   * „Details“.
+   */
+  actions?: Action[]
+  /**
+   * Least width (cells) of the place the actions stand in, kept also by a row without any (key `${key}:slot`): give
+   * every row of a list the same, at least as wide as the widest row's buttons, and what stands before it lines up.
+   * The row-level form of `Action.slot` (which holds the place of one action).
+   */
+  actionSlot?: number
+  /**
+   * What „Details“ unfolds under the row (indented). The text action sits at a fixed place, last on the right, and
+   * reads „Schließen“ while open. Give the content as a function when building it is costly.
+   */
+  details?: Kids | (() => Kids)
+  /** The caller keeps the open state itself (e.g. to load on open); without these the kit keeps it by the row key. */
+  open?: boolean
+  onToggle?: (open: boolean) => void
+  /** Tree level: each level moves the row (and its details) one step to the right. */
+  indent?: number
+  /** A checkable row: a box before the title that toggles (key `${key}-check`); no „Wählen“ button per row. */
+  check?: { checked: boolean; onToggle: () => void }
+  /**
+   * Always under the row, at the title's left edge (where opened details stand): a second line (a job's last log
+   * line, its error) or a block the caller opens itself. Every row of a list then starts its second line at one x.
+   */
+  under?: Kids
+}
+
 /**
- * A list row: status icon, title, meta, a pill, actions. Error rows get the cross-in-circle. Narrow (graphical) or
- * compact (terminal) bodies put the meta on a wrapping line of its own under the title instead of dropping it.
+ * A list row (R3): status icon, title, meta, a pill, at most two actions on the right, then „Details“; on graphical
+ * surfaces one line that never wraps (the meta yields, then the title). Error rows get the cross-in-circle. An action changes neither the height nor the width of the row: a two-step action asks in place,
+ * a sent prompt shows as a pill. Narrow (graphical) or compact (terminal) bodies stack: title, meta under it, then the
+ * actions as one wrapping row. `indent` draws trees, `check` a row that can be ticked.
  */
-export function ListRow(
-  k: Kit,
-  r: {
-    key: string
-    title: string
-    status?: Status
-    icon?: IconName
-    tone?: Tone
-    meta?: string
-    pill?: PillProps
-    actions?: Action[]
-  },
-): RenderElement {
-  const { Box, Text } = k
+export function ListRow(k: Kit, r: ListRowProps): RenderElement {
+  const { Box, Text, Button } = k
+  const cellText = (r.cells ?? [])
+    .map(c => sanitize(c.text))
+    .filter(Boolean)
+    .join(' · ')
+  // everything below reads `meta`: the cells as one line where columns are not drawn (terminal, narrow)
+  r = r.cells && !r.meta ? { ...r, meta: cellText } : r
+  const columns = !!r.cells && k.graphical && !k.narrow
   const tone = r.tone ?? (r.status ? toneOf(r.status) : undefined)
   const icon = r.icon ?? (r.status ? statusIcon(r.status) : undefined)
+  const all = r.actions ?? []
+  // by rank; what destroys something is the first to leave the row (it stands under it, behind „Details“)
+  const sorted = all.every(a => rankOf(a) !== undefined)
+  const ranked = sorted ? [...sortByRank(all.filter(a => !a.danger)), ...all.filter(a => a.danger)] : all
+  const shown = ranked.slice(0, ROW_ACTIONS)
+  const rest = sorted ? sortByRank(ranked.slice(ROW_ACTIONS)) : ranked.slice(ROW_ACTIONS)
+  const hasDetails = r.details !== undefined || rest.length > 0
+  const detailsKey = `${r.key}-details`
+  const open = hasDetails ? (r.open ?? k.isOpen(detailsKey, false)) : false
+  const toggle: Action | null = hasDetails
+    ? {
+        key: detailsKey,
+        label: open ? k.s.close : k.s.details,
+        variant: 'link',
+        // as wide open („Schließen“) as closed („Details“): the pill and the actions before it do not move
+        slot: Math.max([...k.s.close].length, [...k.s.details].length) + 1,
+        onPress: () => (r.onToggle ? r.onToggle(!open) : k.toggle(detailsKey)),
+      }
+    : null
+  const rowActs = [...shown, ...(toggle ? [toggle] : [])]
+  const acts = rowActs.length ? Actions(k, `${r.key}:row`, rowActs, ROW_ACTIONS + 1, { row: true }) : null
+  const body = open ? kids(typeof r.details === 'function' ? r.details() : r.details).map(inCard) : []
+  const Svg = k.Svg
+  // Graphical: the opened part starts at the title's edge (one left edge per row): a blank of the icon's width stands
+  // in front of it, in the same row gap. A row without icon has its title at the row's edge, so nothing is indented.
+  const blank =
+    k.graphical && Svg && icon ? (
+      <Svg
+        source={svgDocument(
+          `<svg width="${ROW_ICON}" height="1" viewBox="0 0 ${ROW_ICON} 1"><rect width="${ROW_ICON}" height="1" fill="none"/></svg>`,
+        )}
+        alt="indent"
+        width={ROW_ICON}
+        height={1}
+      />
+    ) : null
+  const fixed = kids(r.under)
+  const underKids = [
+    ...fixed,
+    ...(open ? body : []),
+    ...(open && rest.length ? [Actions(k, `${r.key}-rest`, rest, rest.length)] : []),
+  ]
+  const under = !underKids.length ? null : !k.graphical ? (
+    <Box key={`${r.key}-under`} flexDirection="column" gap={0} paddingLeft={INDENT}>
+      {underKids}
+    </Box>
+  ) : (
+    <Box key={`${r.key}-under`} flexDirection="row" gap={1} paddingLeft={r.check ? INDENT : 0}>
+      {blank}
+      <Box flexDirection="column" gap={1} flexGrow={1} flexShrink={1} minWidth={0}>
+        {underKids}
+      </Box>
+    </Box>
+  )
+  // text marks: `[x]` on the terminal; a desktop Button draws its label, the ballot box with U+FE0E so it stays text
+  const box = r.check ? (k.graphical ? (r.check.checked ? '☑\uFE0E' : '☐') : r.check.checked ? '[x]' : '[ ]') : ''
+  const check = r.check ? (
+    <Button key={`${r.key}-check`} label={k.graphical ? box : undefined} plain onPress={r.check.onToggle}>
+      {box}
+    </Button>
+  ) : null
+  // a head row has no icon: a blank of the icon's width keeps its title over the other rows' titles
+  const headLead =
+    r.head && k.graphical && Svg ? (
+      <Svg
+        source={svgDocument(
+          `<svg width="${ROW_ICON}" height="1" viewBox="0 0 ${ROW_ICON} 1"><rect width="${ROW_ICON}" height="1" fill="none"/></svg>`,
+        )}
+        alt="indent"
+        width={ROW_ICON}
+        height={1}
+      />
+    ) : null
+  const pad = Math.max(0, r.indent ?? 0) * INDENT
+  const indented = (row: RenderElement) =>
+    pad ? (
+      <Box key={r.key} flexDirection="column" paddingLeft={pad}>
+        {row}
+      </Box>
+    ) : (
+      row
+    )
   if (!k.graphical) {
     const g = r.status ? glyphOf(r.status) : undefined
     const mark = g?.char ?? (icon ? TERM_GLYPHS[icon] : undefined)
+    const cols = Math.max(8, k.cols - pad - (check ? 4 : 0))
     const meta = r.meta && !k.compact ? `  ${sanitize(r.meta)}` : ''
     const pillLen = r.pill ? [...r.pill.text].length + 3 : 0
-    const head = truncate(`${mark ? `${mark} ` : ''}${sanitize(r.title)}`, Math.max(6, k.cols - pillLen))
-    const rest = Math.max(0, k.cols - [...head].length - pillLen)
-    const inline = !!meta && rest > 3
-    const below = r.meta && !inline ? wrapText(sanitize(r.meta), Math.max(4, k.cols - 2)) : []
-    return (
-      <Box key={r.key} flexDirection="column">
+    const head = truncate(`${mark ? `${mark} ` : ''}${sanitize(r.title)}`, Math.max(6, cols - pillLen))
+    const room = Math.max(0, cols - [...head].length - pillLen)
+    const inline = !!meta && room > 3
+    const below = r.meta && !inline ? wrapText(sanitize(r.meta), Math.max(4, cols - 2)) : []
+    return indented(
+      <Box key={pad ? undefined : r.key} flexDirection="column">
         <Box flexDirection="row" gap={1}>
+          {check}
           <Text color={tone ? terminalColor(k.brand, tone) : undefined} dimColor={g?.dim}>
             {head}
-            {inline ? <Text dimColor>{truncate(meta, rest)}</Text> : null}
+            {inline ? <Text dimColor>{truncate(meta, room)}</Text> : null}
           </Text>
           {r.pill ? Pill(k, r.pill) : null}
         </Box>
         {below.map(line => (
           <Text dimColor>{`  ${line}`}</Text>
         ))}
-        {r.actions?.length ? Actions(k, r.key, r.actions) : null}
-      </Box>
+        {acts}
+        {under}
+      </Box>,
     )
   }
-  const acts = r.actions?.length ? Actions(k, r.key, r.actions) : null
-  return (
-    <Box key={r.key} flexDirection="column" paddingY={0}>
-      <Box flexDirection="row" alignItems="center" gap={1}>
-        {icon ? Icon(k, icon, { tone, color: tone ? undefined : k.t.faint, size: 14 }) : null}
+  const metaText = r.meta ? sanitize(r.meta) : ''
+  // A row with actions is already as high as a framed button (KNOB_ROWS below): that height is its air. Only a row
+  // with just a checkbox gets a step above and below (`xs` is less than a line).
+  const air: Space = !rowActs.length && r.check ? 'xs' : 0
+  return indented(
+    <Box key={pad ? undefined : r.key} flexDirection="column" paddingY={air}>
+      {/* One line, always: the actions never wrap and never shrink (Actions, `row`); when room is short the meta
+          yields first (it shrinks far faster than the title and is cut), then the title is cut. */}
+      {/* With actions the line is as high as a framed button, also when it holds only text actions („Details“): rows
+          with and without a framed button keep one pitch */}
+      <Box
+        flexDirection="row"
+        alignItems="center"
+        gap={1}
+        flexWrap="nowrap"
+        minWidth={0}
+        minHeight={rowActs.length ? KNOB_ROWS : undefined}
+      >
+        {check}
+        {icon ? Icon(k, icon, { tone, color: tone ? undefined : k.t.faint, size: ROW_ICON }) : r.head ? headLead : null}
         <Box flexGrow={1} flexShrink={1} minWidth={0}>
-          <Text size="footnote" color={k.t.text} wrap="wrap">
+          <Text size={r.head ? 'caption' : 'footnote'} color={r.head ? k.t.faint : k.t.text} wrap="truncate-end">
             {sanitize(r.title)}
           </Text>
         </Box>
-        {r.meta && !k.narrow ? (
-          <Box flexShrink={0}>
-            <Text size="caption" color={k.t.faint} tabular>
-              {sanitize(r.meta)}
+        {columns ? (
+          (r.cells ?? []).map((c, i) => (
+            <Box key={`${r.key}-cell-${i}`} width={c.width} flexShrink={0}>
+              <Text size="caption" color={k.t.faint} wrap="truncate-end">
+                {sanitize(c.text) || ' '}
+              </Text>
+            </Box>
+          ))
+        ) : metaText && !k.narrow ? (
+          <Box flexShrink={META_YIELDS} minWidth={0}>
+            <Text size="caption" color={k.t.faint} wrap="truncate-end">
+              {metaText}
             </Text>
           </Box>
         ) : null}
-        {r.pill ? (
-          <Box paddingRight={1} flexShrink={0} alignSelf="center">
-            {Pill(k, r.pill)}
+        {columns && r.pillWidth ? (
+          <Box
+            key={`${r.key}-pill-slot`}
+            width={r.pillWidth}
+            flexShrink={0}
+            flexDirection="row"
+            justifyContent={r.pillAlign === 'end' ? 'flex-end' : 'flex-start'}
+          >
+            {r.pill ? Pill(k, r.pill) : null}
           </Box>
+        ) : r.pill ? (
+          Pill(k, r.pill)
         ) : null}
-        {acts && !k.narrow ? acts : null}
+        {r.actionSlot && !k.narrow ? (
+          // the same right-aligned box of a least width as `Action.slot`, here around the whole action place
+          <Box
+            key={`${r.key}:slot`}
+            flexDirection="row"
+            justifyContent="flex-end"
+            minWidth={r.actionSlot}
+            flexShrink={0}
+          >
+            {acts}
+          </Box>
+        ) : acts && !k.narrow ? (
+          acts
+        ) : null}
       </Box>
-      {r.meta && k.narrow ? (
+      {metaText && k.narrow ? (
         <Text size="caption" color={k.t.faint} wrap="wrap">
-          {sanitize(r.meta)}
+          {metaText}
         </Text>
       ) : null}
       {acts && k.narrow ? acts : null}
-    </Box>
+      {under}
+    </Box>,
   )
 }
 
@@ -1164,12 +1610,15 @@ export function KeyValue(
       </Box>
     )
   })
-  if (k.graphical && !kv.bare) return Card(k, { key: kv.key, children: rows })
-  return (
+  const bare = (
     <Box key={kv.key} flexDirection="column">
       {rows}
     </Box>
   )
+  if (!k.graphical || kv.bare) return bare
+  const framed = Card(k, { key: kv.key, children: rows })
+  IN_CARD.set(framed as object, bare)
+  return framed
 }
 
 /** Splits text at spaces into lines of at most `cols` characters (a longer word is cut). Terminal only. */
@@ -1207,8 +1656,9 @@ export function CopyButton(
         {TERM_GLYPHS.copy ?? label}
       </Button>
     ) : k.graphical ? (
-      <Button key={c.key} label={glyphLabel('copy', label)} variant="secondary" onPress={press}>
-        {glyphLabel('copy', label)}
+      // label only: before a label stand only the marks with a fixed meaning (↑ ↓ ↗ ▶ ⚠); the icon is the knob's
+      <Button key={c.key} label={label} variant="secondary" onPress={press}>
+        {label}
       </Button>
     ) : (
       <Button key={c.key} plain onPress={press}>
@@ -1261,21 +1711,95 @@ export type Action = {
   confirm?: boolean | string
   /** v1 spelling of `variant: 'primary'`. */
   primary?: boolean
-  /** v2: the icon's text glyph in front of the label (graphical surfaces; `ICON_GLYPHS`). */
+  /**
+   * An icon. Only the marks with a fixed meaning are drawn in front of the label (R6): ↑ push, ↓ pull/download,
+   * ↗ external, ▶ start. Every other icon names the action for callers and draws nothing (no ✓ before a label).
+   */
   icon?: IconName
-  /** v2: primary (one per view), secondary, link (plain text button). Absent with no icon: the v1 plain look. */
+  /**
+   * The rank (R1), set on every action: `primary` the one main action of a card, `secondary` what triggers something,
+   * `link` what only shows, opens, reloads or folds (a text action). Absent is the v1 look and counts as a mistake in
+   * new code: type new lists as `RankedAction[]`.
+   */
   variant?: 'primary' | 'secondary' | 'link'
   /**
    * Destroys data (delete, wipe, prune): the label carries a ⚠ in front on every surface (a desktop Button takes no
-   * color), the terminal draws it red. Pair it with `confirm` naming the target and the consequence.
+   * color), the terminal draws it red. Pair it with `confirm` naming the target and the consequence. Never primary,
+   * not in its confirm step either.
    */
   danger?: boolean
+  /** Opens this address instead of running `onPress`: drawn as the engine's link, „↗ <label>“ (see `openAction`). */
+  href?: string
+  /** Never goes behind "…": a text action that must stay reachable in one press (e.g. „↗ Öffnen“). */
+  keep?: boolean
+  /** A prompt this action sent to Claude is not answered yet (`askAction` sets it): shown as a pill, not as the label. */
+  sent?: boolean
+  /**
+   * In a list row (graphical): the least width of this action's place, in cells, so rows whose actions differ in
+   * length ("Stage" / "Unstage") keep pill and actions in one column (the engine's Button takes no width).
+   */
+  slot?: number
+  /**
+   * With a `confirm` question: the confirming button's word while it asks (e.g. „Löschen“), when the label is long; the
+   * question above already names the target. Default: the label.
+   */
+  confirmWord?: string
 }
+
+/** An action with its rank set: what new code passes (the type shows every v1 action at compile time). */
+export type RankedAction = Action & { variant: 'primary' | 'secondary' | 'link' }
+
+/** The actions of a card or row by rank: one main action, what else triggers something, then text actions. */
+export type ActionGroups = { primary?: Action; secondary?: Action[]; links?: Action[] }
 
 const DANGER_GLYPH = '⚠'
 
+/**
+ * Key suffix of the box `Actions` draws its buttons in (`<key>:actions`); a list row's ends with `:row:actions`. Tests
+ * find action rows by it (tests/kit-rules.ts).
+ */
+export const ACTIONS_SUFFIX = ':actions'
+
+/** The marks an action label may carry in front (R6); every other icon draws no glyph on a button. */
+const ACTION_GLYPH_ICONS: readonly IconName[] = ['push', 'download', 'external', 'play']
+
+/** `"<mark> <label>"` for the icons with a fixed meaning (↑ ↓ ↗ ▶), else the bare label. */
+export function actionLabel(icon: IconName | undefined, label: string): string {
+  return icon && ACTION_GLYPH_ICONS.includes(icon) ? glyphLabel(icon, label) : label
+}
+
 function isV2(a: Action): boolean {
   return a.icon !== undefined || a.variant !== undefined
+}
+
+/** The rank an action is drawn with: destructive is never primary; v1 actions keep `primary` or nothing. */
+function rankOf(a: Action): 'primary' | 'secondary' | 'link' | undefined {
+  if (a.href) return a.variant ?? 'link'
+  if (a.danger) return a.variant === 'link' ? 'link' : 'secondary'
+  if (a.variant) return a.variant
+  if (a.primary) return 'primary'
+  return a.icon !== undefined ? 'secondary' : undefined
+}
+
+const RANK_ORDER = { primary: 0, secondary: 1, link: 2 } as const
+
+/** The list of an `ActionGroups`: main action first, then secondary, then text actions, each with its rank set. */
+export function rankedActions(g: ActionGroups): RankedAction[] {
+  return [
+    ...(g.primary
+      ? [{ ...g.primary, primary: undefined, variant: g.primary.danger ? 'secondary' : 'primary' } as RankedAction]
+      : []),
+    ...(g.secondary ?? []).map(a => ({ ...a, primary: undefined, variant: 'secondary' }) as RankedAction),
+    ...(g.links ?? []).map(a => ({ ...a, primary: undefined, variant: 'link' }) as RankedAction),
+  ]
+}
+
+/** Sorts by rank (stable): main action, secondary, text actions. Actions without a rank stay where they are. */
+export function sortByRank<T extends Action>(actions: readonly T[]): T[] {
+  return actions
+    .map((a, i) => ({ a, i, r: RANK_ORDER[rankOf(a) ?? 'secondary'] }))
+    .sort((x, y) => x.r - y.r || x.i - y.i)
+    .map(x => x.a)
 }
 
 /** One line of text, sanitized and cut to the body width (minus `indent`). */
@@ -1305,74 +1829,122 @@ export function StatusGlyph(k: Kit, status: Status): RenderElement {
 }
 
 /**
- * Two-step destructive button: the first press turns it, in place, into "Really …?" + Cancel; with a `confirmLabel`
- * (a whole question) into the action label + ✕, the question standing in the fixed `StatusLine`. Nothing else moves.
- * `danger`: a ⚠ in front of the labels (the terminal draws them red).
+ * Two-step button: the first press turns it, in place, into "Really …?" + Cancel; with a `confirmLabel` (a whole
+ * question) into the action label + „Abbrechen“ (the terminal: ✕), the question standing in the status line of the
+ * card that holds the button (else the pane's).
+ *
+ * The question does not change the look (R1): with a `variant` the button is drawn as that rank before and while it
+ * asks. `danger`: a ⚠ in front of the labels (the terminal draws them red), secondary on graphical surfaces and never
+ * primary, not while asking either. Without `variant` and `danger` it is the v1 look: plain text, primary while asking.
  */
 export function ConfirmButton(
   k: Kit,
-  a: { key: string; label: string; confirmLabel?: string; onConfirm: () => void; danger?: boolean },
+  a: {
+    key: string
+    label: string
+    confirmLabel?: string
+    /** The confirming button's word in the long form (with `confirmLabel`); default: the label. */
+    confirmWord?: string
+    onConfirm: () => void
+    danger?: boolean
+    variant?: 'primary' | 'secondary' | 'link'
+    icon?: IconName
+    /** „Abbrechen“ as a framed (secondary) button on graphical surfaces: an `Actions` row that shows only the pair. */
+    framedCancel?: boolean
+  },
 ): RenderElement {
   const { Box, Button, Text } = k
+  const base = a.variant && a.variant !== 'link' ? actionLabel(a.icon, a.label) : a.label
   const marked = (text: string) => (a.danger ? `${DANGER_GLYPH} ${text}` : text)
   const draw = (text: string) => (a.danger && !k.graphical ? <Text color="red">{text}</Text> : text)
   const asks = a.confirmLabel !== undefined ? marked(a.confirmLabel) : undefined
-  // Graphical: a real (secondary) button like its neighbours, not bare text; the terminal keeps the plain one.
-  if (!k.isConfirming(a.key) && k.graphical && !a.danger)
-    return (
-      <Button key={a.key} label={a.label} variant="secondary" onPress={() => k.pressConfirm(a.key, a.onConfirm, asks)}>
-        {a.label}
-      </Button>
-    )
+  // decided on the kit state at press time (unity Runde 3): a desktop button may keep the handler of the step before
+  const ask = () => k.pressConfirm(a.key, a.onConfirm, asks)
+  // the rank the button keeps: destructive is secondary (plain on the terminal, where red marks it), never primary
+  const rank: 'primary' | 'secondary' | undefined = a.danger
+    ? k.graphical
+      ? 'secondary'
+      : a.variant === 'secondary'
+        ? 'secondary'
+        : undefined
+    : a.variant === 'link'
+      ? undefined
+      : a.variant
+  const labelled = a.danger || a.variant !== undefined
   if (!k.isConfirming(a.key))
     return (
       <Button
         key={a.key}
-        label={a.danger ? marked(a.label) : undefined}
-        plain={a.danger && k.graphical ? undefined : true}
-        variant={a.danger && k.graphical ? 'secondary' : undefined}
-        onPress={() => k.pressConfirm(a.key, a.onConfirm, asks)}
+        label={labelled ? marked(base) : undefined}
+        plain={rank ? undefined : true}
+        variant={rank}
+        onPress={ask}
       >
-        {draw(marked(a.label))}
+        {draw(marked(base))}
       </Button>
     )
   // A press moves nothing: a short question ("Wirklich löschen?") is the confirming button itself. A longer one
   // (`confirmLabel`) never becomes a new line: the button turns, in place, into two short ones of the same height (the
-  // action label, primary, and ✕), and the question goes to the fixed StatusLine (PaneBody has one in every pane).
+  // action label and ✕), and the question goes to the fixed StatusLine (PaneBody has one in every pane, a card with
+  // `actions` its own).
   const long = a.confirmLabel !== undefined
-  const question = marked(long ? a.label : k.s.really(a.label))
+  const question = marked(long ? (a.confirmWord ?? base) : k.s.really(a.label))
+  const v1 = !a.danger && a.variant === undefined
+  const askRank = v1 ? 'primary' : rank
   return (
     <Box key={long ? `${a.key}-ask` : undefined} flexDirection="row" gap={1} flexShrink={0}>
       <Button
         key={a.key}
-        label={a.danger ? question : undefined}
-        variant="primary"
-        onPress={() => k.pressConfirm(a.key, a.onConfirm, asks)}
+        label={labelled ? question : undefined}
+        plain={askRank ? undefined : true}
+        variant={askRank}
+        onPress={ask}
       >
         {draw(question)}
       </Button>
-      <Button key={`${a.key}-cancel`} plain onPress={() => k.clearConfirm()}>
-        {long ? '✕' : k.s.cancel}
-      </Button>
+      {a.framedCancel && k.graphical ? (
+        <Button key={`${a.key}-cancel`} label={k.s.cancel} variant="secondary" onPress={() => k.clearConfirm()}>
+          {k.s.cancel}
+        </Button>
+      ) : (
+        <Button key={`${a.key}-cancel`} plain onPress={() => k.clearConfirm()}>
+          {long && !k.graphical ? '✕' : k.s.cancel}
+        </Button>
+      )}
     </Box>
   )
 }
 
 /**
- * One action button. v1 (no `icon`/`variant`): plain, primary or two-step. v2: the engine's own `variant`
- * primary/secondary (the app paints it; a desktop ignores colors on a Button), `link` as a plain Button without glyph. Graphical
- * surfaces put the icon's text glyph in front of the label ("↑ Pushen"): the whole native Button is the click target
- * (`label` names it). The terminal keeps `[ label ]`.
+ * One action button, drawn by its rank (`variant`): the engine's own primary/secondary (the app paints it; a desktop
+ * ignores colors on a Button), `link` a plain Button. A two-step action (`confirm`) keeps that look. `href` draws the
+ * engine's link „↗ <label>“. Graphical surfaces put the mark of the icon in front of the label where it has a fixed
+ * meaning ("↑ Push", see `actionLabel`): the whole native Button is the click target (`label` names it). The terminal
+ * keeps `[ label ]`. v1 (no `icon`/`variant`): plain, primary or two-step.
  */
-export function ActionButton(k: Kit, a: Action): RenderElement {
+export function ActionButton(k: Kit, a: Action, opts: { framedCancel?: boolean } = {}): RenderElement {
   const { Button, Text } = k
+  if (a.href) {
+    const label = `${ICON_GLYPHS.external ?? '↗'} ${a.label}`
+    const Link = k.Link
+    if (Link) return <Link key={a.key} href={a.href} label={label} />
+    return (
+      <Button key={a.key} label={label} plain onPress={a.onPress}>
+        {label}
+      </Button>
+    )
+  }
   if (a.confirm)
     return ConfirmButton(k, {
       key: a.key,
       label: a.label,
       confirmLabel: typeof a.confirm === 'string' ? a.confirm : undefined,
+      confirmWord: a.confirmWord,
       onConfirm: a.onPress,
       danger: a.danger,
+      variant: isV2(a) || a.primary ? rankOf(a) : undefined,
+      icon: a.icon,
+      framedCancel: opts.framedCancel,
     })
   if (a.danger) {
     // the ⚠ is the mark (no icon glyph); a desktop Button takes no color, the terminal draws it red
@@ -1395,14 +1967,16 @@ export function ActionButton(k: Kit, a: Action): RenderElement {
       </Button>
     )
   const variant = a.variant ?? (a.primary ? 'primary' : 'secondary')
-  if (variant === 'link')
+  if (variant === 'link') {
+    const label = a.icon === 'external' ? actionLabel(a.icon, a.label) : a.label
     return (
-      <Button key={a.key} label={a.label} plain onPress={a.onPress}>
-        {a.label}
+      <Button key={a.key} label={label} plain onPress={a.onPress}>
+        {label}
       </Button>
     )
-  // A desktop draws `label` in place of the children: the glyph must be in the label itself.
-  const text = k.graphical ? glyphLabel(a.icon, a.label) : a.label
+  }
+  // A desktop draws `label` in place of the children: the mark must be in the label itself.
+  const text = k.graphical ? actionLabel(a.icon, a.label) : a.label
   return (
     <Button key={a.key} label={text} variant={variant} onPress={a.onPress}>
       {text}
@@ -1411,44 +1985,167 @@ export function ActionButton(k: Kit, a: Action): RenderElement {
 }
 
 /**
- * A wrapped row of buttons: at most `max` (3) shown, the rest behind a "…" toggle keyed `${key}-more`. Narrow body
- * with v2 actions: the primary on a row of its own (stretched where the surface lets a Button stretch), the other
- * buttons and links together in one wrapping row below it, so they do not each take a line.
+ * An action whose prompt is on its way to Claude, on a graphical surface: the button itself turns quiet (a text
+ * action with the same label and key; a press still toasts) behind its pill „geschickt“, so the pair reads as one quiet
+ * unit (a desktop Button takes no colour: its label cannot be dimmed). The pair is keyed `${key}-sent`, never breaks
+ * apart and is as high as the framed button it replaces (the row does not jump when the button turns sent).
  */
-export function Actions(k: Kit, key: string, actions: Action[], max = 3): RenderElement | null {
+function SentAction(k: Kit, a: Action): RenderElement {
+  const { Box } = k
+  return (
+    <Box key={`${a.key}-sent`} flexDirection="row" alignItems="center" gap={1} flexShrink={0} minHeight={KNOB_ROWS}>
+      {Pill(k, { text: k.s.sent, tone: 'info', glyph: false })}
+      {ActionButton(k, { ...a, primary: undefined, variant: 'link' })}
+    </Box>
+  )
+}
+
+/** Which actions stay visible when only `max` fit: text actions go behind "…" first, then secondary, never the main one. */
+function fitByRank(actions: Action[], max: number): Action[] {
+  if (actions.length <= max) return actions
+  const hidden = new Set<Action>()
+  for (const rank of ['link', undefined, 'secondary'] as const) {
+    for (let i = actions.length - 1; i >= 0 && actions.length - hidden.size > max; i--) {
+      const a = actions[i] as Action
+      if (!hidden.has(a) && !a.keep && rankOf(a) === rank) hidden.add(a)
+    }
+  }
+  return actions.filter(a => !hidden.has(a))
+}
+
+/**
+ * The one action row of a card or list row (R2): a wrapped row of buttons, at most `max` (3) shown, the rest behind a
+ * "…" toggle keyed `${key}-more`. What goes behind "…" first are the text actions, then secondary ones, never the main
+ * action.
+ *
+ * Pass the actions by rank (`{ primary, secondary, links }`): the kit sets each look and the order main action,
+ * secondary, text actions. A plain list keeps its order (v1 and callers that sorted themselves).
+ *
+ * Narrow body: the main action on a row of its own (stretched where the surface lets a Button stretch), the other
+ * buttons and links together in one wrapping row below it, so they do not each take a line. An action whose prompt
+ * is on its way to Claude (`sent`) keeps its label: graphical, it is drawn as a text action with its pill „geschickt“
+ * directly after it (one pill per sent button); the terminal puts one pill at the end of the row. While a two-step
+ * action asks (graphical), the row shows only that button and „Abbrechen“.
+ */
+export function Actions(
+  k: Kit,
+  key: string,
+  actions: Action[] | ActionGroups,
+  max = 3,
+  opts: { row?: boolean } = {},
+): RenderElement | null {
   const { Box, Button } = k
-  if (!actions.length) return null
+  const list = Array.isArray(actions) ? actions : rankedActions(actions)
+  if (!list.length) return null
   const open = k.isMore(key)
-  const shown = actions.length > max && !open ? actions.slice(0, max) : actions
+  const fitted = list.length > max ? fitByRank(list, max) : list
+  const shown = open ? list : fitted
+  // "…" only when something really is behind it (kept actions may fill the row past `max`)
   const toggle =
-    actions.length > max ? (
+    fitted.length < list.length ? (
       <Button key={`${key}-more`} plain onPress={() => k.toggleMore(key)}>
         {open ? '‹' : '…'}
       </Button>
     ) : null
-  const isPrimary = (a: Action) =>
-    (isV2(a) ? (a.variant ?? (a.primary ? 'primary' : 'secondary')) : a.primary ? 'primary' : '') === 'primary'
+  const isPrimary = (a: Action) => rankOf(a) === 'primary' && !(k.graphical && a.sent)
+  // The terminal keeps one pill „geschickt“ at the end of the row; a graphical surface draws it after each sent button.
+  const sent = !k.graphical && list.some(a => a.sent) ? Pill(k, { text: k.s.sent, tone: 'info', glyph: false }) : null
+  const drawn = (a: Action) => (k.graphical && a.sent ? SentAction(k, a) : ActionButton(k, a))
+  // a list row's action in a place of fixed least width, its button at the right edge of it
+  const button = (a: Action) =>
+    a.slot && opts.row && k.graphical && !k.narrow ? (
+      <Box key={`${a.key}-slot`} flexDirection="row" justifyContent="flex-end" minWidth={a.slot} flexShrink={0}>
+        {drawn(a)}
+      </Box>
+    ) : (
+      drawn(a)
+    )
+  // While a two-step action of this row asks (graphical), the row shows only the question's pair: the confirming
+  // button and, directly after it, a framed „Abbrechen“. The other actions come back once it is answered.
+  const asking = k.graphical ? list.find(a => a.confirm && k.isConfirming(a.key)) : undefined
+  const inRow = opts.row && k.graphical && !k.narrow
+  if (asking)
+    return (
+      <Box
+        key={`${key}${ACTIONS_SUFFIX}`}
+        flexDirection="row"
+        alignItems="center"
+        gap={1}
+        flexWrap={inRow ? 'nowrap' : 'wrap'}
+        flexShrink={inRow ? 0 : undefined}
+        {...(inRow ? {} : lineGap(k))}
+      >
+        {ActionButton(k, asking, { framedCancel: true })}
+      </Box>
+    )
+  // A list row's actions (graphical, not stacked): one line that neither wraps nor shrinks.
+  if (inRow)
+    return (
+      <Box
+        key={`${key}${ACTIONS_SUFFIX}`}
+        flexDirection="row"
+        alignItems="center"
+        gap={1}
+        flexWrap="nowrap"
+        flexShrink={0}
+      >
+        {shown.map(button)}
+        {toggle}
+      </Box>
+    )
   const lead = shown.filter(isPrimary)
-  if (k.narrow && actions.some(isV2) && lead.length) {
+  if (k.narrow && list.some(isV2) && lead.length) {
     const rest = shown.filter(a => !isPrimary(a))
     return (
-      <Box flexDirection="column" alignItems="stretch" gap={1}>
-        {lead.map(a => ActionButton(k, a))}
-        {rest.length || toggle ? (
-          <Box flexDirection="row" alignItems="center" gap={1} flexWrap="wrap">
-            {rest.map(a => ActionButton(k, a))}
+      <Box key={`${key}${ACTIONS_SUFFIX}`} flexDirection="column" alignItems="stretch" gap={1}>
+        {lead.map(button)}
+        {rest.length || toggle || sent ? (
+          <Box flexDirection="row" alignItems="center" gap={1} flexWrap="wrap" {...lineGap(k)}>
+            {rest.map(button)}
             {toggle}
+            {sent}
           </Box>
         ) : null}
       </Box>
     )
   }
   return (
-    <Box flexDirection="row" alignItems="center" gap={1} flexWrap="wrap">
-      {shown.map(a => ActionButton(k, a))}
+    <Box
+      key={`${key}${ACTIONS_SUFFIX}`}
+      flexDirection="row"
+      alignItems="center"
+      gap={1}
+      flexWrap="wrap"
+      {...lineGap(k)}
+    >
+      {shown.map(button)}
       {toggle}
+      {sent}
     </Box>
   )
+}
+
+/** The text action that re-reads a pane's data: always „Neu laden“ (R6), never a pill, never „Aktualisieren“. */
+export function reloadAction(k: Kit, a: { key: string; onPress: () => void }): RankedAction {
+  return { key: a.key, label: k.s.reload, variant: 'link', onPress: a.onPress }
+}
+
+/**
+ * The text action that opens something outside the app: always „↗ Öffnen“ (R6). With `href` it is the engine's link
+ * (works on every surface, remote ones too); without, `onPress` opens it (a file in the editor, a browser through a
+ * process). Replaces loose `Link`s beside or under a row.
+ */
+export function openAction(
+  k: Kit,
+  a: { key: string; href?: string; onPress?: () => void; label?: string },
+): RankedAction {
+  return {
+    key: a.key,
+    label: a.label ?? k.s.open,
+    variant: 'link',
+    ...(a.href ? { href: a.href } : { icon: 'external' as const }),
+    onPress: a.onPress ?? (() => undefined),
+  }
 }
 
 export function Header(
@@ -1475,7 +2172,7 @@ export function Header(
         {ctx ? <Text dimColor>{`  ${ctx}`}</Text> : null}
       </Text>
       {((hd.actions?.length ?? 0) > 0 || hd.onRefresh) && (
-        <Box flexDirection="row" gap={1} flexWrap="wrap">
+        <Box flexDirection="row" gap={1} flexWrap="wrap" {...lineGap(k)}>
           {(hd.actions ?? []).map(a => ActionButton(k, a))}
           {hd.onRefresh && (
             <Button key={`${key}-refresh`} plain onPress={hd.onRefresh}>
@@ -1519,7 +2216,7 @@ export function Section(
   return (
     <Box flexDirection="column">
       {s.actions?.length ? (
-        <Box flexDirection="row" gap={1} flexWrap="wrap">
+        <Box flexDirection="row" gap={1} flexWrap="wrap" {...lineGap(k)}>
           {head}
           {s.actions.map(a => ActionButton(k, a))}
         </Box>
@@ -1563,7 +2260,32 @@ export function Row(
   )
 }
 
-export type EmptyInfo = { icon?: IconName; title: string; text?: string; action?: Action }
+export type EmptyInfo = {
+  icon?: IconName
+  title: string
+  text?: string
+  /** A quiet last line of its own (how fresh the data is: „Stand 15:05“). */
+  note?: string
+  action?: Action
+  /** In a card beside other content: no air of its own above and below (the card's padding and gap give it). */
+  compact?: boolean
+}
+
+/** Characters a line of the empty state's sentence has at most (about 360 px of footnote text). */
+export const EMPTY_LINE = 60
+
+/** `text` in as few lines of at most `max` characters as `wrapText` needs, but of even length: no lone last word. */
+export function balancedLines(text: string, max: number): string[] {
+  const lines = wrapText(text, max)
+  if (lines.length < 2) return lines
+  // never narrower than the longest word: wrapText would cut it
+  const longest = Math.max(...text.split(/\s+/).map(word => [...word].length))
+  for (let w = Math.max(longest, Math.ceil([...text].length / lines.length)); w < max; w++) {
+    const even = wrapText(text, w)
+    if (even.length === lines.length) return even
+  }
+  return lines
+}
 
 /** Empty state. A string: one dim line (v1). An object: calm icon, one sentence what is going on, at most one button. */
 export function EmptyState(k: Kit, info: string | EmptyInfo): RenderElement {
@@ -1575,16 +2297,26 @@ export function EmptyState(k: Kit, info: string | EmptyInfo): RenderElement {
       <Box flexDirection="column">
         <Text bold>{truncate(info.title, k.cols)}</Text>
         {info.text ? Sentence(k, info.text, { faint: true }) : null}
+        {info.note ? Sentence(k, info.note, { faint: true }) : null}
         {action}
       </Box>
     )
   return (
-    <Box flexDirection="column" alignItems="center" gap={1} paddingY={2}>
+    <Box flexDirection="column" alignItems="center" gap={1} paddingY={info.compact ? 0 : 2}>
       {Icon(k, info.icon ?? 'circle', { size: 28, color: k.t.faint })}
       <Text weight="bold" color={k.t.text} wrap="wrap">
         {sanitize(info.title)}
       </Text>
-      {info.text ? Sentence(k, info.text) : null}
+      {/* centred like icon and title: a Text takes no alignment, so the sentence is wrapped here and each line is
+          centred by the box */}
+      {info.text ? (
+        <Box flexDirection="column" alignItems="center" gap={0}>
+          {balancedLines(sanitize(info.text), Math.max(12, Math.min(EMPTY_LINE, k.cols - 4))).map(line =>
+            Sentence(k, line, { wrap: 'truncate-end' }),
+          )}
+        </Box>
+      ) : null}
+      {info.note ? Sentence(k, info.note, { faint: true, wrap: 'truncate-end' }) : null}
       {action}
     </Box>
   )
@@ -1632,7 +2364,16 @@ export function LoadingState(k: Kit, info: string | { text?: string; shape?: num
  */
 export function ErrorState(
   k: Kit,
-  err: { key: string; message: string; details?: string; onRetry?: () => void; title?: string; action?: Action },
+  err: {
+    key: string
+    message: string
+    details?: string
+    onRetry?: () => void
+    /** The word of the retry action when it only re-reads data: pass `k.s.reload` (one word per meaning, R6). */
+    retryLabel?: string
+    title?: string
+    action?: Action
+  },
 ): RenderElement {
   const { Box, Text, Button } = k
   const lines = sanitize(err.message).split('\n')
@@ -1657,7 +2398,14 @@ export function ErrorState(
     const acts: Action[] = [
       ...(err.action ? [{ variant: 'primary' as const, ...err.action }] : []),
       ...(err.onRetry
-        ? [{ key: `${err.key}-retry`, label: k.s.retry, onPress: err.onRetry, variant: 'link' as const }]
+        ? [
+            {
+              key: `${err.key}-retry`,
+              label: err.retryLabel ?? k.s.retry,
+              onPress: err.onRetry,
+              variant: 'link' as const,
+            },
+          ]
         : []),
       ...(details
         ? [
@@ -1670,16 +2418,32 @@ export function ErrorState(
           ]
         : []),
     ]
-    return Card(k, {
+    const framed = Card(k, {
       key: err.key,
       tone: 'bad',
       children: [
         CardTitle(k, { icon: 'xCircle', title: k.graphical ? err.title : `✗ ${err.title}`, tone: 'bad' }),
         Sentence(k, first),
-        acts.length ? Actions(k, `${err.key}-acts`, acts, acts.length) : null,
+        // the raw details stand above the action row: the action row stays the card's last line (R2)
         ...detailLines,
+        acts.length ? Actions(k, `${err.key}-acts`, acts, acts.length) : null,
       ],
     })
+    // In a card (R2: no card in a card, one action row): one red line with what failed, its helpers as text actions
+    // beside it, the raw details under it on press.
+    IN_CARD.set(
+      framed as object,
+      <Box key={err.key} flexDirection="column">
+        <Box flexDirection="row" alignItems="center" gap={1} flexWrap="wrap" {...lineGap(k)}>
+          <Box flexShrink={1} minWidth={0}>
+            {Sentence(k, `✗ ${sentence(err.title)} ${first}`, { tone: 'bad' })}
+          </Box>
+          {acts.map(a => (k.graphical && a.sent ? SentAction(k, a) : ActionButton(k, { ...a, variant: 'link' })))}
+        </Box>
+        {detailLines}
+      </Box>,
+    )
+    return framed
   }
   return (
     <Box flexDirection="column">
@@ -1693,7 +2457,7 @@ export function ErrorState(
           ) : null}
           {err.onRetry ? (
             <Button key={`${err.key}-retry`} plain onPress={err.onRetry}>
-              {k.s.retry}
+              {err.retryLabel ?? k.s.retry}
             </Button>
           ) : null}
         </Box>
@@ -1716,6 +2480,10 @@ export function LogBox(
     rows?: number
     onClose?: () => void
     collapsed?: boolean
+    /** Colors a line (a diff's added and removed lines, an error line); without it every line is dim. */
+    tone?: (line: string) => Tone | undefined
+    /** Fixed-width lines (a diff, a table): columns stay under each other. */
+    mono?: boolean
   },
 ): RenderElement {
   const { Box, Text, Button } = k
@@ -1760,8 +2528,9 @@ export function LogBox(
         <Box flexDirection="row" gap={1}>
           {b.title ? <Text bold>{truncate(b.title, Math.max(1, k.cols - 4))}</Text> : null}
           {b.onClose ? (
-            <Button key={`${b.key}-close`} plain onPress={b.onClose}>
-              ✕
+            // graphical: a labelled close („Schließen“), a bare ✕ says nothing there; the terminal keeps the short ✕
+            <Button key={`${b.key}-close`} label={k.graphical ? k.s.close : undefined} plain onPress={b.onClose}>
+              {k.graphical ? k.s.close : '✕'}
             </Button>
           ) : null}
         </Box>
@@ -1771,9 +2540,18 @@ export function LogBox(
           {more ? (b.collapsed ? k.s.hideLog : k.s.showLess) : k.s.showMore(hidden)}
         </Button>
       )}
-      {shown.map(l => (
-        <Text dimColor>{truncate(l || ' ', k.cols)}</Text>
-      ))}
+      {shown.map(l => {
+        const tone = b.tone?.(l)
+        return tone ? (
+          <Text mono={b.mono ? true : undefined} color={toneColor(k, tone)}>
+            {truncate(l || ' ', k.cols)}
+          </Text>
+        ) : (
+          <Text mono={b.mono ? true : undefined} dimColor>
+            {truncate(l || ' ', k.cols)}
+          </Text>
+        )
+      })}
     </Box>
   )
 }
@@ -1820,7 +2598,7 @@ export function Tabs<T extends string>(
   const v2 = t.maxVisible !== undefined || t.tabs.some(tab => tab.icon)
   if (!v2)
     return (
-      <Box flexDirection="row" gap={1} flexWrap="wrap">
+      <Box flexDirection="row" gap={1} flexWrap="wrap" {...lineGap(k)}>
         {t.tabs.map(tab => (
           <Button
             key={`${prefix}${tab.id}`}
@@ -1903,12 +2681,553 @@ export function Tabs<T extends string>(
   )
   // Wraps rather than clips: every tab stays reachable even when the estimate is off.
   return (
-    <Box flexDirection="row" alignItems="center" gap={1} flexWrap="wrap">
+    <Box flexDirection="row" alignItems="center" gap={1} flexWrap="wrap" {...lineGap(k)}>
       {page > 0 ? nav(`${prefix}prev`, '‹', page - 1) : null}
       {shown.map(tab => one(tab))}
       {after > 0 ? nav(moreKey, `+${after}`, page + 1) : null}
     </Box>
   )
+}
+
+// --- forms, filters, switches (R1, R4, R9) ---
+
+/** The widest label column of a form, in cells: longer labels are cut, so the fields keep their room. */
+const LABEL_MAX = 16
+/** The least width of a field beside its label (R4: 12 characters). */
+const FIELD_MIN = 12
+/** The most characters a `Select` shows of one value; longer ones are cut in the middle (R4). */
+export const SELECT_MAX = 48
+/** The most options the engine takes in one `Select`. */
+export const SELECT_OPTIONS = 64
+/** What fits a one-line field on a desktop (it has a fixed width there, whatever box it sits in). */
+export const FIELD_ONE_LINE = 24
+
+/** Cuts a long value in the middle (`feature/NXPLUG-4…-booking`), keeping its start and its end. */
+export function truncateMiddle(text: unknown, width: number): string {
+  const line = sanitize(text).split('\n')[0] ?? ''
+  const chars = [...line]
+  const w = Math.max(3, Math.floor(width))
+  if (chars.length <= w) return line
+  const head = Math.ceil((w - 1) / 2)
+  const tail = w - 1 - head
+  return `${chars.slice(0, head).join('')}…${tail ? chars.slice(-tail).join('') : ''}`
+}
+
+/**
+ * What is being typed into a kit field, by the field's key. Typing must not reach the pane's state on every key: a
+ * write there redraws the whole pane and hands the `Input` a new `value` each time, and its frame flickers. So the
+ * keystrokes land here (no redraw) and reach the caller's `onInput` once typing pauses (`FIELD_FLUSH_MS`) or on Enter.
+ * `base` is the caller's value when typing began: when the caller draws another one (a prefill, a reset), the draft
+ * is dropped.
+ */
+const FIELD_DRAFTS = new Map<string, { text: string; seq: number; base: string }>()
+/** How long typing must pause before a field's `onInput` runs. */
+export const FIELD_FLUSH_MS = 600
+/** The same for a search field that filters while typing. */
+export const SEARCH_FLUSH_MS = 250
+
+/**
+ * The text of a kit field right now: what is being typed (also within the pause before `onInput` ran), else
+ * `fallback` (the stored value). A button beside a field reads the field through this, so a press right after typing
+ * does not act on the text of a moment ago.
+ */
+export function fieldText(key: string, fallback = ''): string {
+  return FIELD_DRAFTS.get(key)?.text ?? fallback
+}
+
+/** Forgets what was typed into a field (after its form was sent or closed). */
+export function clearFieldDraft(key: string): void {
+  FIELD_DRAFTS.delete(key)
+}
+
+/** The `value`, `onInput` and `onSubmit` of an `Input` that keeps its draft in the kit (see `FIELD_DRAFTS`). */
+function draftInput(
+  k: Kit,
+  f: { key: string; value?: string; onInput?: (v: string) => void; onSubmit: (v: string) => void },
+  flushMs: number,
+): { value: string | undefined; onInput: (v: string) => void; onSubmit: (v: string) => void } {
+  const given = f.value ?? ''
+  const d = FIELD_DRAFTS.get(f.key)
+  // caught up (the caller stores what was typed) or overruled (the caller drew another value): the draft ends
+  if (d && (d.text === given || d.base !== given)) FIELD_DRAFTS.delete(f.key)
+  const live = FIELD_DRAFTS.get(f.key)
+  return {
+    value: live ? live.text : f.value,
+    onInput: v => {
+      const seq = (FIELD_DRAFTS.get(f.key)?.seq ?? 0) + 1
+      FIELD_DRAFTS.set(f.key, { text: v, seq, base: FIELD_DRAFTS.get(f.key)?.base ?? given })
+      const flush = () => {
+        if (FIELD_DRAFTS.get(f.key)?.seq === seq) f.onInput?.(v)
+      }
+      if (!f.onInput) return
+      if (k.later) k.later(flushMs, flush)
+      else flush()
+    },
+    onSubmit: v => {
+      FIELD_DRAFTS.delete(f.key)
+      f.onSubmit(v)
+    },
+  }
+}
+
+/**
+ * One form row (R4, R9): label | control, the control growing with at least 12 characters; narrow bodies put the label
+ * over the control. `labelWidth` (cells) lines several rows up in one grid (`Form` sets it).
+ */
+function FormRow(
+  k: Kit,
+  r: { key: string; label?: string; labelWidth?: number; control: RenderElement; grow?: boolean; tall?: boolean },
+): RenderElement {
+  const { Box, Text } = k
+  const label = r.label ? sanitize(r.label) : ''
+  const width = Math.min(LABEL_MAX, r.labelWidth ?? [...label].length)
+  const labelEl = label ? (
+    k.graphical ? (
+      <Text size="footnote" color={k.t.muted} wrap="truncate-end">
+        {label}
+      </Text>
+    ) : (
+      <Text dimColor>{k.narrow ? truncate(label, k.cols) : truncate(label, width).padEnd(width)}</Text>
+    )
+  ) : null
+  // a column that stretches its child: the field takes the whole width it is given, never its own small default
+  if (k.narrow || !labelEl)
+    return (
+      <Box key={r.key} flexDirection="column" alignItems="stretch" gap={0} flexGrow={1} minWidth={0}>
+        {labelEl}
+        {r.control}
+      </Box>
+    )
+  return (
+    // A tall control (a field of several lines): the label stands at the field's first line, where the field's own
+    // button is, not at its middle. `xs` is the air a label has above it in a one-line row.
+    <Box key={r.key} flexDirection="row" alignItems={r.tall ? 'flex-start' : 'center'} gap={1}>
+      <Box width={width + 1} flexShrink={0} paddingTop={r.tall && k.graphical ? 'xs' : undefined}>
+        {labelEl}
+      </Box>
+      <Box
+        flexGrow={r.grow === false ? 0 : 1}
+        flexShrink={1}
+        minWidth={FIELD_MIN}
+        flexDirection="column"
+        alignItems={r.grow === false ? 'flex-end' : 'stretch'}
+      >
+        {r.control}
+      </Box>
+    </Box>
+  )
+}
+
+export type FieldProps = {
+  /** Key of the `Input` (what `ui.input` addresses); the row is keyed `${key}-row`. */
+  key: string
+  /** Names the thing (a noun), never the deed and never an instruction. */
+  label?: string
+  /** The value the field changes: a field that edits something shows it (R4). */
+  value?: string
+  /** An example that fits the field (a real value), not an instruction on which key to press. */
+  placeholder?: string
+  /** The deed, one verb: the engine draws it as the field's own button. */
+  submitLabel: string
+  /** Lines of the field; from 2 it holds several lines. */
+  rows?: number
+  onSubmit: (value: string) => void
+  /**
+   * Runs with the text once typing pauses (`FIELD_FLUSH_MS`), not on every key: the kit keeps the draft meanwhile, so
+   * storing it redraws the pane once and the field does not flicker. Read the text of the moment with `fieldText`.
+   */
+  onInput?: (value: string) => void
+  /** The focus ring starts in this field when the pane takes the keyboard (a form that just opened). */
+  autoFocus?: true
+  labelWidth?: number
+}
+
+/**
+ * A form row with one input (R4): label | field | button. One input per row; two forms never share a row. Narrow: the
+ * label over the field. A field of two or more rows takes the width of its row; a one-line field is small (see
+ * `FIELD_ONE_LINE`), so a longer example or text makes it two rows by itself. What is
+ * typed stays in the kit until typing pauses, so the field does not flicker. Without an `Input` on the surface
+ * nothing is drawn.
+ */
+export function Field(k: Kit, f: FieldProps): RenderElement | null {
+  const Input = k.Input
+  if (!Input) return null
+  const draft = draftInput(k, f, FIELD_FLUSH_MS)
+  // A one-line field has a fixed, small width on a desktop (about 20 characters; no box makes it wider), a field of
+  // two or more rows takes the whole row. So a field whose example or text does not fit one line gets two rows: no
+  // mod can build a cut-off mini field by accident.
+  const longest = Math.max([...(f.placeholder ?? '')].length, [...(draft.value ?? '')].length)
+  const rows = f.rows ?? (longest > FIELD_ONE_LINE ? 2 : undefined)
+  return FormRow(k, {
+    key: `${f.key}-row`,
+    label: f.label,
+    labelWidth: f.labelWidth,
+    tall: (rows ?? 1) > 1,
+    control: (
+      <Input
+        key={f.key}
+        placeholder={f.placeholder}
+        value={draft.value}
+        submitLabel={f.submitLabel}
+        rows={rows}
+        autoFocus={f.autoFocus}
+        onInput={draft.onInput}
+        onSubmit={draft.onSubmit}
+      />
+    ),
+  })
+}
+
+export type SelectRowProps = {
+  /** Key of the `Select`; the row is keyed `${key}-row`. */
+  key: string
+  label?: string
+  options: readonly { value: string; label: string }[]
+  value?: string
+  onSelect: (value: string) => void
+  /** The most characters shown of one option (`SELECT_MAX`); longer ones are cut in the middle. */
+  maxWidth?: number
+  labelWidth?: number
+}
+
+/**
+ * A form row with one select (R4): label | select. The select never grows past `maxWidth`: long values (branch names,
+ * project names) are cut in the middle, so the row cannot run over.
+ */
+export function SelectRow(k: Kit, s: SelectRowProps): RenderElement | null {
+  const Select = k.Select
+  if (!Select) return null
+  const max = Math.max(8, Math.min(s.maxWidth ?? SELECT_MAX, k.cols - 4))
+  // The engine refuses a Select with no option or more than 64 and then drops the whole pane (seen live with a repo
+  // of many branches): show the first ones and always the chosen one.
+  const chosen = s.options.find(o => o.value === s.value)
+  const head = s.options.slice(0, SELECT_OPTIONS)
+  const list = chosen && !head.includes(chosen) ? [...head.slice(0, SELECT_OPTIONS - 1), chosen] : head
+  if (!list.length) return null
+  const options = list.map(o => ({ value: o.value, label: truncateMiddle(o.label, max) }))
+  return FormRow(k, {
+    key: `${s.key}-row`,
+    label: s.label,
+    labelWidth: s.labelWidth,
+    control: <Select key={s.key} options={options} value={s.value} onSelect={s.onSelect} />,
+  })
+}
+
+export type FormRowSpec =
+  | { key?: string; label: string; value: string; tone?: Tone; copy?: boolean }
+  | ({ label: string } & Omit<SelectRowProps, 'label' | 'labelWidth'> & { kind: 'select' })
+  | ({ label: string } & Omit<FieldProps, 'label' | 'labelWidth'> & { kind: 'field' })
+  | { kind: 'toggle'; key: string; label: string; on: boolean; onToggle: (on: boolean) => void; hint?: string }
+
+/**
+ * Facts and inputs of one thing as rows in one grid (R5): fixed values, selects and fields share the label column, so a
+ * card reads as one block instead of boxes and stacks. No frame: it sits in a card.
+ */
+export function Form(
+  k: Kit,
+  f: { key: string; rows: (FormRowSpec | null | false | undefined)[]; labelWidth?: number },
+): RenderElement {
+  const { Box, Text } = k
+  const rows = f.rows.filter(Boolean) as FormRowSpec[]
+  // one label width for several forms of a pane: the caller passes it, else it is the longest label of this form
+  const labelWidth = f.labelWidth ?? Math.min(LABEL_MAX, Math.max(0, ...rows.map(r => [...sanitize(r.label)].length)))
+  // rows with a control (a select, a field) need air between them; plain value rows stay close like a table
+  const spaced = k.graphical && rows.some(r => 'kind' in r)
+  return (
+    <Box key={f.key} flexDirection="column" gap={spaced ? 'sm' : 0}>
+      {rows.map((r, i) => {
+        if ('kind' in r && r.kind === 'select') return SelectRow(k, { ...r, labelWidth })
+        if ('kind' in r && r.kind === 'field') return Field(k, { ...r, labelWidth })
+        if ('kind' in r && r.kind === 'toggle') return Toggle(k, { ...r, labelWidth })
+        const v = r as { key?: string; label: string; value: string; tone?: Tone; copy?: boolean }
+        const id = v.key ?? `${f.key}-${i}`
+        const room = Math.max(4, k.cols - labelWidth - 2 - (v.copy ? 4 : 0))
+        return FormRow(k, {
+          key: id,
+          label: v.label,
+          labelWidth,
+          control: (
+            <Box flexDirection="row" alignItems="center" gap={1} flexGrow={1} flexShrink={1} minWidth={0}>
+              <Box flexGrow={1} flexShrink={1} minWidth={0}>
+                {k.graphical ? (
+                  <Text size="footnote" color={v.tone ? k.t.tones[v.tone].fg : k.t.text} wrap="wrap">
+                    {sanitize(v.value)}
+                  </Text>
+                ) : (
+                  <Text color={v.tone ? terminalColor(k.brand, v.tone) : undefined}>
+                    {k.narrow ? wrapText(v.value, k.cols).join('\n') : truncate(v.value, room)}
+                  </Text>
+                )}
+              </Box>
+              {v.copy ? CopyButton(k, { key: `${id}-copy`, text: v.value, iconOnly: true }) : null}
+            </Box>
+          ),
+        })
+      })}
+    </Box>
+  )
+}
+
+/**
+ * A search field (R4): no label, the placeholder an example value, the button `k.s.search`. It filters on submit
+ * and, unless `live: false`, while typing. Put it in the `filter` place of the card whose list it filters.
+ */
+export function SearchField(
+  k: Kit,
+  s: { key: string; value?: string; placeholder?: string; onSearch: (query: string) => void; live?: boolean },
+): RenderElement | null {
+  const Input = k.Input
+  if (!Input) return null
+  // typing filters after a short pause, not on every key (each filter step redraws the list and the field)
+  const draft = draftInput(
+    k,
+    { key: s.key, value: s.value, onInput: s.live === false ? undefined : s.onSearch, onSubmit: s.onSearch },
+    SEARCH_FLUSH_MS,
+  )
+  const { Box } = k
+  return (
+    <Box key={`${s.key}-row`} flexDirection="column" alignItems="stretch" minWidth={0}>
+      <Input
+        key={s.key}
+        placeholder={s.placeholder}
+        value={draft.value}
+        submitLabel={k.s.search}
+        onInput={draft.onInput}
+        onSubmit={draft.onSubmit}
+      />
+    </Box>
+  )
+}
+
+export type SegmentOption<T extends string> = { id: T; label: string; count?: number | string }
+
+/**
+ * A switch between views of one list (R1), each option with an optional count. The chosen one is a quiet grey pill, the
+ * others text: it never uses `primary`, which stays the card's main action. Buttons are keyed `${key}-${id}`; pressing
+ * the chosen one does nothing. Put it in the `filter` place of a card.
+ */
+export function Segment<T extends string>(
+  k: Kit,
+  s: {
+    key: string
+    options: readonly SegmentOption<T>[]
+    active: T | undefined
+    onSelect: (id: T) => void
+    /**
+     * A visible track under all options (graphical): a sunken well (the theme's `well`), no frame, so it reads as one
+     * control and never as a small card, and may stand inside a card. Sub-tabs and a card's filter use it alike (one
+     * look for one kind of control). Without it: the chosen one a quiet grey pill, the others text.
+     */
+    track?: boolean
+  },
+): RenderElement {
+  const { Box, Button } = k
+  const track =
+    s.track && k.graphical
+      ? { backgroundColor: boxPaint(k.t.well), paddingX: 'xs' as Space, alignSelf: 'flex-start' as const }
+      : {}
+  return (
+    <Box key={s.key} flexDirection="row" alignItems="center" gap={1} flexWrap="wrap" {...lineGap(k)} {...track}>
+      {s.options.map(o => {
+        const on = o.id === s.active
+        const label = `${sanitize(o.label)}${o.count !== undefined && o.count !== '' ? ` · ${o.count}` : ''}`
+        return (
+          <Button
+            key={`${s.key}-${o.id}`}
+            label={label}
+            plain={on ? undefined : true}
+            variant={on ? 'secondary' : undefined}
+            onPress={() => {
+              if (!on) s.onSelect(o.id)
+            }}
+          >
+            {label}
+          </Button>
+        )
+      })}
+    </Box>
+  )
+}
+
+/**
+ * A setting (R1): its name, its state as a pill directly after the name (`k.s.on` / `k.s.off`), then the text action
+ * keyed `key` that names the deed („Ausschalten“ when on, „Einschalten“ when off), then what it does (`hint`, pale).
+ * Never an action button with the state in its label. With a `labelWidth` (a row of a `Form`, or beside `Field` /
+ * `SelectRow` rows) the name is the row's label and the pill sits in the value column. The terminal keeps the list
+ * row: name, hint, pill, action.
+ */
+export function Toggle(
+  k: Kit,
+  t: { key: string; label: string; on: boolean; onToggle: (on: boolean) => void; hint?: string; labelWidth?: number },
+): RenderElement {
+  const { Box, Text } = k
+  const pill: PillProps = { text: t.on ? k.s.on : k.s.off, tone: t.on ? 'ok' : 'neutral', glyph: false }
+  const action: Action = {
+    key: t.key,
+    label: t.on ? k.s.turnOff : k.s.turnOn,
+    variant: 'link',
+    onPress: () => t.onToggle(!t.on),
+  }
+  if (!k.graphical) return ListRow(k, { key: `${t.key}-row`, title: t.label, meta: t.hint, pill, actions: [action] })
+  const hint = t.hint ? (
+    <Box flexShrink={META_YIELDS} minWidth={0}>
+      <Text size="caption" color={k.t.faint} wrap={k.narrow ? 'wrap' : 'truncate-end'}>
+        {sanitize(t.hint)}
+      </Text>
+    </Box>
+  ) : null
+  const value = (
+    <Box flexDirection="row" alignItems="center" gap={1} flexWrap={k.narrow ? 'wrap' : 'nowrap'} minWidth={0}>
+      {Pill(k, pill)}
+      {ActionButton(k, action)}
+      {hint}
+    </Box>
+  )
+  if (t.labelWidth !== undefined && !k.narrow)
+    return FormRow(k, { key: `${t.key}-row`, label: t.label, labelWidth: t.labelWidth, control: value })
+  return (
+    <Box
+      key={`${t.key}-row`}
+      flexDirection="row"
+      alignItems="center"
+      gap={1}
+      flexWrap={k.narrow ? 'wrap' : 'nowrap'}
+      minWidth={0}
+      paddingY="xs"
+    >
+      <Box flexShrink={1} minWidth={0}>
+        <Text size="footnote" color={k.t.text} wrap="truncate-end">
+          {sanitize(t.label)}
+        </Text>
+      </Box>
+      {Pill(k, pill)}
+      {ActionButton(k, action)}
+      {hint}
+    </Box>
+  )
+}
+
+// --- foreign status words (R6, R10) ---
+
+/** A status another tool reported, in the pane's words: the text to show and the tone it reads as. */
+export type Translated = { text: string; tone: Tone }
+
+/** Exact words (lower case) of CI checks, test runners, Nx generators, Docker and Compose. */
+const FOREIGN_STATUS: Record<string, Translated> = {
+  // tests and CI checks
+  pass: { text: 'grün', tone: 'ok' },
+  passed: { text: 'grün', tone: 'ok' },
+  success: { text: 'grün', tone: 'ok' },
+  successful: { text: 'grün', tone: 'ok' },
+  completed: { text: 'fertig', tone: 'ok' },
+  fail: { text: 'rot', tone: 'bad' },
+  failed: { text: 'rot', tone: 'bad' },
+  failure: { text: 'rot', tone: 'bad' },
+  error: { text: 'Fehler', tone: 'bad' },
+  timed_out: { text: 'Zeit abgelaufen', tone: 'bad' },
+  action_required: { text: 'wartet auf dich', tone: 'warn' },
+  pending: { text: 'wartet', tone: 'warn' },
+  queued: { text: 'wartet', tone: 'warn' },
+  waiting: { text: 'wartet', tone: 'warn' },
+  in_progress: { text: 'läuft', tone: 'warn' },
+  running: { text: 'läuft', tone: 'warn' },
+  skipped: { text: 'übersprungen', tone: 'neutral' },
+  skipping: { text: 'übersprungen', tone: 'neutral' },
+  neutral: { text: 'neutral', tone: 'neutral' },
+  cancelled: { text: 'abgebrochen', tone: 'neutral' },
+  canceled: { text: 'abgebrochen', tone: 'neutral' },
+  stale: { text: 'veraltet', tone: 'neutral' },
+  none: { text: 'keine', tone: 'neutral' },
+  // file changes of an Nx generator
+  create: { text: 'neu', tone: 'ok' },
+  update: { text: 'geändert', tone: 'warn' },
+  delete: { text: 'gelöscht', tone: 'bad' },
+  rename: { text: 'umbenannt', tone: 'warn' },
+  // Docker container states
+  created: { text: 'angelegt', tone: 'neutral' },
+  restarting: { text: 'startet neu', tone: 'warn' },
+  removing: { text: 'wird entfernt', tone: 'warn' },
+  paused: { text: 'pausiert', tone: 'neutral' },
+  exited: { text: 'beendet', tone: 'neutral' },
+  dead: { text: 'abgestürzt', tone: 'bad' },
+  healthy: { text: 'gesund', tone: 'ok' },
+  unhealthy: { text: 'nicht gesund', tone: 'bad' },
+  starting: { text: 'startet', tone: 'warn' },
+  // reviews
+  approved: { text: 'freigegeben', tone: 'ok' },
+  changes_requested: { text: 'Änderungen gewünscht', tone: 'warn' },
+  review_required: { text: 'wartet auf Review', tone: 'warn' },
+  draft: { text: 'Entwurf', tone: 'neutral' },
+  merged: { text: 'gemergt', tone: 'ok' },
+  closed: { text: 'geschlossen', tone: 'neutral' },
+  open: { text: 'offen', tone: 'neutral' },
+}
+
+const DURATION_UNIT: [RegExp, string, string][] = [
+  [/^seconds?$/, 's', 's'],
+  [/^minutes?$/, 'min', 'min'],
+  [/^hours?$/, 'h', 'h'],
+  [/^days?$/, 'Tag', 'Tagen'],
+  [/^weeks?$/, 'Woche', 'Wochen'],
+  [/^months?$/, 'Monat', 'Monaten'],
+  [/^years?$/, 'Jahr', 'Jahren'],
+]
+
+/** Docker's "3 hours", "About an hour", "Less than a second" as "3 h", "1 h", "1 s". */
+function germanDuration(raw: string): string {
+  const t = raw.trim().toLowerCase()
+  if (/^less than a second$/.test(t)) return '1 s'
+  const m = /^(?:about\s+)?(an?|\d+)\s+([a-z]+)$/.exec(t)
+  if (!m) return raw.trim()
+  const n = m[1] === 'a' || m[1] === 'an' ? 1 : Number(m[1])
+  const unit = DURATION_UNIT.find(([re]) => re.test(m[2] ?? ''))
+  if (!unit) return raw.trim()
+  return `${n} ${n === 1 ? unit[1] : unit[2]}`
+}
+
+/**
+ * A status word of another tool in the pane's language (R6: no English in status and result texts; R10: no raw
+ * foreign status): `passed`/`failed`, CI conclusions, `CREATE`/`UPDATE`/`DELETE` of an Nx generator, Docker's
+ * `Up 3 hours (healthy)` / `Exited (1) 2 days ago` and Compose's `running(2)` / `exited(3)`. An unknown word comes
+ * back cleaned, tone `neutral`, so nothing is lost.
+ */
+export function translateStatus(raw: unknown): Translated {
+  const text = (sanitize(raw).split('\n')[0] ?? '').trim()
+  const low = text.toLowerCase()
+  const exact = FOREIGN_STATUS[low.replace(/[\s-]+/g, '_')]
+  if (exact) return exact
+  // Docker: "Up 3 hours", "Up About an hour (healthy)", "Up 2 minutes (Paused)"
+  const up = /^up\s+(.+?)(?:\s+\(([^)]+)\))?$/.exec(low)
+  if (up) {
+    const extra = up[2] ? FOREIGN_STATUS[up[2].replace(/^health:\s*/, '')] : undefined
+    return {
+      text: `läuft seit ${germanDuration(up[1] ?? '')}${extra ? ` · ${extra.text}` : ''}`,
+      tone: extra && extra.tone !== 'ok' ? extra.tone : 'ok',
+    }
+  }
+  // Compose: "running(2)", "exited(3)", "running(1), exited(2)"
+  if (/^[a-z_]+\(\d+\)(,\s*[a-z_]+\(\d+\))*$/.test(low)) {
+    const parts = low.split(/,\s*/).map(p => {
+      const m = /^([a-z_]+)\((\d+)\)$/.exec(p)
+      const word = FOREIGN_STATUS[m?.[1] ?? '']
+      return { n: m?.[2] ?? '', word: word ?? { text: m?.[1] ?? p, tone: 'neutral' as Tone } }
+    })
+    const tone = parts.some(p => p.word.tone === 'bad')
+      ? 'bad'
+      : parts.every(p => p.word.tone === 'ok' || p.word === FOREIGN_STATUS.running)
+        ? 'ok'
+        : 'neutral'
+    return { text: parts.map(p => `${p.n} ${p.word.text}`).join(' · '), tone }
+  }
+  // Docker: "Exited (1) 2 days ago", "Restarting (1) 14 seconds ago", "Created"
+  const ended = /^(exited|restarting|dead|removing|paused)\s*(?:\((\d+)\))?\s*(?:(.+?)\s+ago)?$/.exec(low)
+  if (ended) {
+    const base = FOREIGN_STATUS[ended[1] ?? ''] as Translated
+    const code = ended[2] !== undefined && ended[2] !== '0' ? ` (Code ${ended[2]})` : ''
+    const ago = ended[3] ? ` vor ${germanDuration(ended[3])}` : ''
+    return { text: `${base.text}${code}${ago}`, tone: code && ended[1] === 'exited' ? 'bad' : base.tone }
+  }
+  return { text, tone: 'neutral' }
 }
 
 // --- ask Claude: buttons that hand a prompt to Claude ---
@@ -2126,35 +3445,40 @@ export async function askTurnComplete(
 }
 
 /**
- * An `Action` that asks Claude: „◷ Wartet auf Claude“ while it waits behind a running answer, „✓ An Claude geschickt“
- * while locked (a press then only toasts), „Nochmal schicken“
- * once Claude answered it (a press sends it again), else as given.
+ * An `Action` that asks Claude. Its label and key stay the same in every state: while the prompt is on its way
+ * (`sent`), `Actions` and `ListRow` draw the button quiet (a text action) with a pill „geschickt“ directly after it
+ * (the terminal: one pill at the end of the row) and a press only toasts; once Claude answered, a press sends it
+ * again. Keep the label short
+ * (at most two words, the same in every mod: „An Claude“, „Beheben“).
  */
 export function askAction(
   $: EngineInterface,
   k: Kit,
   a: { key: string; label: string; icon?: IconName; variant?: Action['variant'] } & Omit<AskOptions, 'key'>,
-): Action {
+): RankedAction {
   const press = (): void => void askClaude($, { text: a.text, key: a.key, toast: a.toast })
-  if (isAsked(k.asked, a.key) && k.asked.busy && k.asked.sent[a.key]?.phase === 'queued')
-    return {
-      key: a.key,
-      label: ASK_TEXT.waiting,
-      icon: 'clock',
-      variant: a.variant === 'primary' ? 'secondary' : (a.variant ?? 'secondary'),
-      onPress: press,
-    }
-  if (isAsked(k.asked, a.key))
-    return {
-      key: a.key,
-      label: ASK_TEXT.label,
-      icon: 'check',
-      variant: a.variant === 'primary' ? 'secondary' : (a.variant ?? 'secondary'),
-      onPress: press,
-    }
-  if (isAnswered(k.asked, a.key))
-    return { key: a.key, label: ASK_TEXT.resend, icon: a.icon ?? 'claude', variant: 'secondary', onPress: press }
-  return { key: a.key, label: a.label, icon: a.icon ?? 'claude', variant: a.variant ?? 'secondary', onPress: press }
+  return {
+    key: a.key,
+    label: a.label,
+    icon: a.icon ?? 'claude',
+    variant: a.variant ?? 'secondary',
+    onPress: press,
+    ...(isAsked(k.asked, a.key) ? { sent: true } : {}),
+  }
+}
+
+/**
+ * The status of a prompt that is on its way to Claude, for the status line of the card it was sent from (a form
+ * whose field sends on Enter has no button that could show it): „An Claude geschickt“ while locked, else nothing.
+ * Every send goes through `askClaude` with a fixed `key`: a second press or Enter then only toasts.
+ */
+export function askStatus(k: Kit, key: string): StatusInfo | undefined {
+  return isAsked(k.asked, key) ? { text: ASK_TEXT.label, running: true } : undefined
+}
+
+/** The pill of a prompt that is on its way to Claude („geschickt“), for a row or title that shows it itself. */
+export function askPill(k: Kit, key: string): PillProps | undefined {
+  return isAsked(k.asked, key) ? { text: k.s.sent, tone: 'info', glyph: false } : undefined
 }
 
 /**
