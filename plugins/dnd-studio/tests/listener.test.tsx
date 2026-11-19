@@ -81,7 +81,7 @@ test("listener mode: a running pnp-zuhoerer is the watcher, its return fills ban
   expect(await bandText()).toContain("kein Zuhörer");
 
   await $.agent.spawn(spawn("z1"));
-  expect(await tableText()).toContain("Zuhörer wartet · 0 übersprungen");
+  expect(await tableText()).toContain("Wartet auf die Spieler");
 
   // The listener's own foreground watch (a subagent's Bash) is no GM watcher.
   await $.tool.check({
@@ -126,7 +126,7 @@ test("listener mode: a running pnp-zuhoerer is the watcher, its return fills ban
   await $.agent.spawn(spawn("z2"));
   // Band v3: a waiting listener is fine (ok) and stays out of the band; the Table tab says it.
   expect(await bandText()).not.toContain("Zuhörer wartet");
-  expect(await tableText()).toContain("Zuhörer wartet · 2 übersprungen");
+  expect(await tableText()).toContain("2 übersprungen");
   await $.agent.spawn(spawn("z3"));
   expect(await bandText()).toContain("2 Zuhörer laufen");
   await $.turn.complete(done("z3", "kaputt, kein JSON", "z3t"));
@@ -141,17 +141,20 @@ test("listener mode: a running pnp-zuhoerer is the watcher, its return fills ban
   );
   // woken is the normal hand-over (ok): not in the band, the whole reason is in the Table tab
   expect(await bandText()).not.toContain("Zuhörer hat geweckt");
-  expect(await tableText()).toContain("Zuhörer hat geweckt: Frage an die Spielleitung");
+  expect(await tableText()).toContain("Frage an die Spielleitung");
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
+  // what the group discussed without the GM stands behind the row's „Details“
+  await ui.press({ key: "ls-between-details" });
   for (const text of [
-    /Zuletzt zurück: geweckt · Frage an die Spielleitung/,
+    /^Zuletzt zurück$/,
+    /^Frage an die Spielleitung$/,
     /Tobi: Hallo Wirt, ein Bier!/,
-    /Ohne Spielleitung besprochen: 3/,
+    /^Ohne Spielleitung besprochen$/,
     /Pizza bestellt/,
     /Jule will bestechen/,
-    /Zuhörer an/,
+    /^Offenes Mikro$/,
   ])
-    expect(await ui.find({ type: "Text", text })).toBeDefined();
+    expect(await ui.find({ type: "Text", text }), String(text)).toBeDefined();
   await ui.unmount();
 
   // The listener is no build run.
@@ -209,13 +212,11 @@ test("the listener switch: only a person's press calls discord listener on/off",
   const sets = () => w.calls.filter((c) => "listener" in c.args);
   expect(sets()).toEqual([]);
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
-  await ui.press({ key: "listener-on" });
+  // one switch (the kit's Toggle, key `listener`): a press turns it on, the next one off
+  await ui.press({ key: "listener" });
   expect(sets()).toEqual([{ tool: "discord", args: { listener: "haiku" } }]);
   expect(w.toasts.some((t) => /Zuhörer an/.test(t))).toBe(true);
-  // Off asks first.
-  await ui.press({ key: "listener-off" });
-  expect(sets().length).toBe(1);
-  await ui.press({ key: "listener-off" });
+  await ui.press({ key: "listener" });
   expect(sets()[1]).toEqual({ tool: "discord", args: { listener: "off" } });
   await ui.unmount();
 });

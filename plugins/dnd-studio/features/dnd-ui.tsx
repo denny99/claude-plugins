@@ -13,9 +13,7 @@ import {
 } from "../lib/brand";
 import { setTab } from "../lib/state";
 import {
-  Actions,
   Card,
-  CardTitle,
   IconButton,
   PaneHeader,
   Pill,
@@ -25,7 +23,14 @@ import {
   truncate,
   wrapText,
 } from "../lib/ui";
-import type { Action, IconAction, IconName, Kit, PillProps } from "../lib/ui";
+import type {
+  Action,
+  IconAction,
+  IconName,
+  Kit,
+  PillProps,
+  StatusInfo,
+} from "../lib/ui";
 import type { Tone } from "../lib/theme";
 import { svgDocument } from "../lib/icons";
 import type { Tab } from "../types";
@@ -182,8 +187,9 @@ export const SWITCH_ON = "\u25C9";
 export const SWITCH_OFF = "\u25CB";
 
 /**
- * A foldable section as a card: icon + title + count/pill and a chevron knob (key `sec-<key>`) on top, its buttons
- * under the title, the rows when open. Terminal: the kit's v1 section (same toggle key).
+ * A foldable section as a card (R2): icon + title + count/pill on top, the rows when open, then the one action row as
+ * the last line: the section's own actions, and last the text action that folds (key `sec-<key>`, „Details“ closed,
+ * „Schließen“ open). A section without rows has no fold action. Terminal: the kit's v1 section (same toggle key).
  */
 export function Fold(
   k: Kit,
@@ -196,9 +202,16 @@ export function Fold(
     tone?: Tone;
     defaultOpen?: boolean;
     actions?: Action[];
+    /** One pale sentence above the action row, shown with the rows. */
+    hint?: string;
+    /** Running, result or error text of the section (the card's status line). */
+    status?: StatusInfo | string;
+    /** A calm sentence when the section has no rows. */
+    empty?: string;
     children: (RenderElement | null)[];
   },
 ): RenderElement {
+  const rows = f.children.filter((x): x is RenderElement => !!x);
   if (!k.graphical)
     return Section(k, {
       key: f.key,
@@ -207,38 +220,45 @@ export function Fold(
       collapsible: true,
       defaultOpen: f.defaultOpen,
       actions: f.actions,
-      children: f.children,
+      children: [
+        ...(rows.length || !f.empty
+          ? rows
+          : [Sentence(k, f.empty, { faint: true })]),
+        f.status
+          ? Sentence(k, typeof f.status === "string" ? f.status : f.status.text, {
+              tone: typeof f.status === "string" ? undefined : f.status.tone,
+            })
+          : null,
+      ],
     });
-  // One knob for every fold: a chevron button in the title row (▸ closed, ▾ open), closed unless the caller says so.
-  // The fold's own buttons sit right under the title, so they stay where the section starts (Pause up top).
-  const { Box, Button } = k;
   const open = k.isOpen(f.key, f.defaultOpen ?? false);
-  const chevron = open ? "\u25BE" : "\u25B8";
+  // Folding only shows and hides: a text action, always the last one of the row and never behind "…".
+  const fold: Action[] = rows.length
+    ? [
+        {
+          key: `sec-${f.key}`,
+          label: open ? k.s.close : k.s.details,
+          variant: "link",
+          keep: true,
+          onPress: () => k.toggle(f.key),
+        },
+      ]
+    : [];
   return Card(k, {
     key: f.key,
     tone: f.tone,
-    children: [
-      <Box key={`${f.key}-head`} flexDirection="row" alignItems="center" gap={1}>
-        <Box flexGrow={1} flexShrink={1} minWidth={0}>
-          {CardTitle(k, {
-            icon: f.icon,
-            title: f.title,
-            count: f.pill ? undefined : f.count,
-            pill: f.pill,
-          })}
-        </Box>
-        <Button
-          key={`sec-${f.key}`}
-          label={chevron}
-          variant="secondary"
-          onPress={() => k.toggle(f.key)}
-        >
-          {chevron}
-        </Button>
-      </Box>,
-      f.actions?.length ? Actions(k, `${f.key}-acts`, f.actions, 4) : null,
-      ...(open ? f.children : []),
-    ].filter((x): x is RenderElement => !!x),
+    title: {
+      icon: f.icon,
+      title: f.title,
+      count: f.pill ? undefined : f.count,
+      pill: f.pill,
+    },
+    children: open ? rows : [],
+    empty: rows.length ? undefined : f.empty,
+    hint: open ? f.hint : undefined,
+    status: f.status,
+    actions: [...(f.actions ?? []), ...fold],
+    maxActions: 4,
   });
 }
 

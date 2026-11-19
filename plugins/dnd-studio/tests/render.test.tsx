@@ -61,22 +61,20 @@ test("render check: every tab (and the band) on every surface, small and large, 
         const ui = await $.ui.mount({ ...pane(cols, rows), surface });
         // open the collapsed sections once (the kit keeps them open) so their rows are drawn too
         if (tab === "table" && !opened) {
-          for (const key of ["sec-evening", "sec-secrets"])
+          for (const key of ["sec-dice"])
             await ui.press({ key });
           opened = true;
         }
         if (tab === "table" && cols === 120) {
           expect(
-            await findShown(ui, /Einwürfe für die Nachbesprechung/),
+            await findShown(ui, /^Einwürfe/),
           ).toBeDefined();
           expect(
-            await findShown(ui, /nicht zugestellt \(dms_closed\)/),
+            await findShown(ui, /dms_closed/),
           ).toBeDefined();
         }
         if (tab === "build" && cols === 120)
-          expect(
-            await findShown(ui, /Bauplan wartet auf deine Freigabe/),
-          ).toBeDefined();
+          expect(await findShown(ui, /wartet auf Freigabe/)).toBeDefined();
         const texts = await ui.findAll({ type: "Text" });
         expect(texts.length).toBeGreaterThan(1);
         for (const t of texts) {

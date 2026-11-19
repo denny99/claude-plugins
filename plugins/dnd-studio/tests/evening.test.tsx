@@ -103,10 +103,8 @@ test("interjections at a live table go to the debrief list and file; other promp
   expect(file?.text).not.toContain("task-notification");
 
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
-  await ui.press({ key: "sec-evening" });
-  expect(
-    (await findShown(ui, /Einwürfe für die Nachbesprechung/))?.text,
-  ).toBeDefined();
+  // the Einwürfe card is always drawn at a running table (no fold)
+  expect((await findShown(ui, /^Einwürfe/))?.text).toBeDefined();
   expect(await findShown(ui, /Mara war heute still/)).toBeDefined();
   await ui.unmount();
 });
@@ -325,17 +323,21 @@ test("Discord: players, rooms, last whisper with its reason, screen-share warnin
   } as never);
 
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
-  expect(await findShown(ui, /Mara · anna/)).toBeDefined();
-  expect(await findShown(ui, /bob · nicht zugeordnet/)).toBeDefined();
-  expect(await findShown(ui, /Thorin: kein Spieler da/)).toBeDefined();
-  expect(await findShown(ui, /▶ Tisch: Mara/)).toBeDefined();
-  expect(
-    await findShown(
-      ui,
-      /Letztes Flüstern an Thorin: nicht zugestellt \(not_mapped\)/,
-    ),
-  ).toBeDefined();
-  expect(await findShown(ui, /Bildschirmfreigabe beendet: Mara/)).toBeDefined();
+  // a row is title (the name) · meta · pill: no instruction per row, one hint for the card
+  for (const text of [
+    /^anna$/,
+    /^bob$/,
+    /nicht zugeordnet/,
+    /kein Spieler/,
+    /^Tisch$/,
+    /^Letztes Flüstern an Thorin$/,
+    /nicht zugestellt/,
+    /^not_mapped$/,
+    /^Bildschirmfreigabe beendet$/,
+    /teilt das Spielerfenster neu/,
+  ])
+    expect(await findShown(ui, text), String(text)).toBeDefined();
+  expect(await findShown(ui, /▶/)).toBeUndefined();
   expect(
     await ui.find({ type: "Button", key: "discord-join" }),
   ).toBeUndefined();
@@ -361,7 +363,10 @@ test("Discord section offers Join when the bot is away", async ($, on) => {
   await $.command.run({ command: "dnd", args: "table" } as never);
   expect(w.calls.some((c) => c.tool === "discord")).toBe(false);
   const ui = await $.ui.mount({ ...pane(), surface: "desktop" });
-  await ui.press({ key: "sec-discord" });
+  // joining is what the card is for while the bot is away: the one primary action, reachable without unfolding
+  expect(
+    (await ui.find({ type: "Button", key: "discord-join" }))?.props.variant,
+  ).toBe("primary");
   await ui.press({ key: "discord-join" });
   expect(w.calls.at(-1)).toEqual({ tool: "discord", args: { action: "join" } });
   await ui.unmount();
@@ -394,7 +399,6 @@ test("interjections: only what the person typed (attached blocks cut, empty ones
   expect(firstFile?.text).not.toContain("local-command");
 
   let ui = await $.ui.mount({ ...pane(), surface: "desktop" });
-  await ui.press({ key: "sec-evening" });
   expect((await shownTexts(ui)).join(" | ")).toContain("Mara war heute still");
   expect(await findShown(ui, /system-reminder|0f3c-11aa|only the app/)).toBeUndefined();
   await ui.unmount();
@@ -407,20 +411,20 @@ test("interjections: only what the person typed (attached blocks cut, empty ones
   // a new table: the list is empty, the last evening's file stays named; then only the new evening's lines
   w.answers.table_state = TABLE;
   await $.command.run({ command: "dnd", args: "table" } as never);
-  ui = await $.ui.mount({ ...pane(), surface: "desktop" }); // the fold stays open across mounts
+  ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   expect(await findShown(ui, /Mara war heute still/)).toBeUndefined();
   expect((await shownTexts(ui)).join(" | ")).toContain("Am laufenden Tisch noch nichts getippt");
-  expect((await shownTexts(ui)).join(" | ")).toContain("Die Einwürfe des letzten Abends stehen in dieser Datei");
+  expect(await ui.find({ type: "Button", key: "notes-file" })).toBeDefined();
   await ui.unmount();
   await $.prompt.submit({ text: "Neuer Abend, neues Glück", origin: { kind: "composer" } } as never);
   expect(w.writes.at(-1)?.text).not.toContain("Mara war heute still");
-  ui = await $.ui.mount({ ...pane(), surface: "desktop" }); // the fold stays open across mounts
+  ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   expect((await shownTexts(ui)).join(" | ")).toContain("Neuer Abend, neues Glück");
   await ui.unmount();
 
   // another Studio profile: another evening, the list is empty
   await $.tool.call({ tool: `${PREFIX}profile`, action: "use", name: "Andere" } as never);
-  ui = await $.ui.mount({ ...pane(), surface: "desktop" }); // the fold stays open across mounts
+  ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   expect(await findShown(ui, /Neuer Abend, neues Glück/)).toBeUndefined();
   await ui.unmount();
 });
