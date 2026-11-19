@@ -285,7 +285,7 @@ export async function reportCard(
         ? bridgeUpdateAction($, options)
         : {
             key: 'rv-report-retry',
-            label: 'Nochmal versuchen',
+            label: 'Neu laden',
             icon: 'camera',
             onPress: () => void openReport($, options),
           },
@@ -318,10 +318,10 @@ export async function reportCard(
       Input
         ? Input({
             key: 'rv-report-note',
-            placeholder: 'Notiz',
+            placeholder: 'z. B. Baum schwebt',
             // the draft while typing (a redraw between two flushes keeps what was typed)
             value: noteDraft && noteDraft.report === (r.stamp ?? '') ? noteDraft.text : r.note,
-            submitLabel: 'Notiz',
+            submitLabel: 'Merken',
             onInput: (t: string) => typeNote($, r.stamp ?? '', t),
             onSubmit: (t: string) => {
               noteDraft = { report: r.stamp ?? '', text: t, seq: (noteDraft?.seq ?? 0) + 1 }
@@ -365,7 +365,7 @@ export async function reportCard(
             [
               {
                 key: 'rv-report-send',
-                label: 'An Claude schicken',
+                label: 'An Claude',
                 icon: 'claude',
                 variant: 'primary',
                 onPress: () => void finishReport($, options, true),

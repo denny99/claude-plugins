@@ -2,9 +2,8 @@
 import { expect, test } from 'claude-code/testing'
 
 import { collapseConsole, consoleOrigin } from '../features/pane/common'
-import { jobNotes } from '../features/pane/overview'
+import { jobTasks } from '../features/pane/overview'
 import { chartTop } from '../features/pane/perf'
-import { shotToggleLabel } from '../features/review/tab'
 import { ICON_GLYPHS } from '../lib/icons'
 import { parseProjectConfig } from '../lib/unity'
 import { findShown } from './shown'
@@ -38,7 +37,7 @@ test('console collapse: same type and message once, counted, at the time of the 
   ])
 })
 
-test('console tab: warnings go to Claude one by one and all at once, clear sits in the filter row (30, 31, 106, 116)', async ($, on) => {
+test('console tab: warnings go to Claude one by one and all at once, clear asks first (30, 31, 106, 116)', async ($, on) => {
   const world = fakeWorld(on)
   world.files[`${BRIDGE}/console.json`] = JSON.stringify({
     entries: [
@@ -52,11 +51,19 @@ test('console tab: warnings go to Claude one by one and all at once, clear sits 
   await settle(world, ui.press({ key: 'refresh' }))
   await settle(world, ui.press({ key: 'tab-console' }))
   await settle(world, ui.press({ key: 'con-filter-warning' }))
-  expect((await ui.find({ type: 'Button', key: 'console-clear' }))?.props.label).toBe('Leeren')
-  expect(await ui.find({ type: 'Button', key: 'fix-3' })).toBeDefined()
+  // destructive: marked and two-step
+  expect((await ui.find({ type: 'Button', key: 'console-clear' }))?.props.label).toBe('⚠ Leeren')
+  expect((await ui.find({ type: 'Button', key: 'fix-3' }))?.props.label).toBe('An Claude')
   expect(await ui.find({ type: 'Button', key: 'fix-1' })).toBeUndefined() // collapsed into seq 2
   expect((await findShown(ui, /^×2/))?.text).toBeDefined()
+  // origin and the whole message stand behind „Details“, the message first
+  expect(await findShown(ui, /^In Plan\.cs:12$/)).toBeUndefined()
+  await settle(world, ui.press({ key: 'con-row-3-details' }))
   expect((await findShown(ui, /^In Plan\.cs:12$/))?.text).toBeDefined()
+  const texts = (await ui.findAll({ type: 'Text' })).map(t => String(t.text))
+  const full = texts.findIndex(t => t.startsWith('Assets/Zoo/Plan.cs') && t.endsWith('use X'))
+  expect(texts.filter(t => t.startsWith('Assets/Zoo/Plan.cs'))).toHaveLength(2)
+  expect(texts.indexOf('In Plan.cs:12')).toBeGreaterThan(full)
   // Befund 29/105: the time / count never gets cut. The new kit's ListRow is one line (title cut at the end), the
   // wrapping row of the old unity copy is gone.
   const long = (await ui.findAll({ type: 'Text' })).find(t => String(t.text).startsWith('Assets/Zoo/Plan.cs'))
@@ -91,8 +98,7 @@ test('perf chart: y axis capped at 4× budget so the 16,6-ms line shows (Befund 
 })
 
 test('review: screenshot switch reads as a checkbox (65, 69); jobs explain themselves (14); glyphs on knobs (33, 116)', () => {
-  expect(shotToggleLabel(true)).toBe('☑ Screenshot mitschicken')
-  expect(shotToggleLabel(false)).toBe('☐ Screenshot mitschicken')
+  // the screenshot switch is the kit's Toggle now, once in the Review tab (asserted in review.test.tsx)
   const cfg = parseProjectConfig(
     JSON.stringify({
       customJobs: [
@@ -101,10 +107,13 @@ test('review: screenshot switch reads as a checkbox (65, 69); jobs explain thems
     }),
   )
   expect(cfg.customJobs?.[0]).toMatchObject({ label: 'Kompilieren (Projekt)', description: 'eigenes Skript' })
-  const notes = jobNotes(cfg.customJobs ?? [], true)
-  expect(notes[0]).toContain('Kompilieren prüfen')
-  expect(notes[1]).toBe('Kompilieren (Projekt): eigenes Skript')
-  expect(jobNotes([], true)).toEqual([])
+  // each task is a row that says what it does (title + meta), the built-in check beside the project's of the same kind
+  const tasks = jobTasks(cfg, true)
+  expect(tasks.map(t => [t.title, t.meta])).toEqual([
+    ['Kompilieren prüfen', 'Kompiliert das Projekt im Hintergrund ohne Editor.'],
+    ['Kompilieren (Projekt)', 'Eigenes Skript'],
+  ])
+  expect(jobTasks({}, false)).toEqual([])
   expect(ICON_GLYPHS.pause).toBe('‖')
   for (const i of ['camera', 'gauge', 'trash', 'gear'] as const) expect(ICON_GLYPHS[i]).toBeDefined()
 })
@@ -140,10 +149,13 @@ test('tests tab: skipped tests counted and listed on demand (90); the affected c
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await settle(world, ui.press({ key: 'refresh' }))
   await settle(world, ui.press({ key: 'tab-tests' }))
-  expect((await findShown(ui, /^Betroffene Tests · geprüft/))?.text).toBeDefined()
-  expect((await ui.find({ type: 'Button', key: 'tests-skipped' }))?.props.label).toBe('1 übersprungen ▾')
-  expect(await findShown(ui, /Game\.Tests\.Core\.Later/)).toBeUndefined()
-  await settle(world, ui.press({ key: 'tests-skipped' }))
-  expect((await findShown(ui, /Game\.Tests\.Core\.Later/))?.text).toBeDefined()
+  expect((await findShown(ui, /^Betroffene Tests$/))?.text).toBeDefined()
+  expect((await findShown(ui, /^Geprüft vor/))?.text).toBeDefined()
+  // the kit's fold: a row „1 übersprungen“ with „Details“
+  expect((await findShown(ui, /^1 übersprungen$/))?.text).toBeDefined()
+  expect((await ui.find({ type: 'Button', key: 'tests-skipped-details' }))?.props.label).toBe('Details')
+  expect(await findShown(ui, /Core\.Later/)).toBeUndefined()
+  await settle(world, ui.press({ key: 'tests-skipped-details' }))
+  expect((await findShown(ui, /^Core\.Later$/))?.text).toBeDefined()
   await ui.unmount()
 })

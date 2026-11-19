@@ -88,7 +88,8 @@ test('[4/5] throttled result: warning instead of a normal result; „Unity vorn 
   expect((await findShown(ui, new RegExp(`^${THROTTLED_TEXT} \\(9 Bilder/s`)))?.text).toBeDefined()
   expect((await findShown(ui, 'nicht aussagekräftig'))?.text).toBeDefined()
   expect(await findShown(ui, /Ruckler$/)).toBeUndefined()
-  expect((await findShown(ui, /^Gedrosselt gemessen: /))?.text).toBeDefined()
+  // the figures stay as rows; that they do not hold is said once, by the pill and the status line
+  expect((await findShown(ui, 'Median'))?.text).toBeDefined()
   expect(await keys(ui)).toContain('perf-front-run')
 
   // the fallback: Unity to the front (pid only as an argument, the script text fixed), record, focus back to 777
@@ -213,7 +214,6 @@ test('[13] picture without UI Toolkit: the human sees it, the prompt tells Claud
   await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await settle(world, ui.press({ key: 'refresh' }))
-  await settle(world, ui.press({ key: 'editor-acts-more' }))
   await settle(world, ui.press({ key: 'shot' }))
   expect(world.toasts).toContain('Bild ohne Oberfläche: Menü/HUD (UI Toolkit) fehlen – Unity war im Hintergrund')
   const prompt = world.prompts.at(-1) ?? ''

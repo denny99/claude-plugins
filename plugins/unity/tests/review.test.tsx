@@ -147,11 +147,15 @@ test('review list: renders on desktop and terminal; an answer is appended with s
     await ui.unmount()
   }
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  // Befund 64/65: one "Antworten" (the comment field's), the screenshot switch reads as a checkbox.
+  // A plain verdict question answers with one press („Passt“ is its main action), showing is a text action; the
+  // screenshot switch stands once in the tab, as a switch.
   expect(await ui.find({ type: 'Button', key: 'rv-answer-reuse' })).toBeUndefined()
-  expect((await ui.find({ type: 'Button', key: 'rv-shot-reuse' }))?.props.label).toMatch(
-    /^[☑☐] Screenshot mitschicken$/,
-  )
+  expect((await ui.find({ type: 'Button', key: 'rv-choice-reuse-0' }))?.props).toMatchObject({ label: 'Passt', variant: 'primary' })
+  expect((await ui.find({ type: 'Button', key: 'rv-choice-reuse-1' }))?.props).toMatchObject({ label: 'Passt nicht', variant: 'secondary' })
+  expect((await ui.find({ type: 'Button', key: 'rv-goto-reuse' }))?.props.label).toBe('Hinspringen')
+  expect(await ui.find({ type: 'Button', key: 'rv-shot-reuse' })).toBeUndefined()
+  expect((await findShown(ui, 'Screenshot mitschicken'))?.text).toBeDefined()
+  expect(await ui.find({ type: 'Button', key: 'rv-shot' })).toBeDefined()
   await settle(world, ui.press({ key: 'rv-goto-reuse' }))
   const gotoCmd = Object.entries(world.files).find(([p, t]) => /cmd-.*\.json$/.test(p) && t.includes('"goto"'))
   expect(gotoCmd?.[1]).toContain('spot: seed=1 x=2 z=3')
@@ -176,9 +180,17 @@ test('review list: renders on desktop and terminal; an answer is appended with s
     'time',
     'screenshot',
   ])
-  // Decide: the choice is kept as the option text.
+  // Decide: „Wählen“ only marks the option, „Antwort schicken“ sends it; the choice is kept as the option text.
   await settle(world, ui.press({ key: 'rv-tab-decide' }))
+  const answers = () => (world.files[`${ROOT}/docs/antworten.jsonl`] ?? '').trim().split('\n').length
+  const before = answers()
+  await settle(world, ui.press({ key: 'rv-answer-fackel' }))
+  expect(answers()).toBe(before) // nothing chosen, no comment: nothing is sent
   await settle(world, ui.press({ key: 'rv-choice-fackel-0' }))
+  expect(answers()).toBe(before)
+  expect((await findShown(ui, /A gewählt/))?.text).toBeDefined()
+  expect(await ui.find({ type: 'Button', key: 'rv-choice-fackel-0' })).toBeUndefined()
+  await settle(world, ui.press({ key: 'rv-answer-fackel' }))
   const last = JSON.parse((world.files[`${ROOT}/docs/antworten.jsonl`] ?? '').trim().split('\n').pop() ?? '{}')
   expect(last).toMatchObject({ id: 'fackel', verdict: 'kommentar', choice: 'warmes Orange' })
   await ui.unmount()
@@ -217,7 +229,7 @@ test('sounds: list, play near, mix nudge through mix_set, verdict appended as to
   await ui.unmount()
 })
 
-test('sounds after an error: "Nochmal holen", Aktualisieren and the bridge coming back each load the board again', async ($, on) => {
+test('sounds after an error: „Neu laden“ in the card, Aktualisieren and the bridge coming back each load the board again', async ($, on) => {
   const world = reviewWorld(on)
   await openReview($, world)
   world.bridge.up = false
@@ -294,7 +306,6 @@ test('viewer: unity_review_show draws the frame as Svg with a paint Client; a st
   const blocks = fb.result as { type: string }[]
   expect(blocks.map(b => b.type)).toEqual(['text', 'image'])
   expect(Object.keys(world.files).some(p => /\.claude\/unity-review\/marks-\d{8}-\d{6}\.svg$/.test(p))).toBe(true)
-  // Terminal: no Svg, the file path instead.
   await settle(
     world,
     $.tool.call({
@@ -305,7 +316,10 @@ test('viewer: unity_review_show draws the frame as Svg with a paint Client; a st
   )
   const term = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await settle(world, term.press({ key: 'tab-review' }))
-  expect((await findShown(term, /Bild in Datei \/g\/art\/n1\.png/))?.text).toBeDefined()
+  // Terminal: no Svg; the file's path is not running text, a copy button hands it over.
+  expect((await findShown(term, 'Das Bild liegt als Datei vor.'))?.text).toBeDefined()
+  expect(await findShown(term, /\/g\/art\/n1\.png/)).toBeUndefined()
+  expect(await term.find({ type: 'Button', key: 'rv-copy-frame' })).toBeDefined()
   await term.unmount()
 })
 
@@ -391,10 +405,10 @@ test('schmales Panel: Entscheidungs-Optionen ganz lesbar, keine „Entscheiden�
   await reveal(ui, 'rv-tab-decide', 'rv-tab-')
   await settle(world, ui.press({ key: 'rv-tab-decide' }))
   expect((await subs()).includes('rv-tab-decide')).toBe(true) // the page with the chosen tab stays shown
-  // the option is a wrapping text above a short button; the button carries no option text (runde 2, Befund 4)
-  expect((await findShown(ui, 'A: warmes Orange'))?.text).toBeDefined()
+  // the option is a list row with a short „Wählen“; the button carries no option text (runde 2, Befund 4)
+  expect((await findShown(ui, 'A · warmes Orange'))?.text).toBeDefined()
   const a = await ui.find({ type: 'Button', key: 'rv-choice-fackel-0' })
-  expect(a?.props.label).toBe('A wählen')
+  expect(a?.props.label).toBe('Wählen')
   const alts = (await ui.findAll({ type: 'Svg' })).map(s => String(s.props.alt ?? ''))
   expect(alts.includes('Entscheiden')).toBe(false)
   await ui.unmount()
