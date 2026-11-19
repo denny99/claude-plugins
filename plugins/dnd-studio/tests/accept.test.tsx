@@ -83,6 +83,16 @@ test("pure: the §4 checklist names what is missing and who fixes it", () => {
   expect(gpuOf({ jobs: [] }, 1)).toMatchObject({ running: 0, queued: 0 });
 });
 
+/** Is a list row drawn whose title is directly followed by this meta (two texts of one row)? */
+async function rowShown(
+  ui: { findAll: (q: { type?: string }) => Promise<{ text: string }[]> },
+  title: string,
+  meta: string,
+): Promise<boolean> {
+  const texts = (await ui.findAll({ type: "Text" })).map((t) => t.text);
+  return texts.some((t, i) => t === title && texts[i + 1] === meta);
+}
+
 test("Build: Check reads campaign, maps and studio_status; rows show status and fix hints; spoiler-safe hides names", async ($, on) => {
   const w = world(on);
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
@@ -101,20 +111,26 @@ test("Build: Check reads campaign, maps and studio_status; rows show status and 
   expect(w.calls[4]?.args).toEqual({ action: "list" });
 
   const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
-  expect((await findShown(ui, /GPU belegt/))?.text).toBe(
-    "● GPU belegt · 1 läuft, 1 warten 40%",
-  );
-  expect(
-    await findShown(ui, /Szenen mit Bild, Vorlesetext und Ablauf · 1\/2/),
-  ).toBeDefined();
+  // the GPU is a row of the progress card: its state as a pill, the numbers as meta
+  expect(await findShown(ui, "GPU")).toBeDefined();
+  expect(await findShown(ui, "belegt")).toBeDefined();
+  expect(await findShown(ui, "1 läuft, 1 warten · 40 %")).toBeDefined();
+  // a check row: title, the count as meta, the state as a pill
+  expect(await rowShown(ui, "Szenen mit Bild, Vorlesetext und Ablauf", "1/2")).toBe(true);
   expect(await findShown(ui, /Karten gemalt/)).toBeDefined();
-  expect(
-    await findShown(ui, /Startfelder in den Szenen · 1\/1/),
-  ).toBeDefined();
+  expect(await rowShown(ui, "Startfelder in den Szenen", "1/1")).toBe(true);
   expect(await findShown(ui, /Offene Fäden und wo die Gruppe steht/)).toBeDefined();
-  expect(await findShown(ui, /Stimmen vorbereitet · noch nicht gelaufen/)).toBeDefined();
-  expect(await findShown(ui, /beheben: Maler, Texter/)).toBeDefined();
-  expect(await findShown(ui, /starten: Stimmen-Macher/)).toBeDefined();
+  expect(await rowShown(ui, "Stimmen vorbereitet", "noch nicht gelaufen")).toBe(true);
+  expect(await findShown(ui, "fehlt")).toBeDefined();
+  expect(await findShown(ui, "offen")).toBeDefined();
+  // who fixes it stands behind the row's „Details“
+  expect(await findShown(ui, /Maler, Texter/)).toBeUndefined();
+  await ui.press({ key: "chk-scenes-details" });
+  expect(await findShown(ui, "Behebt")).toBeDefined();
+  expect(await findShown(ui, "Maler, Texter")).toBeDefined();
+  await ui.press({ key: "chk-prepare-details" });
+  expect(await findShown(ui, "Startet")).toBeDefined();
+  expect(await findShown(ui, "Stimmen-Macher")).toBeDefined();
   expect(await findShown(ui, /pnp-/)).toBeUndefined();
   // spoiler-safe by default: counts, no names
   expect(await findShown(ui, /Im Wald/)).toBeUndefined();
@@ -133,7 +149,7 @@ test("Build: the plan is signed off by a press, recorded, and the main thread is
   } as never);
   await $.command.run({ command: "dnd", args: "build" } as never);
   let ui = await $.ui.mount({ ...pane(), surface: "desktop" });
-  expect(await findShown(ui, /schreibt den Bauplan/)).toBeDefined();
+  expect(await findShown(ui, "entsteht")).toBeDefined();
   expect(
     await ui.find({ type: "Button", key: "plan-approve" }),
   ).toBeUndefined();
@@ -148,12 +164,11 @@ test("Build: the plan is signed off by a press, recorded, and the main thread is
     reason: "answer",
   } as never);
   ui = await $.ui.mount({ ...pane(), surface: "desktop" });
-  expect(
-    await findShown(ui, /Bauplan wartet auf deine Freigabe/),
-  ).toBeDefined();
+  expect(await findShown(ui, "wartet auf Freigabe")).toBeDefined();
   expect(w.submitted).toEqual([]);
-  // the Build tab names the campaign it builds
-  expect(await findShown(ui, /Bau-Abschnitte · Breeland/)).toBeDefined();
+  // the campaign's name stands in the header only; the question below names it
+  expect(await findShown(ui, "Bau-Abschnitte")).toBeDefined();
+  expect(await findShown(ui, /Bau-Abschnitte · Breeland/)).toBeUndefined();
   // two steps: the first press asks into which campaign, only the yes sends
   await ui.press({ key: "plan-approve" });
   expect(w.submitted).toEqual([]);
@@ -172,7 +187,7 @@ test("Build: the plan is signed off by a press, recorded, and the main thread is
   await ui.unmount();
 
   ui = await $.ui.mount({ ...pane(), surface: "desktop" });
-  expect(await findShown(ui, /✓ Bauplan abgesegnet/)).toBeDefined();
+  expect(await findShown(ui, "abgesegnet")).toBeDefined();
   // until Claude answered the sign-off the button says it went (kit „ask Claude“), a press sends nothing
   expect((await ui.findAll({ type: "Svg" })).some((el) => el.props.alt === "geschickt")).toBe(true);
   await ui.press({ key: "plan-approve" });
@@ -252,9 +267,7 @@ test("Build: a list cut at the engine's output limit is read a few entries at a 
     ),
   ).toBe(true);
   const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
-  expect(
-    await findShown(ui, /Szenen mit Bild, Vorlesetext und Ablauf · 1\/2/),
-  ).toBeDefined();
+  expect(await rowShown(ui, "Szenen mit Bild, Vorlesetext und Ablauf", "1/2")).toBe(true);
   await ui.unmount();
 });
 
@@ -320,10 +333,8 @@ test("Build: a big scene list is read whole, its reads halved until each fits un
   // eight at a time are cut, then four, then two fit
   expect(reads.slice(0, 3)).toEqual([8, 4, 2]);
   const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
-  expect(
-    await findShown(ui, /Szenen mit Bild, Vorlesetext und Ablauf · 20\/20/),
-  ).toBeDefined();
-  expect(await findShown(ui, /Startfelder in den Szenen · 20\/20/)).toBeDefined();
+  expect(await rowShown(ui, "Szenen mit Bild, Vorlesetext und Ablauf", "20/20")).toBe(true);
+  expect(await rowShown(ui, "Startfelder in den Szenen", "20/20")).toBe(true);
   expect(await findShown(ui, /nicht geprüft|zu groß/)).toBeUndefined();
   await ui.unmount();
 });
@@ -339,17 +350,16 @@ test("Build: a part that cannot be read leaves its rows unchecked and locks the 
   await $.command.run({ command: "dnd", args: "build" } as never);
   const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
   expect(await findShown(ui, /Kampagne \(Szenen\): Antwort zu groß/)).toBeDefined();
-  expect(
-    await findShown(ui, /Szenen mit Bild, Vorlesetext und Ablauf · nicht geprüft/),
-  ).toBeDefined();
-  expect(await findShown(ui, /Startfelder in den Szenen · nicht geprüft/)).toBeDefined();
+  expect(await rowShown(ui, "Szenen mit Bild, Vorlesetext und Ablauf", "nicht geprüft")).toBe(true);
+  expect(await rowShown(ui, "Startfelder in den Szenen", "nicht geprüft")).toBe(true);
   expect(await findShown(ui, /0\/2/)).toBeUndefined();
   // the other rows still count: maps, pins and NPCs are open, scenes are not
   expect(await findShown(ui, "3 offen")).toBeDefined();
   expect(
     await ui.find({ type: "Button", text: /Offene Punkte beheben/ }),
   ).toBeUndefined();
-  expect(await findShown(ui, /ist gesperrt, bis jeder Teil/)).toBeDefined();
+  // no sentence about a button that is not there: the reason is the error in the status line (asserted above)
+  expect(await findShown(ui, /ist gesperrt|Neu prüfen/)).toBeUndefined();
   await ui.unmount();
 
   const items = acceptanceOf(CAMPAIGN, MAPS, "", ["scenes"]);
@@ -375,19 +385,21 @@ test("Build: „Offene Punkte beheben“ asks first into which campaign, only th
   await ui.unmount();
 });
 
-test("Build: „Erneut versuchen“ under the check's error is a real secondary button that checks again", async ($, on) => {
+test("Build: the check's error stands once, in the card's status line; the header's „Neu laden“ reads again", async ($, on) => {
   const w = world(on, {
     campaign: () => [{ type: "text", text: '{"open": "Breel' }, CUT],
   });
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd", args: "build" } as never);
   const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
-  const retry = await ui.find({ type: "Button", key: "check-err-retry" });
-  expect(retry?.text).toMatch(/Erneut versuchen/);
-  expect(retry?.props.variant).toBe("secondary");
-  expect(retry?.props.plain).toBeUndefined();
+  expect(
+    (await ui.findAll({ type: "Text" })).filter((t) => /Kampagne nicht gelesen/.test(t.text)).length,
+  ).toBe(1);
+  // the card repeats neither a retry nor the header's reload
+  expect(await ui.find({ type: "Button", key: "check-err-retry" })).toBeUndefined();
+  expect(await ui.find({ type: "Button", key: "check-refresh" })).toBeUndefined();
   const before = w.calls.length;
-  await ui.press({ key: "check-err-retry" });
+  await ui.press({ key: "refresh" });
   expect(w.calls.length).toBeGreaterThan(before);
   await ui.unmount();
 });
@@ -400,9 +412,10 @@ test("Build: in a narrow pane the check's rows wrap instead of cutting, the pill
   const rows = (await ui.findAll({ type: "Text" })).filter((t) =>
     /^(Szenen mit Bild, Vorlesetext und Ablauf · 1\/2|Stimmen vorbereitet · noch nicht gelaufen)$/.test(t.text),
   );
+  // narrow, the count stays in the wrapping title (the row has no meta place there); the pill stands below
   expect(rows.length).toBe(2);
   for (const r of rows) expect(r.props.wrap).toBe("wrap");
-  expect(await findShown(ui, /beheben: Maler, Texter/)).toBeDefined();
+  expect(await findShown(ui, "fehlt")).toBeDefined();
   await ui.unmount();
 });
 
