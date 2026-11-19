@@ -170,6 +170,13 @@ export function targetTab($: EngineInterface, k: Kit, m: UnityModel, options: Op
             meta: 'z. B. Dateien, die Unity selbst ändert',
             pill: onOff(options.commitGuard),
           }),
+          ListRow(k, {
+            key: 'guard-unity-run',
+            icon: 'folder',
+            title: 'Unity nicht neben dem Editor starten',
+            meta: 'Bei offenem Editor nur im Worktree',
+            pill: onOff(options.unityRunGuard),
+          }),
         ],
         // Plugin options (userConfig): shown here, changed in the plugin's own settings.
         hint: 'Das sind Plugin-Einstellungen von unity; geändert werden sie unter /plugin.',

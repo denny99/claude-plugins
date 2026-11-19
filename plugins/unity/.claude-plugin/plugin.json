@@ -1,6 +1,6 @@
 {
   "name": "unity",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Unity inside Claude Code: compile gate after C# edits, editor console, EditMode/PlayMode tests, play/stop and Game view screenshots through a small editor bridge package, batchmode runs when no editor is open. Works with any Unity project on macOS and Windows.",
   "author": {
     "name": "denny99"
@@ -49,6 +49,12 @@
       "type": "boolean",
       "title": ".meta guard",
       "description": "Refuse a Bash mv/rm (git, cmd, PowerShell too) of an asset under Assets/ whose .meta is not part of the same command; the refusal shows the corrected command.",
+      "default": true
+    },
+    "unityRunGuard": {
+      "type": "boolean",
+      "title": "Unity-run guard",
+      "description": "Refuse a Bash command that starts Unity by hand (the editor binary, `-batchmode`, or a project wrapper like `node tools/unity.mjs`) in the main checkout while an editor holds the project; the refusal points to the unity tools and unity_worktree.",
       "default": true
     },
     "autoOpen": {

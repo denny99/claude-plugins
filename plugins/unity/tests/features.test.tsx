@@ -5,7 +5,7 @@ import { bashVerdictReason } from '../features/bash'
 import { launcherStatus } from '../features/launcher'
 import { LauncherChip, showsStatus } from '../lib/ui'
 import type { UnityModel } from '../types'
-import { BRIDGE, fakeWorld, PANE, PROJECT, ROOT, settle, type World } from './world'
+import { BRIDGE, EDITOR, fakeWorld, PANE, PROJECT, ROOT, settle, type World } from './world'
 
 const start = { cwd: ROOT, surface: 'terminal', isInteractive: false } as const
 const check = (command: string) => ({ tool: 'Bash', input: { command } })
@@ -347,7 +347,11 @@ test('starter status (Band v4): the editor state in a few words, colour only for
     'Play pausiert',
   )
   expect(
-    launcherStatus({ ...EMPTY_STATUS, tests: { state: 'running', results: [] }, bridge: { up: true, isCompiling: true } }),
+    launcherStatus({
+      ...EMPTY_STATUS,
+      tests: { state: 'running', results: [] },
+      bridge: { up: true, isCompiling: true },
+    }),
   ).toEqual({ status: 'Tests laufen', tone: 'info' })
   // errors beat everything; every status stays short for line 1
   expect(launcherStatus({ ...errs(1), bridge: { up: false } }).tone).toBe('bad')
@@ -363,7 +367,10 @@ test('starter (Band v4): ready shows only the name, a test run shows its text, c
     graphical: true,
     brand: 'neutral',
     cols: 80,
-    t: { faint: 'inactive', tones: { ok: { fg: 'success' }, warn: { fg: 'warning' }, bad: { fg: 'error' }, info: { fg: 'suggestion' } } },
+    t: {
+      faint: 'inactive',
+      tones: { ok: { fg: 'success' }, warn: { fg: 'warning' }, bad: { fg: 'error' }, info: { fg: 'suggestion' } },
+    },
   } as never
   type N = { children?: unknown[] }
   const texts = (m: UnityModel): string[] => {
@@ -384,4 +391,34 @@ test('starter (Band v4): ready shows only the name, a test run shows its text, c
   })
   expect(bad).toEqual({ status: '1 Fehler', tone: 'bad' })
   expect(showsStatus(bad)).toBe(true)
+})
+
+test('Unity-run guard: a hand-started Unity run in the main checkout is denied while the editor holds the project', async ($, on) => {
+  const world = fakeWorld(on, { lock: 'held' })
+  await $.session.start(start)
+  const wrapper = await settle(world, $.tool.check(check('COZY_MUTE=1 node tools/unity.mjs smoke')))
+  expect(wrapper.decision).toBe('deny')
+  expect(wrapper.reason).toContain('node tools/unity.mjs smoke')
+  expect(wrapper.reason).toContain('unity_worktree')
+  const binary = await settle(
+    world,
+    $.tool.check(check(`"${EDITOR}" -batchmode -quit -projectPath unity -executeMethod X.Y`)),
+  )
+  expect(binary.decision).toBe('deny')
+
+  // inside a worktree, in another checkout, or not a Unity run at all → allowed
+  expect(
+    (await settle(world, $.tool.check(check('cd .worktrees/a && COZY_MUTE=1 node tools/unity.mjs smoke')))).decision,
+  ).not.toBe('deny')
+  expect(
+    (await settle(world, $.tool.check(check(`${EDITOR} -batchmode -projectPath /other/unity`)))).decision,
+  ).not.toBe('deny')
+  expect((await settle(world, $.tool.check(check('node tools/build.mjs')))).decision).not.toBe('deny')
+  expect(await bashVerdictReason($ as never, { unityRunGuard: false }, 'node tools/unity.mjs smoke')).toBeUndefined()
+})
+
+test('Unity-run guard: no editor holding the project → the same run passes', async ($, on) => {
+  const world = fakeWorld(on, { lock: 'none' })
+  await $.session.start(start)
+  expect((await settle(world, $.tool.check(check('node tools/unity.mjs smoke')))).decision).not.toBe('deny')
 })

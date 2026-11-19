@@ -59,6 +59,8 @@ export type Options = {
   editorPath?: string
   commitGuard?: boolean
   metaGuard?: boolean
+  /** Refuse starting Unity by hand in the main checkout while an editor holds the project. */
+  unityRunGuard?: boolean
   /** Open the pane at session start in a Unity project (lib/autoopen.ts ranking). */
   autoOpen?: boolean
 }
