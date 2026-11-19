@@ -27,6 +27,7 @@ import { registerLanguage } from "../features/language";
 import { clashText, healthText, probe, renderHealth } from "../features/health";
 import { pluginVersion } from "../lib/brand";
 import { registerLook } from "../features/look";
+import { registerTranscript } from "../features/transcript";
 import {
   bandHint,
   bandStatus,
@@ -270,6 +271,7 @@ export const register: Register = (on, options) => {
   registerBuild(on);
   registerProgress(on);
   registerLook(on);
+  registerTranscript(on);
   registerEvening(on);
   registerLanguage(on);
 

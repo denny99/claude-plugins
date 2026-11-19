@@ -10,7 +10,7 @@ import {
   toTableView,
 } from "../lib/model";
 import { findShown } from "./shown";
-import { pane, TABLE, world } from "./world";
+import { pane, TABLE, world, looksOn } from "./world";
 
 const IDLE = { order: [], index: -1, round: 0, isActive: false };
 const view = (s: Record<string, unknown>) => toTableView(s, {}, 0);
@@ -56,6 +56,7 @@ test("a live table gets the game table backdrop, with or without a picture, and 
     },
   });
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await looksOn($ as never);
   await $.command.run({ command: "dnd-scene", args: "" } as never);
   // a picture: it is made into a look in a job of its own, meanwhile (and when no result has it) the game table stands
   expect(w.themes).toEqual(["dnd-table"]);
@@ -123,4 +124,19 @@ test("after a break the pause button says Weiter", async ($, on) => {
   expect(await ui.find({ type: "Button", key: "pause-off" })).toBeDefined();
   expect(await ui.find({ type: "Button", key: "pause-on" })).toBeUndefined();
   await ui.unmount();
+});
+
+test("the table look is off by default: a live table leaves the person's theme alone", async ($, on) => {
+  const w = world(on, {
+    table_state: { ...TABLE, scene: { kind: "show", title: "Im Tänzelnden Pony" } },
+  });
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd-scene", args: "" } as never);
+  expect(w.themes).toEqual([]);
+  // turned on, our own look is never kept as „the theme before“: the table's end clears, it does not set dnd-table again
+  await looksOn($ as never);
+  await $.command.run({ command: "dnd-scene", args: "" } as never);
+  w.answers.table_state = { ...TABLE, discord: false, scene: { kind: "clear" } };
+  await $.command.run({ command: "dnd-scene", args: "" } as never);
+  expect(w.themes).toEqual(["dnd-table", "clear"]);
 });
