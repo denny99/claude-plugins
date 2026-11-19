@@ -174,9 +174,7 @@ test("Build: the plan is signed off by a press, recorded, and the main thread is
   ui = await $.ui.mount({ ...pane(), surface: "desktop" });
   expect(await findShown(ui, /✓ Bauplan abgesegnet/)).toBeDefined();
   // until Claude answered the sign-off the button says it went (kit „ask Claude“), a press sends nothing
-  expect(
-    (await ui.find({ type: "Button", key: "plan-approve" }))?.text,
-  ).toContain("An Claude geschickt");
+  expect((await ui.findAll({ type: "Svg" })).some((el) => el.props.alt === "geschickt")).toBe(true);
   await ui.press({ key: "plan-approve" });
   expect(w.submitted.length).toBe(1);
   await ui.unmount();

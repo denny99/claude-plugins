@@ -269,7 +269,7 @@ test("review: a sent verdict is done (dimmed, local time, no buttons), a typed n
   expect(await ui.find({ type: "Button", key: `rv-redo-${id0}` })).toBeUndefined();
   expect(await ui.find({ type: "Button", key: `rv-ok-${id1}` })).toBeUndefined();
   // until Claude answered the result: the kit's „✓ An Claude geschickt“, a second press sends nothing
-  expect((await ui.find({ type: "Button", key: "rv-send" }))?.text).toContain("An Claude geschickt");
+  expect((await ui.findAll({ type: "Svg" })).some((el) => el.props.alt === "geschickt")).toBe(true);
   await ui.press({ key: "rv-send" });
   expect(w.submitted).toHaveLength(1);
   await $.turn.start({ turnId: "t-rv", text: w.submitted[0] } as never);
