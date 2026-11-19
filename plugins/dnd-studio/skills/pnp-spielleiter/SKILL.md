@@ -158,6 +158,16 @@ Jedes Ende eines Zuhörers ließ den Tisch taub, bis der nächste lief.
    2026-11-19: deine zehn Sekunden Denkzeit sollen nicht still sein). Deine Antwort setzt keinen zweiten davor
    (kein `opener: "think"` für den Erzähler), sie fängt gleich mit der Sache an. Der Erzähler braucht dafür viele
    think-Sätze in diesem Ton (`campaign set narrator_stock`, dann `prepare_table`), sonst wiederholen sie sich.
+   Wendet sich ein Held an einen NPC, spielt der Zuhörer statt des Denksatzes die Brücke des Erzählers („Tobi geht
+   zu Bartel hinüber.“, die `approach`-Sätze der Kampagne); ein `from` in deiner Antwort spielt dann keine zweite.
+   Dafür braucht die Kampagne `approach`-Sätze, und `prepare_table` muss sie für jedes Paar gemacht haben.
+   Für Züge ohne NPC gibt es zwei weitere Brücken über den Helden allein, ebenfalls Stock-Sätze des Erzählers mit
+   `{hero}`: `look` (der Spieler fragt, was sein Held sieht, hört oder findet: „{hero} sieht genauer hin.“) und `act`
+   (der Held tut etwas: „{hero} zögert nicht lange.“). Schreib je drei bis fünf davon, so allgemein, dass sie auf
+   jede Frage und jede Handlung passen und nichts vorwegnehmen (kein Ergebnis, kein Ort, kein Gegenstand), im Ton des
+   Erzählers und verschieden genug, dass sie sich nicht abnutzen (`campaign set narrator_stock`, dann
+   `prepare_table`; ohne sie kommt der Denksatz). Lässt der Zuhörer eine Zeile von dir ausreden, spielt die Brücke
+   erst nach ihrem Ende, falls deine Antwort dann noch nicht da ist.
 5. Kommt er nicht (Fehler, `why: "Wächter geht nicht"`): wie oben mit dem Wächter weiter, und dem Menschen eine Zeile.
 6. **Die Begrüßung erklärt, wie man dich ruft** (Live-Test 2026-11-18, vier Spieler, nebenher ein Videospiel: „es
    kommt zwar alles an, aber es löst nicht aus“): einfach reden; wer „Spielleitung“ oder „Erzähler“ sagt oder
@@ -174,6 +184,13 @@ Jedes Ende eines Zuhörers ließ den Tisch taub, bis der nächste lief.
    (`campaign set listener_rules`, die ganze Liste, `campaign` zeigt sie unter `listenerRules`). Der Zuhörer bekommt
    sie mit jedem Wächter, sie gelten ab dem nächsten Zug; kein neuer Zuhörer nötig. Kurz bestätigen, was
    du dir gemerkt hast; ein Feld dafür gibt es im Studio nicht.
+10. **Der erste Werkzeugaufruf jeder Antwort auf einen Zug ist `say_line`.** Braucht die Antwort ein Bild, eine
+   Karte oder einen Wurf, stehen `show_players` oder `roll_dice` im selben Schritt neben `say_line` (mehrere Aufrufe
+   in einer Antwort), nie in einem eigenen Schritt davor. Bei einem Wurf sagt die erste Zeile nur, was der Held
+   versucht und dass gewürfelt wird (ein Satz, noch kein Ausgang); der Ausgang folgt im nächsten Schritt. Gemessen
+   2026-11-19 mit Opus an „Die Laterne von Archet“: Vom letzten Wort bis zur Antwort vergingen 12 bis 15 s, mit
+   einem eigenen Schritt vor der ersten Zeile (`show_players`, `roll_dice`) 18 bis 20 s; mit dieser Regel gab es
+   keinen Zug über 15,3 s. Dein eigenes Nachdenken waren nur 2 bis 4 s, jeder Schritt vor dem Sprechen 4 bis 7.
 
 Der Befehl braucht einmal die Erlaubnis für Bash (`curl` an `127.0.0.1`); fragt die App, den Menschen zu Beginn
 bitten, sie für die Sitzung zu geben. Gibt es `watch` nicht (ältere App): wie früher, `wait_for_players` wartet

@@ -41,7 +41,9 @@ Fehlschlägen hintereinander endest du mit `why: "Wächter geht nicht"`.
 
 1. `wait_for_players` mit `watch: true`, `quiet: true`, `timeout_seconds: 540`, `background: false`. Es gibt einen
    Befehl (`curl …`). Ihn mit Bash **im Vordergrund** starten, `timeout: 600000`. Er blockiert, bis die Spieler etwas
-   haben. Ein neuer Wächter heißt für den Tisch auch: den Zug davor hast du durchgelassen (die leiser gedrehte Zeile
+   haben. Jeder Befehl gilt genau einmal: nie einen früheren `curl` noch einmal starten, immer den aus dem letzten
+   `wait_for_players` (gemessen 2026-11-19: ein wiederverwendeter Befehl kam mit „unknown or used watch“ zurück, eine
+   Runde verloren). Ein neuer Wächter heißt für den Tisch auch: den Zug davor hast du durchgelassen (die leiser gedrehte Zeile
    kommt wieder hoch). Darum zwischen Entscheiden und Wächter nichts anderes tun.
 2. Seine Ausgabe sagt `ready`:
    - `null`: nichts in 9 Minuten → zurück zu 1.
@@ -58,9 +60,14 @@ Fehlschlägen hintereinander endest du mit `why: "Wächter geht nicht"`.
      Kommt dabei kein Zug (`finished: false`, oder „cut in without a word“): zurück zu 1. Kommt `paused: true`: wie
      `break`. Steht in der Antwort `secret_waiting`: wie `secret`, sofort wecken.
 3. Nicht wecken: den Zug in einer kurzen Zeile merken („Jule und Tobi beraten, ob sie den Wächter bestechen“), zurück
-   zu 1. Kein Ende nach vielen übersprungenen Zügen: du hörst weiter zu.
-4. Wecken: `cut_line` (bei einem Zug, unten), dann `SendMessage` mit `to: "main"` und als `message` genau das JSON
-   unten, dann **sofort** zurück zu 1. Die Zeilen in `between` gibst du damit ab: danach fängt `between` neu an.
+   zu 1, ohne Text davor: gleich das `wait_for_players`. Kein Ende nach vielen übersprungenen Zügen: du hörst weiter zu.
+4. Wecken in zwei Antworten: **erst `cut_line` allein** (bei einem Zug, unten), damit der Denksatz sofort spielt;
+   **dann in einer einzigen Antwort nebeneinander** `SendMessage` mit `to: "main"` und als `message` genau das JSON
+   unten, und schon das `wait_for_players` aus 1 für den nächsten Wächter. In der Antwort danach nur noch den neuen
+   Befehl mit Bash starten. Gemessen 2026-11-19: Alle drei in einer Antwort wecken die Spielleitung keine Zehntel
+   früher (die Aufrufe laufen erst, wenn die ganze Antwort mit dem JSON geschrieben ist), der Denksatz kam aber
+   anderthalb Sekunden später; Nachricht und `wait_for_players` zusammen sparen dagegen eine Runde, in der du taub
+   wärst. Die Zeilen in `between` gibst du mit der Nachricht ab: danach fängt `between` neu an.
 5. **Nach 10 Minuten wird die nächste Weckung dein Ende** (Denny 2026-11-19: „all 10 min mal restart wegen kontext
    window“). Vor jedem Wecken mit Bash `date +%s` prüfen: Sind seit deiner Startzeit 600 Sekunden vorbei, schickst du
    keine Nachricht, sondern endest mit demselben JSON (nach `cut_line` wie sonst). Die Spielleitung antwortet dann
@@ -100,7 +107,10 @@ Wecken, sobald eine dieser Regeln passt, ohne weiter nachzudenken:
 6. Die Spieler reden über die Spielleitung, weil sie auf sie warten („er macht nicht weiter“, „warum schläft er?“,
    „wann geht's weiter?“): Sie warten, also wecken.
 
-Sonst nicht wecken: Geplauder, Witze, anderes (ein Videospiel nebenher), Regeln nachschlagen, offenes Abwägen. Ein
+Sonst nicht wecken: Geplauder, Witze, anderes (ein Videospiel nebenher), Regeln nachschlagen, offenes Abwägen. Auch was
+ein Spieler über sich selbst am echten Tisch sagt („ich hol mir kurz einen Kaffee“, „bin gleich wieder da“, „muss mal
+ans Telefon“), ist keine Antwort seines Helden, selbst wenn die Spielleitung gerade „Was tust du?“ gefragt hat (live
+2026-11-19: zweimal als Antwort gewertet und geweckt): in `between` festhalten, nicht wecken. Ein
 Entschluss mitten im Geplauder bleibt ein Entschluss: aus dem Durcheinander heraushören, nicht überhören.
 
 Auch nicht wecken (gemessen am Live-Test 2026-11-18, das waren die Fehlalarme):
@@ -111,8 +121,8 @@ Auch nicht wecken (gemessen am Live-Test 2026-11-18, das waren die Fehlalarme):
 - Was jemand tun *könnte* oder getan *hätte* („ich könnte auch alle niederballern“): Gedankenspiel. „Ich würde sagen,
   ich mache X“ ist dagegen ein Entschluss (oben, 3).
 
-Vor jedem Wecken mit einem Zug (nicht bei `secret`, `break` und `resume`): `cut_line`, sofort, sobald klar ist, dass
-du weckst, vor jedem weiteren Nachdenken. **Schneiden oder ausreden lassen ist deine Abwägung** (Denny 2026-11-19:
+Vor jedem Wecken mit einem Zug (nicht bei `secret`, `break` und `resume`): `cut_line`, sofort und allein in seiner
+Antwort, sobald klar ist, dass du weckst, vor jedem weiteren Nachdenken (die Nachricht folgt in der nächsten, Schleife 4). **Schneiden oder ausreden lassen ist deine Abwägung** (Denny 2026-11-19:
 „es muss nicht immer audio terminieren, wenn wir was sagen, das ist Ermessenssache“):
 - **Schneiden** (`cut_line` ohne Feld): Was gesagt wurde, macht die laufende Zeile falsch oder muss jetzt beantwortet
   werden: Einspruch („Stopp, das hab ich nicht gesagt“), eine Handlung, die das Erzählte ändert („ich schieße, bevor er
@@ -120,6 +130,29 @@ du weckst, vor jedem weiteren Nachdenken. **Schneiden oder ausreden lassen ist d
 - **Ausreden lassen** (`cut_line` mit `keep: true`): Der Zug fügt nur etwas hinzu oder sagt, was danach kommt („und
   ich schau mich dabei um“, „danach gehen wir zur Tür“). Die Zeile läuft zu Ende, die Spielleitung antwortet danach;
   ein Denksatz kommt dann nicht, die Zeile überbrückt selbst.
+**Die Brücke mit Inhalt:** Sagt ein Held in diesem Zug, dass er zu einem NPC der Szene geht oder sich an ihn wendet,
+um mit ihm zu reden („ich geh zu Bartel rüber und frag ihn“, „Pips, wer war das?“ zu einer Figur, mit der gerade
+niemand sprach), gib `cut_line` zusätzlich `hero` (der Name aus dem Zug) und `npc` (der Name aus dem Auftrag). Statt
+des Denksatzes spielt dann der Satz des Erzählers für die beiden („Tobi geht zu Bartel hinüber.“), und die Wartezeit
+beginnt mit dem, was der Spieler gerade getan hat (gemessen 2026-11-19: rund zehn Sekunden liegen zwischen diesem Satz
+und der Antwort). Du wählst nur, du erfindest nichts; gibt es für die beiden keinen Satz, kommt der Denksatz wie sonst.
+Das gilt auch, wenn der NPC den Helden eben angesprochen oder gerufen hat (live 2026-11-19: Bartel sprach von der
+Hüttentür aus, der Spieler sagte „ich gehe zu dem alten Mann an der Hütte rüber und frage ihn …“, und es kam nur der
+Denksatz): Der Held geht in diesem Zug hin, also die Brücke. „Der alte Mann“, „die Frau mit der Laterne“, „der Wirt“
+meinen den NPC der Szene, auf den es passt: nimm seinen Namen aus dem Auftrag. Weglassen nur, wenn der Held schon bei
+ihm steht und mit ihm redet (sein Zug davor ging schon an diesen NPC), sonst „geht“ er jedes Mal von Neuem hinüber.
+
+Ist kein NPC im Spiel, gibt es zwei Brücken über den Helden allein: `hero` und dazu `bridge`:
+- `bridge: "look"`, wenn der Spieler fragt, was sein Held sieht, hört oder findet („Was sehe ich auf dem Weg?“, „Gibt es
+  Spuren?“, „Wie viele Wölfe sind es?“): Es spielt etwa „Brór sieht genauer hin.“
+- `bridge: "act"`, wenn der Held etwas tut („ich schleiche mich an den Turm“, „ich nehme die Laterne und folge der
+  Spur“, „ich spanne den Bogen“): Es spielt etwa „Brór zögert nicht lange.“
+Reden mehrere im Zug, nimm den Helden, dessen Zug dich wecken lässt. Passt keine der drei Brücken eindeutig (ein
+Einspruch, eine Antwort auf eine Frage der Spielleitung, eine Regelfrage, `sent` ohne klare Handlung), lass die Felder
+weg: Der Denksatz ist dann richtig, eine falsche Brücke wäre schlimmer als keine.
+
+Mit `keep` und einer laufenden Zeile spielt die Brücke erst, wenn diese Zeile zu Ende ist; die Felder gibst du genauso mit.
+
 Läuft keine Zeile, spielt beides sofort einen kurzen Denksatz des Erzählers („Ist angekommen. Ich prüfe.“), der die
 Zeit bis zur Antwort überbrückt; ihn schneidet nichts. Schreib in `why`, ob du geschnitten hast. Beim Beraten und bei
 Geplauder nie `cut_line`.
