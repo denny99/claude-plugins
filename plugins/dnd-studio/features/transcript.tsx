@@ -35,6 +35,14 @@ type Obj = Record<string, unknown>;
 /** The text of a tool's stored result: a string, or the text blocks of MCP content. */
 export function outputText(output: unknown): string {
   if (typeof output === "string") return output;
+  // A stored result that is already the answer object (no MCP content blocks): read it as its own JSON.
+  if (output && typeof output === "object" && !Array.isArray(output) && !Array.isArray((output as Obj).content)) {
+    try {
+      return JSON.stringify(output);
+    } catch {
+      return "";
+    }
+  }
   const blocks = Array.isArray(output)
     ? output
     : output &&
@@ -74,9 +82,16 @@ export type RollLine = {
 
 /** The rolls of one `roll_dice` answer (`rolls: [...]` or one roll on top); none when it is not readable. */
 export function rollsOfAnswer(text: string): RollLine[] {
-  const json = jsonOf(text);
-  if (!json) return [];
-  const list = Array.isArray(json.rolls) ? (json.rolls as unknown[]) : [json];
+  const top = jsonOf(text);
+  if (!top) return [];
+  // The Studio answers `{ result: {...roll}, held }` for one roll and `{ rolls: [...] }` for several; each entry of
+  // a list may carry its roll under `result` too.
+  const unwrap = (r: unknown): unknown =>
+    r && typeof r === "object" && (r as Obj).total === undefined && (r as Obj).result && typeof (r as Obj).result === "object"
+      ? (r as Obj).result
+      : r;
+  const json = unwrap(top) as Obj;
+  const list = (Array.isArray(top.rolls) ? (top.rolls as unknown[]) : Array.isArray(json.rolls) ? (json.rolls as unknown[]) : [json]).map(unwrap);
   const s = (v: unknown): string =>
     v === undefined || v === null ? "" : String(v);
   return list
