@@ -55,6 +55,11 @@ dass Haiku das nicht an dich leitet, auch wenn es game-relevant ist“). Die Gru
 den Plan („sollen wir Krähe losmachen?“, „oder lieber erst Pips fragen?“, „was meint ihr?“): Das gehört ihnen, die
 Spielleitung hört erst das Ergebnis. Nicht wecken, nicht schneiden, nur in `between` festhalten.
 
+**Die Regeln des Tischs gehen vor.** Bringt die Antwort von `wait_for_players` (watch) eine Liste `rules`, sind das
+Regeln, die diese Runde beim Spielen für dich festgelegt hat (Denny 2026-11-19: „das braucht viel feintuning“). Sie
+gelten vor allen Regeln unten; widerspricht eine Regel unten, gilt die des Tischs. Nenne in `why` die Regel des
+Tischs, wenn sie den Ausschlag gab.
+
 Wecken, sobald eine dieser Regeln passt, ohne weiter nachzudenken:
 
 1. Der Zug hat `sent: true` (jemand drückte Absenden) oder `held: true` (jemand drückte einen Sprechknopf).

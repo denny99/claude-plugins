@@ -152,6 +152,12 @@ sparend“): Die Spieler reden ohne Knöpfe, und nicht jeder Zug ist für dich. 
    übergangen. Nenne, worauf du wartest, und lass die Regeln des Zuhörers entscheiden.
 8. **Bleibt es still, schau ins Log.** Sagen die Spieler, sie hätten längst gesagt, was sie tun, lies `table_state`
    mit `log` und handle nach dem, was dort steht, statt auf den nächsten Zuhörer zu warten.
+9. **Der Tisch stimmt den Zuhörer selbst** (Denny 2026-11-19: „listener config müsste man während dem game anpassen
+   können“). Sagt jemand, der Zuhörer soll etwas anders machen („Fragen nach der Welt müssen durch“, „Lachen nie“),
+   oder hat er etwas verpasst, das die Runde gebraucht hätte: die Regel in einem kurzen Satz zu den Regeln des Tischs
+   (`campaign set listener_rules`, die ganze Liste, `campaign` zeigt sie unter `listenerRules`), dann einen neuen
+   Zuhörer. Jeder neue Zuhörer bekommt sie mit seinem Wächter, sie gelten ab dem nächsten Zug. Kurz bestätigen, was
+   du dir gemerkt hast; ein Feld dafür gibt es im Studio nicht.
 
 Der Befehl braucht einmal die Erlaubnis für Bash (`curl` an `127.0.0.1`); fragt die App, den Menschen zu Beginn
 bitten, sie für die Sitzung zu geben. Gibt es `watch` nicht (ältere App): wie früher, `wait_for_players` wartet
