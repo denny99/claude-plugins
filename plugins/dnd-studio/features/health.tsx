@@ -12,18 +12,10 @@ import { applyLook } from "./look";
 import { createHost, startArgv, startHint, tidyError } from "../lib/host";
 import { readClash, readHealth, setHealth, toggleRule } from "../lib/state";
 import { SERVER_KEY } from "../lib/studio";
-import { clockTime, isListenerMode } from "../lib/model";
-import {
-  Actions,
-  Card,
-  CardTitle,
-  ListRow,
-  ProblemCard,
-  Sentence,
-} from "../lib/ui";
+import { clockTime } from "../lib/model";
+import { Card, ListRow, ProblemCard, Toggle } from "../lib/ui";
 import type { Kit } from "../lib/ui";
 import type { EveningState, Health, Rules, TableView } from "../types";
-import { Fold, Switch } from "./dnd-ui";
 
 export function portOf(options: PluginOptions): number {
   const p = Number(options.port);
@@ -67,7 +59,7 @@ export async function startApp(
     return;
   }
   await host.run(argv[0]!, argv.slice(1));
-  $.ui.toast("Studio startet … in ein paar Sekunden „Neu prüfen“ drücken.");
+  $.ui.toast("Studio startet … der Zustand wird gleich neu gelesen.");
   $.clock.after(8000, () => void probe($, options));
 }
 
@@ -101,31 +93,32 @@ async function healthLine($: EngineInterface): Promise<string> {
   return "D&D Studio is running and connected.";
 }
 
+// Each text is the row's meta: short enough to stand beside the name without being cut.
 const RULES: { key: keyof Rules; label: string; text: string }[] = [
   {
     key: "annotate",
     label: "Tipps am Tisch",
-    text: "Claude bekommt während des Abends kurze Erinnerungen, etwa wenn Discord nicht verbunden ist oder ein Spieler noch wartet.",
+    text: "Kurze Erinnerungen für Claude während des Abends",
   },
   {
     key: "denyLeaks",
     label: "Geheimes privat",
-    text: "Handouts und Geheimnisse für einen Spieler landen nicht im gemeinsamen Fenster, sondern als Flüstern bei ihm.",
+    text: "Handouts und Geheimnisse gehen als Flüstern an den Spieler",
   },
   {
     key: "denyTalkNpc",
     label: "NPCs sprechen selbst",
-    text: "Bei laufendem Tisch antworten NPCs sofort mit ihrer eigenen Stimme, statt erst im Hintergrund vorbereitet zu werden.",
+    text: "Am laufenden Tisch antworten NPCs sofort mit eigener Stimme",
   },
   {
     key: "denyFamily",
     label: "Familie schützen",
-    text: "Solange das Profil „Meine Familie“ im Studio offen ist, ändert Claude dort nichts.",
+    text: "Im Profil „Meine Familie“ ändert Claude nichts",
   },
   {
     key: "spoilerSafe",
     label: "Spoilerfrei",
-    text: "Für dich als Mitspieler: blendet Ziele, Notizen, Geheimnisse und Bilder aus, damit du nichts vorher siehst.",
+    text: "Blendet Ziele, Notizen, Geheimnisse und Bilder für dich aus",
   },
 ];
 
@@ -151,12 +144,6 @@ export function renderHealth(
         key: "clash",
         title: "Namenskollision: alter MCP-Server „dnd-studio“",
         cause: CLASH_FIX,
-        action: {
-          key: "probe-clash",
-          label: "Neu prüfen",
-          icon: "refresh",
-          onPress: () => void probe($, options),
-        },
       }),
     );
   if (health?.app === "down")
@@ -165,19 +152,15 @@ export function renderHealth(
         key: "app-down",
         title: "Die Studio-App läuft nicht",
         cause: startHint(health.platform as never),
+        // re-reading is the header's „Neu laden“: a card never repeats it
         action: startArgv(health.platform as never, "x")
           ? {
               key: "start",
               label: "Studio öffnen",
-              icon: "play",
+              variant: "primary",
               onPress: () => void startApp($, options),
             }
-          : {
-              key: "probe-down",
-              label: "Neu prüfen",
-              icon: "refresh",
-              onPress: () => void probe($, options),
-            },
+          : undefined,
       }),
     );
   const disc = d.evening?.discord ?? null;
@@ -191,14 +174,18 @@ export function renderHealth(
   out.push(
     Card(k, {
       key: "studio",
+      title: {
+        icon: "stethoscope",
+        title: "Zustand",
+        subtitle: health
+          ? `Zuletzt geprüft um ${clockTime(health.checkedAt)}.`
+          : "Noch nicht geprüft.",
+      },
+      // the token is set in the plugin's configuration, not here: one sentence, no button that only explains
+      hint: health?.connected
+        ? "Der Token steht unter /plugin → dnd-studio → Konfigurieren."
+        : "Token im Studio unter Einstellungen → Verbindungen kopieren, dann unter /plugin → dnd-studio → Konfigurieren einfügen.",
       children: [
-        CardTitle(k, {
-          icon: "stethoscope",
-          title: "Zustand",
-          count: health
-            ? clockTime(health.checkedAt)
-            : "",
-        }),
         ...(health
           ? [
               row(
@@ -219,10 +206,10 @@ export function renderHealth(
                 "Verbindung zu Claude",
                 health.connected
                   ? "Token gesetzt"
-                  : "Token fehlt: im Studio unter Einstellungen → Verbindungen kopieren",
+                  : "Token fehlt",
               ),
             ]
-          : [Sentence(k, "Noch nicht geprüft.", { faint: true })]),
+          : []),
         row(
           "h-plugin",
           d.pluginVersion ? "ok" : "idle",
@@ -237,77 +224,49 @@ export function renderHealth(
             ? `im Sprachkanal${disc.channel ? ` ${disc.channel}` : ""}`
             : "nicht im Sprachkanal",
         ),
-        row(
-          "h-clash",
-          d.clash ? "failed" : "ok",
-          "Alter Studio-Server",
-          d.clash ? "blockiert das Plugin" : "keiner im Weg",
-        ),
-        Actions(
-          k,
-          "studio-acts",
-          [
-            {
-              key: "reconfigure",
-              label: health?.connected ? "Token ändern" : "Token eintragen",
-              icon: "gear",
-              variant: health?.connected ? ("link" as const) : ("secondary" as const),
-              onPress: () =>
-                $.ui.toast(
-                  "1. Im Studio: Einstellungen → Verbindungen → Token kopieren. 2. Hier: /plugin → dnd-studio → Konfigurieren → Token einfügen.",
-                ),
-            },
-          ],
-          2,
-        ),
-      ].filter((x): x is RenderElement => !!x),
+        ...(d.clash
+          ? [row("h-clash", "failed", "Alter Studio-Server", "blockiert das Plugin")]
+          : []),
+      ],
     }),
   );
-  // One card for every switch of the plugin, grouped: the listener is switched at the table (one place), the looks
-  // of the table and of the build sit together, then the table rules. Folded, like every other section.
-  const listening = isListenerMode(d.view ?? null);
+  // One card per group of switches, each switch a row (name, state, what it does). The listener is switched at the
+  // table only, so it has no row here.
+  const relook = (key: keyof Rules) => () =>
+    void toggleRule($, key).then(() => applyLook($));
   out.push(
-    Fold(k, {
-      key: "settings",
-      icon: "sliders",
-      title: "Einstellungen",
+    Card(k, {
+      key: "settings-looks",
+      title: { icon: "moon", title: "Hintergründe" },
       children: [
-        CardTitle(k, { icon: "mic", title: "Zuhörer" }),
-        Sentence(
-          k,
-          `Zuhörer ist ${listening ? "an" : "aus"}. Ein- und ausschalten im Tisch-Tab (Karte „Zuhörer“), nur bei laufendem Tisch.`,
-          { faint: true },
-        ),
-        CardTitle(k, { icon: "moon", title: "Looks" }),
-        Switch(k, {
+        Toggle(k, {
           key: "rule-looks",
-          title: "Tisch-Hintergrund",
-          text: "Am laufenden Tisch zeigt die App das Szenenbild oder den Spieltisch als Hintergrund.",
+          label: "Tisch-Hintergrund",
+          hint: "Szenenbild oder Spieltisch hinter dem laufenden Tisch",
           on: rules.looks,
-          bare: true,
-          onPress: () => void toggleRule($, "looks").then(() => applyLook($)),
+          onToggle: relook("looks"),
         }),
-        Switch(k, {
+        Toggle(k, {
           key: "rule-buildLooks",
-          title: "Bau-Looks",
-          text: "Beim Bauen wechselt der Hintergrund mit dem Abschnitt.",
+          label: "Bau-Hintergründe",
+          hint: "Beim Bauen wechselt der Hintergrund mit dem Abschnitt",
           on: rules.buildLooks,
-          bare: true,
-          onPress: () =>
-            void toggleRule($, "buildLooks").then(() => applyLook($)),
+          onToggle: relook("buildLooks"),
         }),
-        CardTitle(k, { icon: "list", title: "Regeln am Tisch" }),
-        ...RULES.map((r) =>
-          Switch(k, {
-            key: `toggle-${r.key}`,
-            title: r.label,
-            text: r.text,
-            on: rules[r.key],
-            bare: true,
-            onPress: () => void toggleRule($, r.key).then(() => applyLook($)),
-          }),
-        ),
       ],
+    }),
+    Card(k, {
+      key: "settings-rules",
+      title: { icon: "list", title: "Regeln am Tisch" },
+      children: RULES.map((r) =>
+        Toggle(k, {
+          key: `toggle-${r.key}`,
+          label: r.label,
+          hint: r.text,
+          on: rules[r.key],
+          onToggle: relook(r.key),
+        }),
+      ),
     }),
   );
   return out;
