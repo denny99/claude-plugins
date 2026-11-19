@@ -1,6 +1,6 @@
 {
   "name": "unity",
-  "version": "0.8.3",
+  "version": "0.9.0",
   "description": "Unity inside Claude Code: compile gate after C# edits, editor console, EditMode/PlayMode tests, play/stop and Game view screenshots through a small editor bridge package, batchmode runs when no editor is open. Works with any Unity project on macOS and Windows.",
   "author": {
     "name": "denny99"
