@@ -118,20 +118,28 @@ Minuten waren zwölf davon. Stattdessen:
 
 **Mit dem Zuhörer** (`table_state` zeigt `listener: "haiku"`; Denny 2026-11-17: offenes Mikro in Discord, „token
 sparend“): Die Spieler reden ohne Knöpfe, und nicht jeder Zug ist für dich. Statt des Wächters wartet der Agent
-`dnd-studio:pnp-zuhoerer` (Haiku) und weckt dich nur, wenn die Spielleitung gebraucht wird.
-1. **Zu Beginn jeder Antwort auf den Zuhörer**, vor dem ersten Tisch-Werkzeug: einen neuen `pnp-zuhoerer` im
-   Hintergrund starten (Agent, `run_in_background: true`). Der Auftrag nennt in wenigen Zeilen, was du gleich sagst
-   und ob du danach auf eine Antwort oder einen Wurf wartest, wer in der Szene ist, die NPCs der Szene. Immer genau
-   einer läuft: Weckt dich etwas anderes (Chronist, Prüfer, Vorbereiter), startest du keinen neuen; einen neuen nur,
-   wenn dich der Zuhörer geweckt hat oder keiner läuft (Abendbeginn, nach einem Fehler). Einschalten:
-   `discord` mit `listener: "haiku"`, aus mit `"off"`.
-2. Antworten, dann **den Zug beenden**. Keinen Wächter starten, kein `wait_for_players`: das macht der Zuhörer.
-3. Seine Rückgabe weckt dich: `{woke, why, turn, between}`.
+`dnd-studio:pnp-zuhoerer` (Haiku) und weckt dich nur, wenn die Spielleitung gebraucht wird. **Er bleibt und weckt
+dich mit einer Nachricht** (Denny 2026-11-19: „mit diesem Restarten von diesem Agent, das ist irgendwie scheiße“):
+Jedes Ende eines Zuhörers ließ den Tisch taub, bis der nächste lief.
+1. **Einen Zuhörer starten** (Agent `pnp-zuhoerer`, `run_in_background: true`), wenn keiner läuft: zum Abendbeginn,
+   wenn sein Ende (die Rückgabe, nicht eine Nachricht) dich geweckt hat, nach einem Fehler. Sonst läuft er schon:
+   keinen zweiten starten, zwei nehmen sich die Züge weg. Der Auftrag nennt in wenigen Zeilen, was du gleich sagst
+   und ob du danach auf eine Antwort oder einen Wurf wartest, wer in der Szene ist, die NPCs der Szene. Merk dir seine
+   ID aus der Antwort des Agent-Werkzeugs. Einschalten: `discord` mit `listener: "haiku"`, aus mit `"off"`.
+2. Seine **Nachricht** weckt dich (`{woke, why, turn, between}` als Text von ihm): antworten, dann **ihm die neue
+   Lage schicken** (`SendMessage` an seine ID, zwei, drei Zeilen wie der Auftrag), dann den Zug beenden. Keinen
+   Wächter starten, kein `wait_for_players`: das macht er. Die Lage zuerst schicken, wenn deine Antwort lang wird.
+3. Sein **Ende** (die Rückgabe des Agenten) kommt nach etwa 10 Minuten bei einer Weckung (dann frisch, sein Kontext
+   wäre sonst voll), nach vielen Zügen ohne Weckung, bei einem Fehler oder auf „Schluss“: den Zug beantworten wie eine
+   Nachricht und **mit deiner Antwort einen neuen Zuhörer starten**. `woke: false`: nichts beantworten, nur einen neuen
+   starten. Am Ende des Abends schickst du ihm „Schluss“.
+4. Was er bringt:
    - `turn` beantworten wie einen Zug aus `wait_for_players` (`secret: true` wie dort: flüstern). `turn: null` mit
-     `why` Pause: vorbereiten. `woke: false`: nichts beantworten, nur einen neuen Zuhörer starten.
-   - `why: "geheim"` (oder `secret_waiting`): Der Zuhörer holt kein Geheimnis, das tust du. **Vor** dem neuen
-     Zuhörer `wait_for_players` mit `secret: true` (sonst kommt der neue sofort wieder) und flüstern (4c), dann den
-     Zuhörer starten und weiter wie sonst.
+     `why` Pause: vorbereiten.
+   - `why: "geheim"` (oder `secret_waiting`): Der Zuhörer holt kein Geheimnis, das tust du: `wait_for_players` mit
+     `secret: true` und flüstern (4c). Ihn weckt dasselbe Geheimnis nicht noch einmal.
+   - Hat er nicht geschnitten (`why` sagt es, `cut_line` mit `keep`), läuft deine Zeile noch zu Ende: deine Antwort
+     kommt danach, sie knüpft an das Erzählte an.
    - `between` ist, was die Gruppe ohne dich beredet hat. Lies es, bevor du antwortest, und nimm auf, was zählt
      („Ihr habt euch für die Bestechung entschieden …“); den Wortlaut hat `table_state log`.
 4. Stimme schneidet deine Zeile nicht mehr von selbst; der Zuhörer tut es, wenn ein Zug wichtig ist (`cut_line`), und
@@ -155,8 +163,8 @@ sparend“): Die Spieler reden ohne Knöpfe, und nicht jeder Zug ist für dich. 
 9. **Der Tisch stimmt den Zuhörer selbst** (Denny 2026-11-19: „listener config müsste man während dem game anpassen
    können“). Sagt jemand, der Zuhörer soll etwas anders machen („Fragen nach der Welt müssen durch“, „Lachen nie“),
    oder hat er etwas verpasst, das die Runde gebraucht hätte: die Regel in einem kurzen Satz zu den Regeln des Tischs
-   (`campaign set listener_rules`, die ganze Liste, `campaign` zeigt sie unter `listenerRules`), dann einen neuen
-   Zuhörer. Jeder neue Zuhörer bekommt sie mit seinem Wächter, sie gelten ab dem nächsten Zug. Kurz bestätigen, was
+   (`campaign set listener_rules`, die ganze Liste, `campaign` zeigt sie unter `listenerRules`). Der Zuhörer bekommt
+   sie mit jedem Wächter, sie gelten ab dem nächsten Zug; kein neuer Zuhörer nötig. Kurz bestätigen, was
    du dir gemerkt hast; ein Feld dafür gibt es im Studio nicht.
 
 Der Befehl braucht einmal die Erlaubnis für Bash (`curl` an `127.0.0.1`); fragt die App, den Menschen zu Beginn
