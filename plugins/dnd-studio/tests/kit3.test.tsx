@@ -1,5 +1,6 @@
 /** Kit v3 in the D&D pane: native buttons with their glyph, the switch as one button, results Claude makes go to review. */
-import { expect, test } from "claude-code/testing";
+import { expect } from "claude-code/testing";
+import { test } from "./limits";
 
 import { resetAutoOpen, SWITCH_OFF, SWITCH_ON } from "../features/dnd-ui";
 import { findShown } from "./shown";

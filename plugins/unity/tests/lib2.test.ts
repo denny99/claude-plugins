@@ -1,4 +1,5 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect } from 'claude-code/testing'
+import { test } from './limits'
 
 import { affectedAreas, affectedText, changedFiles, landingsReminder } from '../lib/affected'
 import {

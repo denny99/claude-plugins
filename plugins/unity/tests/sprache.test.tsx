@@ -1,5 +1,6 @@
 // Paket 3 der Befunde: Panel, Toasts, Slash-Echo und Prompts an Claude auf Deutsch; Projektname; Ortszeit.
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './limits'
 
 import { clockTime, FIX_ASK, fixPrompt, localDateTime, localDay, localStamp } from '../features/pane/common'
 import { noCostsText, perfPrompt } from '../features/pane/perf'

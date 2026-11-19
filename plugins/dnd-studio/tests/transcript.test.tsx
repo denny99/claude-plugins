@@ -1,6 +1,7 @@
 // Cards in the transcript: roll_dice's answer as a card at its result row (a hidden roll stays covered while
 // spoiler-safe is on), the review verdict under a reviewed picture that results get shows. Foreign tools stay as they were.
-import { expect, test } from "claude-code/testing";
+import { expect } from "claude-code/testing";
+import { test } from "./limits";
 
 import { rollsOfAnswer } from "../features/transcript";
 import { kitRuleLines } from "./kit-rules";

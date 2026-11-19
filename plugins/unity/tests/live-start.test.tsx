@@ -1,6 +1,7 @@
 // Runde 2 (6): the live watch starts at session start in a Unity project, without panel, chip or measurement.
 // Its own file: each test file runs in its own process, so no watch is left over from another test.
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './limits'
 
 import { fakeWorld, ROOT } from './world'
 

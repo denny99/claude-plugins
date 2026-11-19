@@ -1,5 +1,6 @@
 // Paket 4b der Befunde: Konsole nach Kompilieren, Szene vor Play, Screenshots, Betroffene, Guards, rote Tests bleiben.
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './limits'
 
 import { statusPill } from '../features/pane'
 import { noSceneOpen, sceneLabel, shotPrompt } from '../features/pane/overview'

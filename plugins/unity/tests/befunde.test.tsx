@@ -1,6 +1,7 @@
 // Paket 1 der Befunde: Editor in anderem Checkout, Bridge-Version, gesperrte Aufgaben, Tests mit Wahl/Stopp/Fortschritt.
 import { NOTHING_CHOSEN } from '../features/pane/tests'
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './limits'
 
 import { draftConfig } from '../features/init'
 import { BRIDGE_VERSION, versionOlder } from '../lib/bridge'

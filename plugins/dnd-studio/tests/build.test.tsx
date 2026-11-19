@@ -1,5 +1,6 @@
 import type { On } from 'claude-code'
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, mock } from 'claude-code/testing'
+import { test } from './limits'
 import { findShown } from './shown'
 
 import { checkColors } from '../lib/make-colors.js'

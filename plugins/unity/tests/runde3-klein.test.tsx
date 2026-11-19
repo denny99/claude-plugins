@@ -1,6 +1,7 @@
 // Runde 3, kleine Befunde: „Sperre lösen?“ erster Klick tat nichts [2], Warnung „Bereich trifft … nicht“ mit Rohtext [3],
 // Bereich als Satz statt Testnamen (Beifang).
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './limits'
 
 import { loadProjectConfig, normalizeFilter, unmatchedParts } from '../lib/unity'
 import { confirmStep } from '../lib/ui'

@@ -1,5 +1,6 @@
 // Paket 4: layout findings of the Table, Health, Build and Review tabs, the pill geometry and the launcher text.
-import { expect, test } from "claude-code/testing";
+import { expect } from "claude-code/testing";
+import { test } from "./limits";
 
 import { bandEvening } from "../features/evening";
 import { fileName } from "../features/build";

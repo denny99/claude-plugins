@@ -1,4 +1,5 @@
-import { expect, test } from 'claude-code/testing'
+import { expect } from 'claude-code/testing'
+import { test } from './limits'
 import { findShown } from './shown'
 
 import { BRIDGE, EDITOR, fakeWorld, PANE, PROJECT, ROOT, settle } from './world'

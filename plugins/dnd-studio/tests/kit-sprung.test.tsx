@@ -4,7 +4,8 @@
  * `onPress` is a button.
  */
 import type { RenderElement } from "claude-code";
-import { expect, test, type Engine } from "claude-code/testing";
+import { expect, type Engine } from "claude-code/testing";
+import { test } from "./limits";
 
 import {
   KIT_STRINGS,

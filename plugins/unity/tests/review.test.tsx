@@ -1,4 +1,5 @@
-import { expect, test, type Engine } from 'claude-code/testing'
+import { expect, type Engine } from 'claude-code/testing'
+import { test } from './limits'
 import { findShown, reveal } from './shown'
 
 import {

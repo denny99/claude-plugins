@@ -1,5 +1,6 @@
 /** The scene picture as the table backdrop: BMP to pixel SVG, and the look a live table with a picture gets. */
-import { expect, test } from "claude-code/testing";
+import { expect } from "claude-code/testing";
+import { test } from "./limits";
 
 import { pictureKey, studioPathOfPicture } from "../features/look";
 import { CELLS, cropCenter, fromBase64, MAX_SVG_BYTES, parseBmp, pictureSvg, type Raster, rasterSvg } from "../lib/picture";

@@ -1,7 +1,8 @@
 // Kit „ask Claude“: every button that hands Claude a prompt toasts at once, sends a task once and stays locked until
 // the main loop answered *that* prompt (not just any turn end); an interrupt frees it.
 import type { On } from 'claude-code'
-import { expect, test, type Engine } from 'claude-code/testing'
+import { expect, type Engine } from 'claude-code/testing'
+import { test } from './limits'
 
 import { BRIDGE, fakeWorld, PANE, PROJECT, ROOT, settle } from './world'
 
