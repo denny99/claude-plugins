@@ -480,7 +480,21 @@ export const register: Register = (on, options) => {
               });
     const tableLive = isLive(view, ini);
     const waiting = openCount(review);
+    // What a press reported goes into the fixed status line under the header (one row, always there), so nothing
+    // below jumps: the table's failed read, a review item that would not play or open.
+    const failedItem =
+      tab === "review" ? review.items.find((i) => i.error) : undefined;
+    const status =
+      tab === "table" && view?.error
+        ? { text: view.error, tone: "bad" as const }
+        : failedItem
+          ? {
+              text: `${failedItem.name}: ${failedItem.error}`,
+              tone: "bad" as const,
+            }
+          : undefined;
     return PaneBody(k, {
+      status,
       header: DndHeader(k, {
         // one name, always: the open campaign, else the app (never a scene or profile)
         title: campaign?.name || "D&D Studio",

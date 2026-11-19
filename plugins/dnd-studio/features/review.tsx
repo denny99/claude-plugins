@@ -18,7 +18,6 @@ import {
   Card,
   CardTitle,
   EmptyState,
-  ErrorState,
   ListRow,
   ProgressBlock,
   Sentence,
@@ -713,16 +712,8 @@ function itemRow(
     }),
     Actions(k, `rv-acts-${i.id}`, acts, 3) as RenderElement,
   ];
-  if (i.error)
-    out.push(
-      ErrorState(k, {
-        key: `rv-err-${i.id}`,
-        message: i.error,
-        onRetry: () =>
-          void (i.kind === "sound" ? playItem($, i) : openItem($, i)),
-      }),
-    );
-  else if (!covered && !i.heard)
+  // `i.error` (playing or opening failed) stands in the pane's fixed status line, see hooks/register.tsx
+  if (!i.error && !covered && !i.heard)
     out.push(
       Sentence(
         k,

@@ -49,7 +49,6 @@ import {
   Card,
   CardTitle,
   EmptyState,
-  ErrorState,
   Line,
   ListRow,
   Section,
@@ -834,14 +833,7 @@ export function renderTable(
     );
     return out;
   }
-  if (view.error)
-    out.push(
-      ErrorState(k, {
-        key: "table-err",
-        message: view.error,
-        onRetry: () => void refreshTable($),
-      }),
-    );
+  // `view.error` (a failed read) stands in the pane's fixed status line, see the pane's render in hooks/register.tsx
 
   // Table status: one sentence, problems first
   const status = [
