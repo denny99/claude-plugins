@@ -3,7 +3,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { statusPill } from '../features/pane'
 import { noSceneOpen, sceneLabel, shotPrompt } from '../features/pane/overview'
-import { hasOutlier, NO_SPOT, outlierNote, perfLength, perfPrompt } from '../features/pane/perf'
+import { hasOutlier, outlierNote, perfLength, perfPrompt } from '../features/pane/perf'
 import { captureFacts } from '../features/review/report'
 import { isCompileErrorLine, parseStartScene, parseWorktreeList } from '../features/state'
 import { affectedAreas, affectedText } from '../lib/affected'
@@ -77,7 +77,6 @@ test('45: the report folder gets a .gitignore; 48: the overview screenshot goes 
   await $.session.start(start)
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await settle(world, ui.press({ key: 'refresh' }))
-  await settle(world, ui.press({ key: 'editor-acts-more' }))
   await settle(world, ui.press({ key: 'shot' }))
   expect(world.prompts.some(p => p.startsWith('Screenshot aus dem Unity-Editor (Play-Modus, Szene Main)'))).toBe(true)
   await settle(world, ui.press({ key: 'tab-overview' }))
@@ -167,7 +166,6 @@ test('94/96/101/102: real length, outlier with its place and Play-start distance
   expect(prompt).toContain('1,5 s nach dem Play-Start')
   expect(prompt).toContain('Ladephase')
   expect(perfPrompt(0, perf)).toContain('unbekannt')
-  expect(NO_SPOT).toContain('Stelle unbekannt')
 })
 
 test('97: a narrow run adds to the last one: earlier reds stay until a run containing them turns them green', () => {

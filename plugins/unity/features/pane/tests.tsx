@@ -3,7 +3,7 @@ import type { EngineInterface, RenderElement } from 'claude-code'
 
 import type { UnityModel } from '../../types'
 import { batchAllowed, countResults, rankResults, testErrorLine, unmatchedParts } from '../../lib/unity'
-import { ActionButton, Actions, Card, CardTitle, ListRow, Sentence, type Action, type Kit } from '../../lib/ui'
+import { Card, ListRow, LogBox, Sentence, type Action, type Kit, type PillProps } from '../../lib/ui'
 import { affectedTests, batchTarget, landingsLine, patchModel, runTests, type Options } from '../state'
 import {
   FIX_ASK,
@@ -44,8 +44,11 @@ function startCard($: EngineInterface, k: Kit, x: Extra, m: UnityModel, options:
   // Nothing is preselected: a filter, an area or "Alle Tests" chosen on purpose (that one asks once more).
   const all = !filter && m.testScope === 'all'
   const chosen = !!filter || all
+  // The start buttons always stand (R4): with nothing chosen a press only says what is missing.
   const start = (mode: 'EditMode' | 'PlayMode'): (() => void) =>
-    run($, `${mode} tests`, () => runTests($, options, mode, filter, 0))
+    chosen
+      ? run($, `${mode} tests`, () => runTests($, options, mode, filter, 0))
+      : () => void $.ui.toast(NOTHING_CHOSEN)
   const target = batchTarget(m)
   const canRun = m.bridge.up || batchAllowed({ lock: target.lock, bridgeUp: false }).ok
   const reminder = landingsLine(m)
@@ -58,14 +61,14 @@ function startCard($: EngineInterface, k: Kit, x: Extra, m: UnityModel, options:
     m.bridge.up
       ? `Alle ${mode}-Tests (${lastAll(mode)})? Der Editor ist bis zum Ende blockiert.`
       : `Alle ${mode}-Tests (${lastAll(mode)}) im Hintergrund? Kann lange dauern.`
-  const startActs: Action[] = chosen
+  // Two starts of the same rank look the same (R1): both secondary, the card has no main action.
+  const acts: Action[] = canRun
     ? [
         {
           key: 'edit-tests',
           label: 'EditMode',
           icon: 'play',
-          variant: 'primary',
-          primary: true,
+          variant: 'secondary',
           ...(all ? { confirm: askAll('EditMode') } : {}),
           onPress: start('EditMode'),
         },
@@ -77,14 +80,9 @@ function startCard($: EngineInterface, k: Kit, x: Extra, m: UnityModel, options:
           ...(all ? { confirm: askAll('PlayMode') } : {}),
           onPress: start('PlayMode'),
         },
-      ]
-    : []
-  const acts: Action[] = canRun
-    ? [
-        ...startActs,
         {
           key: 'affected-tests',
-          label: 'Betroffene',
+          label: 'Betroffene prüfen',
           icon: 'diff',
           variant: 'secondary',
           onPress: run($, 'affected tests', () => affectedTests($, options, { run: true, waitMs: 0 })),
@@ -93,15 +91,15 @@ function startCard($: EngineInterface, k: Kit, x: Extra, m: UnityModel, options:
     : []
   return Card(k, {
     key: 'tests-start',
+    title: { icon: 'flask', title: 'Tests starten' },
     children: [
-      CardTitle(k, { icon: 'flask', title: 'Tests starten' }),
       reminder ? Sentence(k, reminder, { tone: 'warn' }) : null,
       <Select
         key="preset"
         label="Bereich"
         value={preset?.name ?? (all ? ALL : '')}
         options={[
-          { value: '', label: 'Bereich wählen …' },
+          { value: '', label: '–' },
           ...m.presets.map(p => ({ value: p.name, label: p.name })),
           { value: ALL, label: 'Alle Tests' },
         ]}
@@ -117,30 +115,28 @@ function startCard($: EngineInterface, k: Kit, x: Extra, m: UnityModel, options:
       <Input
         key="filter"
         label="Testname enthält"
-        placeholder="Testname, z. B. Mahlen"
+        placeholder="z. B. Mahlen"
         value={m.filterInput}
         onSubmit={(v: string) => void patchModel($, { filterInput: v, testScope: undefined, testArea: undefined })}
       />,
-      preset?.note ? Sentence(k, preset.note, { faint: true }) : null,
-      canRun
-        ? Sentence(
-            k,
-            !chosen
-              ? 'Erst einen Bereich wählen oder einen Filter eingeben — dann lassen sich die Tests starten.'
-              : m.bridge.up
-                ? 'Läuft im offenen Editor und blockiert ihn bis zum Ende.'
-                : 'Läuft im Hintergrund ohne Editor-Fenster.',
-            { faint: true },
-          )
-        : Sentence(k, 'Tests brauchen die Verbindung zum Unity-Editor oder ein Projekt, das kein Editor offen hat.', {
-            tone: 'warn',
-          }),
-      acts.length ? Actions(k, 'tests-start-acts', acts, 3) : null,
     ],
+    hint: preset?.note,
+    status: !canRun
+      ? { text: 'Braucht den verbundenen Editor oder ein Projekt ohne offenen Editor', tone: 'warn' }
+      : !chosen
+        ? NOTHING_CHOSEN
+        : m.bridge.up
+          ? 'Läuft im offenen Editor und blockiert ihn bis zum Ende'
+          : 'Läuft im Hintergrund ohne Editor-Fenster',
+    actions: acts,
+    keepOrder: true,
   })
 }
 
 const ALL = '*all*'
+
+/** What the start card says (status line, and a press on a start button) while neither area nor filter is set. */
+export const NOTHING_CHOSEN = 'Noch kein Bereich und kein Filter gewählt'
 
 /** The last "Betroffene" check as a block of its own: which areas, or the check's own sentence. */
 function affectedCard(k: Kit, m: UnityModel, now: number): RenderElement | null {
@@ -152,15 +148,16 @@ function affectedCard(k: Kit, m: UnityModel, now: number): RenderElement | null 
     .filter(Boolean)
   return Card(k, {
     key: 'tests-affected',
+    title: {
+      icon: 'diff',
+      title: 'Betroffene Tests',
+      pill: a.areas.length
+        ? { text: `${a.areas.length} ${a.areas.length === 1 ? 'Bereich' : 'Bereiche'}`, tone: 'info', glyph: false }
+        : { text: 'nichts betroffen', tone: 'ok', glyph: false },
+    },
     children: [
-      CardTitle(k, {
-        icon: 'diff',
-        title: `Betroffene Tests · geprüft ${ago(now, a.at)}`,
-        pill: a.areas.length
-          ? { text: `${a.areas.length} ${a.areas.length === 1 ? 'Bereich' : 'Bereiche'}`, tone: 'info', glyph: false }
-          : { text: 'nichts betroffen', tone: 'ok', glyph: false },
-      }),
       a.areas.length ? Sentence(k, a.areas.join(', ')) : Sentence(k, lines[0] ?? '', { faint: true }),
+      Sentence(k, `Geprüft ${ago(now, a.at)}`, { faint: true }),
     ],
   })
 }
@@ -195,22 +192,44 @@ function resultCard($: EngineInterface, k: Kit, m: UnityModel, options: Options,
   const fresh = compared ? ranked.filter(r => r.newlyRed) : []
   const still = compared ? ranked.filter(r => !r.newlyRed) : ranked
   const skipped = t.results.filter(r => r.status === 'Skipped' || r.status === 'Inconclusive')
-  const skippedOpen = k.isMore('tests-skipped')
   const done = t.state !== 'running' && t.state !== 'error'
+  const running = t.state === 'running'
   const total = c.passed + c.failed + c.skipped
   const secs = runSeconds(t)
-  const head =
-    t.state === 'running'
-      ? `${t.mode ?? ''} läuft${testsProgress(t, now) ? ` · ${testsProgress(t, now)}` : ' …'}`
-      : t.state === 'error'
-        ? testErrorLine(t)
-        : `Letzter Lauf${t.finishedAt ? ` ${ago(now, t.finishedAt)}` : ''} · ${total} Tests${secs !== undefined ? ` · ${runLength(secs)}` : ''}`
+  const pill: PillProps = running
+    ? { text: 'läuft', tone: 'warn', glyph: '◷' }
+    : t.state === 'error'
+      ? { text: 'Fehler', tone: 'bad' }
+      : c.failed
+        ? { text: `${c.failed} rot${fresh.length ? ` · ${fresh.length} neu` : ''}`, tone: 'bad' }
+        : { text: 'grün', tone: 'ok' }
+  // The run as one sentence under the title (the title is a name, R2).
+  const meta = [
+    t.filter ? filterLine(m, t.filter) : undefined,
+    ...(done
+      ? [
+          t.finishedAt ? ago(now, t.finishedAt) : undefined,
+          `${c.passed} von ${total} grün`,
+          secs !== undefined ? runLength(secs) : undefined,
+        ]
+      : []),
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  const progress = running ? testsProgress(t, now) : ''
   const row = (r: (typeof ranked)[number], i: number, group: string): RenderElement =>
     ListRow(k, {
       key: `tf-${group}-${i}`,
       status: 'failed',
-      title: r.fullName,
+      // as in the overview: class and test; the full name and the assertion stand behind „Details“
+      title: r.fullName.split('.').slice(-2).join('.'),
       meta: r.duration !== undefined ? `${dec(r.duration)} s` : undefined,
+      details: () => [
+        LogBox(k, {
+          key: `tf-${group}-${i}-log`,
+          lines: [r.fullName, ...(r.message ? r.message.split('\n') : []), ...(r.stack ? r.stack.split('\n') : [])],
+        }),
+      ],
       actions: [
         fixAction(
           $,
@@ -221,64 +240,68 @@ function resultCard($: EngineInterface, k: Kit, m: UnityModel, options: Options,
         ),
       ],
     })
-  const msgLine = (r: (typeof ranked)[number]): RenderElement | null =>
-    r.message ? Sentence(k, r.message.split('\n')[0] ?? '', { faint: true }) : null
+  const acts: Action[] = []
+  if (running) acts.push(stopTestsAction($, options))
+  if (done && ranked.length)
+    acts.push({
+      key: 'tests-rerun-red',
+      label: 'Rote erneut ausführen',
+      icon: 'rerun',
+      variant: 'secondary',
+      onPress: run($, 'rerun red', () =>
+        runTests($, options, t.mode ?? 'EditMode', exactFilter(ranked.map(r => r.fullName)), 0),
+      ),
+    })
   return Card(k, {
     key: 'tests-result',
     tone: t.state === 'error' ? 'bad' : undefined,
+    title: {
+      icon: running ? 'clock' : c.failed || t.state === 'error' ? 'xCircle' : 'checkCircle',
+      title: running ? 'Lauf' : 'Letzter Lauf',
+      pill,
+      tone: running ? 'warn' : c.failed || t.state === 'error' ? 'bad' : 'ok',
+    },
     children: [
-      CardTitle(k, {
-        icon: t.state === 'running' ? 'clock' : c.failed || t.state === 'error' ? 'xCircle' : 'checkCircle',
-        title: head,
-        tone: t.state === 'running' ? 'warn' : c.failed || t.state === 'error' ? 'bad' : 'ok',
-      }),
-      t.filter ? Sentence(k, filterLine(m, t.filter), { faint: true }) : null,
+      meta ? Sentence(k, meta, { faint: true }) : null,
+      t.state === 'error' ? Sentence(k, testErrorLine(t), { tone: 'bad' }) : null,
+      running && t.current?.trim() ? Sentence(k, `Gerade: ${t.current.trim()}`, { faint: true }) : null,
       ...missedLine(k, t),
-      t.state === 'running' && t.current?.trim() ? Sentence(k, `Gerade: ${t.current.trim()}`, { faint: true }) : null,
-      t.state === 'running' ? Actions(k, 'tests-running-acts', [stopTestsAction($, options)]) : null,
       fresh.length ? Sentence(k, `Neu rot gegenüber dem Lauf davor · ${fresh.length}`, { tone: 'bad' }) : null,
-      ...fresh.slice(0, 8).flatMap((r, i) => [row(r, i, 'new'), msgLine(r)]),
+      ...fresh.slice(0, 8).map((r, i) => row(r, i, 'new')),
       still.length
         ? Sentence(k, compared ? `Weiterhin rot · ${still.length}` : `Rot · ${still.length}`, {
             tone: compared ? undefined : 'bad',
             faint: compared,
           })
         : null,
-      ...still.slice(0, 8).flatMap((r, i) => (compared ? [row(r, i, 'old')] : [row(r, i, 'old'), msgLine(r)])),
-      ranked.length && !compared && done
-        ? Sentence(k, 'Kein Vergleichslauf in dieser Sitzung — „neu rot“ zeigt sich ab dem nächsten Lauf.', {
-            faint: true,
-          })
-        : null,
-      done ? Sentence(k, `${c.passed} grün`, { tone: 'ok' }) : null,
+      ...still.slice(0, 8).map((r, i) => row(r, i, 'old')),
       done && skipped.length
-        ? ActionButton(k, {
+        ? ListRow(k, {
             key: 'tests-skipped',
-            label: `${skipped.length} übersprungen ${skippedOpen ? '▴' : '▾'}`,
-            variant: 'link',
-            onPress: () => k.toggleMore('tests-skipped'),
-          })
-        : null,
-      ...(done && skippedOpen
-        ? skipped
-            .slice(0, 20)
-            .map((r, i) =>
-              ListRow(k, { key: `tskip-${i}`, status: 'idle', title: r.fullName, meta: r.message?.split('\n')[0] }),
-            )
-        : []),
-      done && ranked.length
-        ? Actions(k, 'tests-result-acts', [
-            {
-              key: 'tests-rerun-red',
-              label: 'Rote erneut ausführen',
-              icon: 'rerun',
-              variant: 'secondary',
-              onPress: run($, 'rerun red', () =>
-                runTests($, options, t.mode ?? 'EditMode', exactFilter(ranked.map(r => r.fullName)), 0),
+            status: 'idle',
+            title: `${skipped.length} übersprungen`,
+            details: () =>
+              skipped.slice(0, 20).map((r, i) =>
+                ListRow(k, {
+                  key: `tskip-${i}`,
+                  status: 'idle',
+                  title: r.fullName.split('.').slice(-2).join('.'),
+                  meta: r.message?.split('\n')[0],
+                }),
               ),
-            },
-          ])
+          })
         : null,
     ],
+    hint:
+      ranked.length && !compared && done
+        ? 'Kein Vergleichslauf in dieser Sitzung: „neu rot“ zeigt sich ab dem nächsten Lauf.'
+        : undefined,
+    status: running
+      ? {
+          text: `${t.mode ?? ''} läuft${progress ? ` · ${progress}` : ''}`,
+          running: true,
+        }
+      : undefined,
+    actions: acts,
   })
 }

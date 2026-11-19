@@ -4,16 +4,14 @@ import type { EngineInterface, RenderElement } from 'claude-code'
 import type { UnityModel } from '../../types'
 import { batchAllowed, countResults, formatMessage, rankResults, testErrorLine } from '../../lib/unity'
 import {
-  Actions,
-  ActionButton,
   askAction,
   Card,
-  CardTitle,
   ListRow,
   LogBox,
   Sentence,
   type Action,
   type Kit,
+  type PillProps,
   type Status,
 } from '../../lib/ui'
 import { openReport } from '../review/report'
@@ -43,7 +41,6 @@ import {
   targetSentence,
   testsProgress,
 } from './common'
-import { measure } from './measure'
 import { shotUiNote, shotUiPrompt, type ShotUi } from '../../lib/play'
 
 export function overviewTab($: EngineInterface, k: Kit, m: UnityModel, options: Options, now: number): RenderElement {
@@ -68,14 +65,18 @@ async function reportFromOverview($: EngineInterface, options: Options): Promise
   await openReport($, options)
 }
 
-/** Editor actions: Play/Stop (the one primary), report a problem, measure 10 s, screenshot. */
-export function playActions($: EngineInterface, k: Kit, m: UnityModel, options: Options): Action[] {
+/**
+ * Editor actions: start/stop (the one primary), pause, screenshot to Claude, report a problem. `crowded` (the caller
+ * adds a secondary of its own): „Problem melden“ becomes a text action, so never more than two secondary stand beside
+ * the primary (R1). Measuring lives in the Leistung tab.
+ */
+export function playActions($: EngineInterface, k: Kit, m: UnityModel, options: Options, crowded = false): Action[] {
   const b = m.bridge
   const acts: Action[] = b.isPlaying
     ? [
         {
           key: 'stop',
-          label: 'Stopp',
+          label: 'Stoppen',
           icon: 'stop',
           variant: 'primary',
           primary: true,
@@ -94,7 +95,7 @@ export function playActions($: EngineInterface, k: Kit, m: UnityModel, options: 
     : [
         {
           key: 'play',
-          label: 'Play',
+          label: 'Starten',
           icon: 'play',
           variant: 'primary',
           primary: true,
@@ -102,24 +103,10 @@ export function playActions($: EngineInterface, k: Kit, m: UnityModel, options: 
         },
       ]
   acts.push(
-    {
-      key: 'report',
-      label: 'Problem melden',
-      icon: 'flag',
-      variant: 'secondary',
-      onPress: () => void reportFromOverview($, options),
-    },
-    {
-      key: 'perf-quick',
-      label: '10 s messen',
-      icon: 'gauge',
-      variant: 'secondary',
-      onPress: () => void measure($, options, 10, true),
-    },
     // The prompt exists only after the capture: the lock is taken first, a failed capture frees it again.
     askAction($, k, {
       key: 'shot',
-      label: 'Screenshot',
+      label: 'Screenshot an Claude',
       icon: 'camera',
       toast: 'Screenshot an Claude geschickt.',
       text: async () => {
@@ -141,6 +128,13 @@ export function playActions($: EngineInterface, k: Kit, m: UnityModel, options: 
         }
       },
     }),
+    {
+      key: 'report',
+      label: 'Problem melden',
+      icon: 'flag',
+      variant: b.isPlaying || crowded ? 'link' : 'secondary',
+      onPress: () => void reportFromOverview($, options),
+    },
   )
   return acts
 }
@@ -190,56 +184,59 @@ function editorCard($: EngineInterface, k: Kit, m: UnityModel, options: Options,
         : 'Kompiliert ohne Fehler'
   // While compiling, the last compile's age would contradict "gerade".
   const when = m.compile && !compiling ? `${ago(now, m.compile.at)} · ` : ''
+  const shot = m.lastShot?.split('/').pop()
+  const facts = `${when}${state} · Unity ${b.unityVersion ?? m.project?.version ?? ''}${scene ? ` · Szene ${scene}` : ''}`
+  const acts = playActions($, k, m, options, noScene && !!start)
+  if (noScene && start)
+    acts.splice(1, 0, {
+      key: 'open-start-scene',
+      label: 'Startszene öffnen',
+      variant: 'secondary',
+      onPress: run($, 'open-scene', async () =>
+        msg(await bridgeCommand($, options, { cmd: 'open-scene', path: start }), 'Startszene geöffnet'),
+      ),
+    })
   return Card(k, {
     key: 'editor',
     tone: errors.length ? 'bad' : undefined,
+    title: {
+      icon: errors.length ? 'xCircle' : compiling ? 'clock' : 'checkCircle',
+      title,
+      tone: errors.length ? 'bad' : compiling ? 'warn' : 'ok',
+    },
     children: [
-      CardTitle(k, {
-        icon: errors.length ? 'xCircle' : compiling ? 'clock' : 'checkCircle',
-        title,
-        tone: errors.length ? 'bad' : compiling ? 'warn' : 'ok',
-      }),
-      Sentence(
-        k,
-        `${when}${state} · Unity ${b.unityVersion ?? m.project?.version ?? ''}${scene ? ` · Szene ${scene}` : ''}`,
-        { faint: true },
-      ),
-      noScene
-        ? Sentence(
-            k,
-            start
-              ? `Keine Szene offen – Play startet eine leere Welt. Startszene: ${start.split('/').pop()?.replace(/\.unity$/, '')}.`
-              : 'Keine Szene offen – Play startet eine leere Welt. In den Build Settings ist keine Startszene eingetragen.',
-            { tone: 'warn' },
-          )
-        : null,
-      noScene && start
-        ? Actions(k, 'scene-acts', [
-            {
-              key: 'open-start-scene',
-              label: 'Startszene öffnen',
-              icon: 'play',
-              variant: 'secondary',
-              onPress: run($, 'open-scene', async () =>
-                msg(await bridgeCommand($, options, { cmd: 'open-scene', path: start }), 'Startszene geöffnet'),
-              ),
-            },
-          ])
-        : null,
+      Sentence(k, shot ? `${facts} · letzter Screenshot ${shot}` : facts, { faint: true }),
       ...errors.slice(0, 5).map((x, i) =>
         ListRow(k, {
           key: `cerr-${i}`,
           status: 'failed',
-          title: formatMessage(x),
-          actions: [
-            fixAction($, k, `cfix-${i}`, FIX_ASK.compile, formatMessage(x)),
-          ],
+          title: compileTitle(x),
+          // the row cuts its title: the whole compiler line (path, position, code) stands behind „Details“
+          details: () => [LogBox(k, { key: `cerr-${i}-log`, lines: [formatMessage(x)] })],
+          actions: [fixAction($, k, `cfix-${i}`, FIX_ASK.compile, formatMessage(x))],
         }),
       ),
-      Actions(k, 'editor-acts', playActions($, k, m, options), 4),
-      m.lastShot ? Sentence(k, `Letzter Screenshot: ${m.lastShot.split('/').pop() ?? ''}`, { faint: true }) : null,
     ],
+    status: noScene
+      ? {
+          text: start
+            ? `Keine Szene offen · Startszene: ${start.split('/').pop()?.replace(/\.unity$/, '')}`
+            : 'Keine Szene offen · in den Build Settings ist keine Startszene eingetragen',
+          tone: 'warn',
+        }
+      : undefined,
+    actions: acts,
+    maxActions: 4,
+    keepOrder: true,
   })
+}
+
+/** A compile message as a row title: `Datei.cs:12 · CS0103 · text` when it has a place, else its text. */
+export function compileTitle(x: Parameters<typeof formatMessage>[0]): string {
+  const line = formatMessage(x)
+  const hit = /^(.*?)\((\d+),\d+\):\s*(?:error|warning)\s+([A-Z]+\d+)\s*:\s*(.*)$/.exec(line.split('\n')[0] ?? '')
+  if (!hit) return line.split('\n')[0] ?? line
+  return `${hit[1]!.split('/').pop()}:${hit[2]} · ${hit[3]} · ${hit[4]}`
 }
 
 export function testsCard($: EngineInterface, k: Kit, m: UnityModel, options: Options, now: number): RenderElement {
@@ -247,19 +244,9 @@ export function testsCard($: EngineInterface, k: Kit, m: UnityModel, options: Op
   if (!t)
     return Card(k, {
       key: 'tests-card',
-      children: [
-        CardTitle(k, { icon: 'flask', title: 'Tests' }),
-        Sentence(k, 'Noch kein Lauf in dieser Sitzung.', { faint: true }),
-        Actions(k, 'tests-card-acts', [
-          {
-            key: 'tests-open',
-            label: 'Tests wählen',
-            icon: 'flask',
-            variant: 'secondary',
-            onPress: selectTab($, 'tests'),
-          },
-        ]),
-      ],
+      title: { icon: 'flask', title: 'Tests' },
+      empty: 'Noch kein Lauf in dieser Sitzung.',
+      actions: [{ key: 'tests-open', label: 'Zu Tests', variant: 'link', onPress: selectTab($, 'tests') }],
     })
   const c = countResults(t.results)
   const ranked = rankResults(t.results, m.previous).filter(r => r.status === 'Failed')
@@ -291,11 +278,11 @@ export function testsCard($: EngineInterface, k: Kit, m: UnityModel, options: Op
       onPress: run($, 'rerun red', () => runTests($, options, mode, exactFilter(ranked.map(r => r.fullName)), 0)),
     })
   if (running) acts.push(stopTestsAction($, options))
-  acts.push({ key: 'tests-open', label: 'Zum Tab Tests', variant: 'link', onPress: selectTab($, 'tests') })
+  acts.push({ key: 'tests-open', label: 'Zu Tests', variant: 'link', onPress: selectTab($, 'tests') })
   return Card(k, {
     key: 'tests-card',
+    title: { icon: 'flask', title: `${mode}-Tests`, pill },
     children: [
-      CardTitle(k, { icon: 'flask', title: `${mode}-Tests`, pill }),
       Sentence(k, sentence, { faint: true }),
       ...ranked.slice(0, 3).map((r, i) =>
         ListRow(k, {
@@ -305,8 +292,8 @@ export function testsCard($: EngineInterface, k: Kit, m: UnityModel, options: Op
           pill: compared && r.newlyRed ? { text: 'neu', tone: 'info', glyph: false } : undefined,
         }),
       ),
-      Actions(k, 'tests-card-acts', acts),
     ],
+    actions: acts,
   })
 }
 
@@ -335,16 +322,16 @@ function consoleCard($: EngineInterface, k: Kit, m: UnityModel): RenderElement {
   const origin = last ? consoleOrigin(last) : undefined
   return Card(k, {
     key: 'console-card',
+    title: {
+      icon: 'terminal',
+      title: 'Konsole',
+      pill: errors.length
+        ? { text: `${errors.length} ${errors.length === 1 ? 'Fehler' : 'Fehler'}`, tone: 'bad' }
+        : warnings
+          ? { text: `${warnings} ${warnings === 1 ? 'Warnung' : 'Warnungen'}`, tone: 'warn' }
+          : undefined,
+    },
     children: [
-      CardTitle(k, {
-        icon: 'terminal',
-        title: 'Konsole',
-        pill: errors.length
-          ? { text: `${errors.length} ${errors.length === 1 ? 'Fehler' : 'Fehler'}`, tone: 'bad' }
-          : warnings
-            ? { text: `${warnings} ${warnings === 1 ? 'Warnung' : 'Warnungen'}`, tone: 'warn' }
-            : undefined,
-      }),
       Sentence(k, last ? (last.message.split('\n')[0] ?? '') : 'Keine Fehler seit dem letzten Kompilieren.', {
         faint: !last,
         tone: last && !origin?.pkg ? 'bad' : undefined,
@@ -359,13 +346,8 @@ function consoleCard($: EngineInterface, k: Kit, m: UnityModel): RenderElement {
           )
         : null,
       warnLine ? Sentence(k, warnLine, { faint: true }) : null,
-      ActionButton(k, {
-        key: 'console-open',
-        label: 'Konsole öffnen',
-        variant: 'link',
-        onPress: selectTab($, 'console'),
-      }),
     ],
+    actions: [{ key: 'console-open', label: 'Zur Konsole', variant: 'link', onPress: selectTab($, 'console') }],
   })
 }
 
@@ -439,23 +421,36 @@ export function jobDescription(j: { name: string; description?: string; command?
   return command ? `führt „${command.length > 80 ? `${command.slice(0, 79)}…` : command}“ aus.` : 'Projekt-Aufgabe aus .claude/unity.json.'
 }
 
-/**
- * One line per job button that needs saying: what "Kompilieren prüfen" does next to a project job of the same kind,
- * and each project job's `description` from .claude/unity.json.
- */
-export function jobNotes(
-  jobs: { name: string; label?: string; description?: string; command?: string; batch?: boolean }[],
+/** A task's description as a row's meta: a sentence of its own, so it starts with a capital. */
+export function jobMeta(j: { name: string; description?: string; command?: string }): string {
+  const text = jobDescription(j)
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+/** What the card „Aufgaben“ lists: the built-in background jobs (only without an open editor), then the project's. */
+export function jobTasks(
+  cfg: {
+    buildMethod?: string
+    customJobs?: { name: string; label?: string; description?: string; command?: string; batch?: boolean }[]
+  },
   allowed: boolean,
-): string[] {
-  const shown = jobs.filter(j => !j.batch || allowed)
-  const notes: string[] = []
-  if (allowed && shown.length)
-    notes.push(
-      '„Kompilieren prüfen“ kompiliert das Projekt im Hintergrund ohne Editor (Unity-Batchmodus). Die anderen Knöpfe sind Projekt-Aufgaben aus .claude/unity.json.',
-    )
-  // every task says what it does: its own description, else a known or derived one (raw names alone said nothing)
-  for (const j of shown) notes.push(`${jobLabel(j)}: ${jobDescription(j)}`)
-  return notes
+): { key: string; title: string; meta: string; kind: 'compile' | 'build' | 'custom'; name?: string }[] {
+  const tasks: ReturnType<typeof jobTasks> = []
+  if (allowed) {
+    tasks.push({
+      key: 'batch-compile',
+      title: 'Kompilieren prüfen',
+      meta: 'Kompiliert das Projekt im Hintergrund ohne Editor.',
+      kind: 'compile',
+    })
+    if (cfg.buildMethod)
+      tasks.push({ key: 'batch-build', title: 'Build', meta: jobMeta({ name: 'build' }), kind: 'build' })
+  }
+  // Jobs marked `batch` always start Unity: hidden while an editor holds the project.
+  for (const j of cfg.customJobs ?? [])
+    if (!j.batch || allowed)
+      tasks.push({ key: `custom-${j.name}`, title: jobLabel(j), meta: jobMeta(j), kind: 'custom', name: j.name })
+  return tasks
 }
 
 /** A run's name in the list: a project task by its label, the built-in jobs by their name. */
@@ -464,65 +459,78 @@ function jobTitle(cfg: { customJobs?: { name: string; label?: string }[] }, j: {
   return custom ? jobLabel(custom) : j.name
 }
 
-/** Batch and custom jobs: start buttons, the last five, the latest log collapsed. */
+const JOB_TONE: Record<string, PillProps['tone']> = {
+  running: 'warn',
+  exited: 'ok',
+  failed: 'bad',
+  denied: 'bad',
+  timeout: 'bad',
+}
+
+/**
+ * Tasks as list rows (name, what it does, „Starten“ on the right), then the last five runs (name, status as a pill,
+ * error text behind „Details“) and the latest log.
+ */
 export function jobsCard($: EngineInterface, k: Kit, m: UnityModel, options: Options): RenderElement | null {
   const cfg = configOf(m)
   const target = batchTarget(m)
   const allowed = batchAllowed({ lock: target.lock, bridgeUp: target.bridgeUp }).ok
-  const actions: Action[] = []
-  if (allowed) {
-    actions.push({
-      key: 'batch-compile',
-      label: 'Kompilieren prüfen',
-      icon: 'hammer',
-      variant: 'secondary',
-      onPress: run($, 'compile check', () => startBatchJob($, options, 'compile', {})),
-    })
-    if (cfg.buildMethod)
-      actions.push({
-        key: 'batch-build',
-        label: 'Build',
-        icon: 'box',
-        variant: 'secondary',
-        onPress: run($, 'build', () => startBatchJob($, options, 'build', {})),
-      })
-  }
-  // A project job may start Unity itself (e.g. node tools/unity.mjs): with an editor holding the project, only after a
-  // second press. Jobs marked `batch` are hidden then (they always start Unity).
-  for (const j of cfg.customJobs ?? [])
-    if (!j.batch || allowed)
-      actions.push({
-        key: `custom-${j.name}`,
-        label: jobLabel(j),
-        icon: 'terminal',
-        variant: 'secondary',
-        ...(allowed ? {} : { confirm: 'Editor ist offen — trotzdem starten?' }),
-        onPress: run($, j.name, () => startBatchJob($, options, 'custom', { custom: j.name })),
-      })
-  if (!actions.length && !m.jobs.length) return null
+  const tasks = jobTasks(cfg, allowed)
+  if (!tasks.length && !m.jobs.length) return null
   const latest = [...m.jobs].reverse()
   const runningCount = m.jobs.filter(j => j.status === 'running').length
   const head = latest[0]
   return Card(k, {
     key: 'jobs',
+    title: {
+      icon: 'list',
+      title: 'Aufgaben',
+      pill: runningCount ? { text: `${runningCount} läuft`, tone: 'warn', glyph: '◷' } : undefined,
+    },
     children: [
-      CardTitle(k, {
-        icon: 'list',
-        title: 'Aufgaben',
-        pill: runningCount ? { text: `${runningCount} läuft`, tone: 'warn', glyph: '◷' } : undefined,
-      }),
+      ...tasks.map(t =>
+        ListRow(k, {
+          key: `task-${t.key}`,
+          icon: t.kind === 'compile' ? 'hammer' : t.kind === 'build' ? 'box' : 'terminal',
+          title: t.title,
+          meta: t.meta,
+          actions: [
+            {
+              key: t.key,
+              label: 'Starten',
+              icon: 'play',
+              variant: 'secondary',
+              // A project job may start Unity itself (e.g. node tools/unity.mjs): with an editor holding the project,
+              // only after a second press.
+              ...(t.kind === 'custom' && !allowed ? { confirm: 'Editor ist offen — trotzdem starten?' } : {}),
+              onPress:
+                t.kind === 'custom'
+                  ? run($, t.name ?? '', () => startBatchJob($, options, 'custom', { custom: t.name }))
+                  : t.kind === 'build'
+                    ? run($, 'build', () => startBatchJob($, options, 'build', {}))
+                    : run($, 'compile check', () => startBatchJob($, options, 'compile', {})),
+            },
+          ],
+        }),
+      ),
+      tasks.length && latest.length ? Sentence(k, 'Letzte Läufe', { faint: true }) : null,
       ...latest.slice(0, 5).map(j =>
         ListRow(k, {
           key: `job-${j.key}`,
           status: jobGlyph(j.status),
-          title: `${jobTitle(cfg, j)} · ${JOB_STATUS[j.status] ?? j.status}${j.exitCode !== undefined ? ` (Exit ${j.exitCode})` : ''}`,
-          meta: j.error ?? undefined,
+          title: jobTitle(cfg, j),
+          pill: {
+            text: `${JOB_STATUS[j.status] ?? j.status}${j.exitCode !== undefined ? ` · Exit ${j.exitCode}` : ''}`,
+            tone: JOB_TONE[j.status],
+            glyph: false,
+          },
+          details: j.error ? () => [LogBox(k, { key: `job-${j.key}-error`, lines: [j.error ?? ''] })] : undefined,
           actions:
             j.status === 'running'
               ? [
                   {
                     key: `stop-${j.key}`,
-                    label: 'Stopp',
+                    label: 'Stoppen',
                     icon: 'stop',
                     variant: 'secondary',
                     confirm: 'Wirklich stoppen?',
@@ -541,8 +549,6 @@ export function jobsCard($: EngineInterface, k: Kit, m: UnityModel, options: Opt
         : head && head.tail.length
           ? LogBox(k, { key: 'job-log', title: `Log · ${head.name}`, lines: head.tail, collapsed: true })
           : null,
-      actions.length ? Actions(k, 'jobs-acts', actions, 3) : null,
-      ...jobNotes(cfg.customJobs ?? [], allowed).map(t => Sentence(k, t, { faint: true })),
     ],
   })
 }

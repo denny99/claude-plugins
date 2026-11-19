@@ -45,14 +45,14 @@ async function compileErrorPane($: Engine, on: On) {
 
 test('two presses across a turn end that is not the answer give exactly one prompt; the answer frees the button', async ($, on) => {
   const { world, ui, label, sent } = await compileErrorPane($, on)
-  expect(await label()).toMatch(/Claude reparieren lassen/)
+  expect(await label()).toMatch(/^Reparieren$/)
 
   await turnStart($, 'busy', 'Denny fragt etwas anderes') // Claude works on something else
   await settle(world, ui.press({ key: 'cfix-0' }))
   // the toast comes at once, before Claude has seen anything
   expect(world.prompts).toHaveLength(1)
   expect(world.toasts).toContain('An Claude geschickt – kommt nach der laufenden Antwort.')
-  expect(await label()).toMatch(/Claude reparieren lassen/)
+  expect(await label()).toMatch(/^Reparieren$/)
   expect(await sent()).toBe(true)
 
   await turnEnd($, 'busy') // the running turn ends, the task still waits in the queue
@@ -69,7 +69,7 @@ test('two presses across a turn end that is not the answer give exactly one prom
   await turnEnd($, 'sub', { agentId: 'a1' })
   expect(await sent()).toBe(true)
   await turnEnd($, 't1')
-  expect(await label()).toMatch(/Claude reparieren lassen/)
+  expect(await label()).toMatch(/^Reparieren$/)
   expect(await sent()).toBe(false)
   await settle(world, ui.press({ key: 'cfix-0' })) // sending again is a choice
   expect(world.prompts).toHaveLength(2)
@@ -90,11 +90,11 @@ test('an interrupt frees a queued task: it never arrived, the button is back to 
   await turnStart($, 'busy', 'etwas anderes')
   await settle(world, ui.press({ key: 'cfix-0' }))
   await turnEnd($, 'sub', { agentId: 'a1', isAborted: true, reason: 'aborted' }) // a subagent's abort: nothing
-  expect(await label()).toMatch(/Claude reparieren lassen/)
+  expect(await label()).toMatch(/^Reparieren$/)
   expect(await sent()).toBe(true)
   await turnEnd($, 'busy', { isAborted: true, reason: 'aborted', answer: '' })
   expect(world.toasts).toContain('Abgebrochen – nicht bei Claude angekommen. Der Knopf ist wieder frei.')
-  expect(await label()).toMatch(/Claude reparieren lassen/)
+  expect(await label()).toMatch(/^Reparieren$/)
   expect(await sent()).toBe(false)
   await settle(world, ui.press({ key: 'cfix-0' }))
   expect(world.prompts).toHaveLength(2)
@@ -116,7 +116,6 @@ test('screenshot (prompt made after the capture) and console „all to Claude“
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   const sentPill = async () => (await ui.findAll({ type: 'Svg' })).some(el => el.props.alt === 'geschickt')
   await settle(world, ui.press({ key: 'refresh' }))
-  await settle(world, ui.press({ key: 'editor-acts-more' }))
   await settle(world, ui.press({ key: 'shot' }))
   await settle(world, ui.press({ key: 'shot' }))
   expect(world.prompts.filter(p => p.startsWith('Screenshot aus dem Unity-Editor'))).toHaveLength(1)
@@ -134,7 +133,7 @@ test('screenshot (prompt made after the capture) and console „all to Claude“
   await ui.unmount()
 })
 
-test('perf „Claude analysieren lassen“ and Ziel „Entwurf erstellen“ use the lock too', async ($, on) => {
+test('perf „Analysieren“ and Ziel „Entwurf erstellen“ use the lock too', async ($, on) => {
   const world = fakeWorld(on)
   world.bridge.isPlaying = true
   delete world.files[`${ROOT}/.claude/unity.json`]

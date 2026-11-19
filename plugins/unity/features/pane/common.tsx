@@ -4,7 +4,7 @@ import type { EngineInterface, RenderElement } from 'claude-code'
 import type { ModelConsoleEntry, UnityModel, UnityTab } from '../../types'
 import { BRIDGE_VERSION } from '../../lib/bridge'
 import { batchAllowed } from '../../lib/unity'
-import { askAction, askClaude, Card, CardTitle, CopyButton, Actions, Sentence, type Action, type Kit } from '../../lib/ui'
+import { askAction, askClaude, Card, type Action, type Kit } from '../../lib/ui'
 import { batchTarget, bridgeOutdatedTitle, cancelTests, patchModel, unlockBridgePackage, type Options } from '../state'
 
 /** Elements the kit does not wrap. */
@@ -23,7 +23,7 @@ export const BRIDGE_GIT_URL_TAGGED = `${BRIDGE_GIT_URL}#${BRIDGE_TAG}`
 export const BRIDGE_README =
   'https://github.com/denny99/claude-plugins/tree/main/plugins/unity/bridge/com.denny99.claude-bridge'
 
-/** What a "Claude reparieren lassen" prompt asks for, in the pane's language. */
+/** What a „Reparieren“ prompt asks for, in the pane's language. */
 export const FIX_ASK = {
   compile: 'Behebe diesen Unity-Kompilierfehler',
   test: 'Repariere diesen fehlschlagenden Unity-Test',
@@ -40,9 +40,9 @@ export async function fixWithClaude($: EngineInterface, ask: string, detail: str
   await askClaude($, { text: fixPrompt(ask, detail), key })
 }
 
-/** A „Claude reparieren lassen“ button: locked („✓ An Claude geschickt“) until Claude answered this prompt. */
+/** A „Reparieren“ button: locked (pill „geschickt“) until Claude answered this prompt. */
 export function fixAction($: EngineInterface, k: Kit, key: string, ask: string, detail: string): Action {
-  return askAction($, k, { key, label: 'Claude reparieren lassen', icon: 'claude', text: fixPrompt(ask, detail) })
+  return askAction($, k, { key, label: 'Reparieren', icon: 'claude', text: fixPrompt(ask, detail) })
 }
 
 /**
@@ -174,27 +174,23 @@ export function bridgeUpdateAction($: EngineInterface, options: Options, primary
   }
 }
 
-/** The way out of an old bridge: what is installed, what is needed, the button and the manual way. */
+/** The way out of an old bridge: what is installed and needed (title), the button, the address for the manual way. */
 export function bridgeUpdateCard($: EngineInterface, k: Kit, m: UnityModel, options: Options): RenderElement {
-  const { Box } = k
   return Card(k, {
     key: 'bridge-outdated',
     tone: 'warn',
-    children: [
-      CardTitle(k, {
-        icon: 'download',
-        title: bridgeOutdatedTitle(m),
-        tone: 'warn',
-      }),
-      Sentence(
-        k,
-        'Unity aktualisiert Git-Pakete nicht von selbst. „Bridge aktualisieren“ löst die Sperre in Packages/packages-lock.json, dann lädt der Editor die neue Bridge. Von Hand: Package Manager → + → Add package from git URL → dieselbe Adresse erneut eintragen.',
-        { faint: true },
-      ),
-      <Box key="bridge-outdated-acts" flexDirection="row" gap={1} flexWrap="wrap">
-        {Actions(k, 'bridge-outdated-btn', [bridgeUpdateAction($, options)])}
-        {CopyButton(k, { key: 'copy-bridge-url-update', text: BRIDGE_GIT_URL_TAGGED, label: 'Paket-Adresse kopieren' })}
-      </Box>,
+    title: { icon: 'download', title: bridgeOutdatedTitle(m), tone: 'warn' },
+    hint: 'Unity aktualisiert Git-Pakete nicht von selbst: erst ohne die Sperre in Packages/packages-lock.json lädt der Editor die neue Bridge.',
+    actions: [
+      bridgeUpdateAction($, options),
+      // copying is a text action (R1): it triggers nothing, the address is for adding the package by hand
+      {
+        key: 'copy-bridge-url-update',
+        label: 'Adresse kopieren',
+        variant: 'link',
+        // the button hands its surface along, so the toast shows where the press was
+        onPress: ((e?: { surface?: string }) => k.copy(BRIDGE_GIT_URL_TAGGED, e?.surface)) as () => void,
+      },
     ],
   })
 }
@@ -215,11 +211,11 @@ export function testsProgress(t: NonNullable<UnityModel['tests']>, now: number):
   return parts.join(' · ')
 }
 
-/** "Stopp" for the running test run (two-step). */
+/** „Stoppen“ for the running test run (two-step). */
 export function stopTestsAction($: EngineInterface, options: Options): Action {
   return {
     key: 'tests-stop',
-    label: 'Stopp',
+    label: 'Stoppen',
     icon: 'stop',
     variant: 'secondary',
     confirm: 'Testlauf wirklich stoppen?',

@@ -1,4 +1,5 @@
 // Paket 1 der Befunde: Editor in anderem Checkout, Bridge-Version, gesperrte Aufgaben, Tests mit Wahl/Stopp/Fortschritt.
+import { NOTHING_CHOSEN } from '../features/pane/tests'
 import { expect, test } from 'claude-code/testing'
 
 import { draftConfig } from '../features/init'
@@ -26,7 +27,9 @@ test('editor open for the main checkout: the pane says where it runs instead of 
   await $.session.start(start)
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await settle(world, ui.press({ key: 'refresh' }))
-  expect((await findShown(ui, /Editor läuft für main \(Haupt-Checkout\) — diese Session ist im Worktree g/))?.text).toBeDefined()
+  // a short card title; the sentence stands in the card
+  expect((await findShown(ui, 'Editor in anderem Checkout'))?.text).toBeDefined()
+  expect((await findShown(ui, /Der Editor läuft für main \(Haupt-Checkout\), diese Session ist im Worktree g\./))?.text).toBeDefined()
   expect((await findShown(ui, /Editor in Haupt-Checkout/))?.text).toBeDefined()
   expect(world.argv).toContain('git worktree list --porcelain')
   await ui.unmount()
@@ -86,10 +89,13 @@ test('tests tab: nothing preselected; "Alle Tests" asks first; no one-click full
   await $.session.start(start)
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await settle(world, ui.press({ key: 'refresh' }))
-  expect(await ui.find({ type: 'Button', key: 'edit-tests' })).toBeUndefined() // overview: only "Tests wählen"
+  expect(await ui.find({ type: 'Button', key: 'edit-tests' })).toBeUndefined() // overview: only „Zu Tests“
   await settle(world, ui.press({ key: 'tests-open' }))
-  expect(await ui.find({ type: 'Button', key: 'edit-tests' })).toBeUndefined()
-  expect((await findShown(ui, /Erst einen Bereich wählen/))?.text).toBeDefined()
+  // the start buttons stand from the beginning; with nothing chosen the status line says so and a press starts nothing
+  expect((await findShown(ui, NOTHING_CHOSEN))?.text).toBeDefined()
+  await settle(world, ui.press({ key: 'edit-tests' }))
+  expect(Object.entries(world.files).filter(([p, t]) => p.includes('/cmd-') && t.includes('run-tests')).length).toBe(0)
+  expect(world.toasts).toContain(NOTHING_CHOSEN)
   await ui.select({ key: 'preset', value: '*all*' } as never)
   await world.clock.advance(100)
   await settle(world, ui.press({ key: 'edit-tests' }))
@@ -119,7 +125,7 @@ test('setup without editor: no one-click full batch run, a way to choose an area
   expect(await ui.find({ type: 'Button', key: 'edit-tests' })).toBeUndefined()
   expect(await ui.find({ type: 'Button', key: 'play-tests' })).toBeUndefined()
   await settle(world, ui.press({ key: 'setup-choose-tests' }))
-  expect((await findShown(ui, /Erst einen Bereich wählen/))?.text).toBeDefined()
+  expect((await findShown(ui, NOTHING_CHOSEN))?.text).toBeDefined()
   await ui.unmount()
 })
 
