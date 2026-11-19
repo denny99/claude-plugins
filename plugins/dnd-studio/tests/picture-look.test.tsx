@@ -4,7 +4,7 @@ import { expect, test } from "claude-code/testing";
 import { pictureKey, studioPathOfPicture } from "../features/look";
 import { CELLS, cropCenter, fromBase64, MAX_SVG_BYTES, parseBmp, pictureSvg, type Raster, rasterSvg } from "../lib/picture";
 import { random } from "../lib/pixel";
-import { TABLE, world } from "./world";
+import { TABLE, world, looksOn } from "./world";
 
 /** A 24-bit bottom-up BMP, w x h, rows padded to 4 bytes: a red/blue gradient with a green bar. */
 function bmp(w: number, h: number): Uint8Array {
@@ -167,6 +167,7 @@ test("a live table with a picture gets the picture as backdrop once it is made",
     return { value: { exitCode: 0, stdout: out, stderr: "" } } as never;
   });
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await looksOn($ as never);
   await $.command.run({ command: "dnd-scene", args: "" } as never);
   // the picture is made in a job of its own: the game table stands meanwhile
   expect(w.themes[0]).toBe("dnd-table");
@@ -184,6 +185,7 @@ test("a picture the Studio cannot hand out keeps the game table", async ($, on) 
   });
   on("process.run", () => ({ value: { exitCode: 1, stdout: "", stderr: "no" } }) as never);
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await looksOn($ as never);
   await $.command.run({ command: "dnd-scene", args: "" } as never);
   await w.clock.advance(10);
   await $.command.run({ command: "dnd-scene", args: "" } as never);

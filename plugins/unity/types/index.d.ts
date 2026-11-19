@@ -279,6 +279,25 @@ export type ReviewUiState = {
   }
 }
 
+/** Which test run each `unity_run_tests` / `unity_test_results` call answered (its card in the transcript). */
+export type TestsCardsState = {
+  tests: Record<
+    string,
+    {
+      runId: string
+      mode?: 'EditMode' | 'PlayMode'
+      filter?: string
+      state: 'idle' | 'running' | 'done' | 'error'
+      passed: number
+      failed: number
+      skipped: number
+      error?: string
+      red: { fullName: string; message?: string; duration?: number }[]
+    }
+  >
+  order: string[]
+}
+
 declare module 'claude-code' {
   interface PluginState {
     unity: {
@@ -286,6 +305,7 @@ declare module 'claude-code' {
       model: ShapedState<UnityModel>
       review: ShapedState<ReviewUiState>
       asked: ShapedState<AskedState>
+      cards: ShapedState<TestsCardsState>
     }
   }
 }

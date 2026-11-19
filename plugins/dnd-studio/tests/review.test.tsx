@@ -44,7 +44,7 @@ test("review: Claude fills the queue, the tab opens itself once, pictures stay c
 
   for (const surface of ["desktop", "terminal"] as const) {
     const ui = await $.ui.mount({ ...pane(90, 60), surface });
-    expect(await findShown(ui, /Neue Klänge prüfen/)).toBeDefined();
+    expect(await findShown(ui, /^Neue Klänge$/)).toBeDefined();
     expect(await findShown(ui, /Brann am Tor/)).toBeUndefined();
     expect(await findShown(ui, /Szene 4/)).toBeUndefined();
     expect(await findShown(ui, /Szene verdeckt/)).toBeDefined();
@@ -228,7 +228,7 @@ test("review: Studio paths are told apart from local paths and URLs", () => {
   expect(isStudioPath("https://x/y.png")).toBe(false);
 });
 
-test("review: a sent verdict is done (dimmed, local time, no buttons), a typed note goes along without Enter, nothing is sent twice", async ($, on) => {
+test("review: a sent verdict is done (a row with pill and local time, no buttons), a typed note goes along without Enter, nothing is sent twice", async ($, on) => {
   resetAutoOpen();
   const w = world(on);
   on("process.run", () => ({ value: { code: 0, stdout: "", stderr: "" } }) as never);
@@ -248,24 +248,31 @@ test("review: a sent verdict is done (dimmed, local time, no buttons), a typed n
     await ui.press({ key: `rv-reveal-${id}` });
     await ui.press({ key: `rv-open-${id}` });
   }
+  // a row holds at most two actions; the redo and its note field wait behind „Details“
+  expect(await ui.find({ type: "Button", key: `rv-redo-${id0}` })).toBeUndefined();
+  await ui.press({ key: `rv-${id0}-details` });
   await ui.press({ key: `rv-redo-${id0}` });
   await ui.press({ key: `rv-ok-${id1}` });
-  expect(await findShown(ui, /leer geht es als „Nochmal ohne Notiz“/)).toBeDefined();
-  // typed, never confirmed with Enter
+  expect((await ui.find({ type: "Button", key: `rv-ok-${id1}` }))?.text).toBe("Passt");
+  // one card „Prüfung“: the counter in its title, the main action without a count
+  expect(await findShown(ui, "2 von 2")).toBeDefined();
+  expect(await findShown(ui, /2 beurteilt, noch nicht geschickt/)).toBeDefined();
+  // typed, never kept with „Merken“
   await ui.input({ key: `rv-note-${id0}`, text: "heller, mehr Nebel", kind: "change" } as never);
-  expect(await ui.find({ type: "Button", text: /Ergebnis an Claude \(2\)/ })).toBeDefined();
+  expect((await ui.find({ type: "Button", key: "rv-send" }))?.text).toBe("An Claude schicken");
   await ui.press({ key: "rv-send" });
 
   expect(w.submitted).toHaveLength(1);
   expect(w.submitted[0]).toContain("Notiz: „heller, mehr Nebel“");
   expect(w.submitted[0]).toContain("Passt: Tor");
-  // done: one dimmed line each, with the local time; no verdict buttons, no send button
+  // done: one quiet row each with its verdict as a pill and the local time; no verdict buttons
   const at = new Date(1_700_000_000_000);
   const hhmm = `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
-  expect(
-    (await findShown(ui, /✓ Brann · nochmal \(„heller, mehr Nebel“\) · an Claude geschickt/))?.text,
-  ).toContain(hhmm);
-  expect(await findShown(ui, /✓ Tor · passt · an Claude geschickt/)).toBeDefined();
+  expect((await findShown(ui, /^„heller, mehr Nebel“ · geschickt/))?.text).toContain(hhmm);
+  expect(await findShown(ui, new RegExp(`^geschickt ${hhmm}$`))).toBeDefined();
+  expect(await findShown(ui, "nochmal")).toBeDefined();
+  expect(await findShown(ui, "passt")).toBeDefined();
+  expect(await findShown(ui, /an Claude geschickt \d/)).toBeUndefined(); // no typed-out sentence per row
   expect(await ui.find({ type: "Button", key: `rv-redo-${id0}` })).toBeUndefined();
   expect(await ui.find({ type: "Button", key: `rv-ok-${id1}` })).toBeUndefined();
   // until Claude answered the result: the kit's „✓ An Claude geschickt“, a second press sends nothing

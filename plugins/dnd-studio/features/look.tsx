@@ -186,12 +186,13 @@ export async function applyLook($: EngineInterface): Promise<void> {
     } else if (look.applied && look.foreign) {
       // another plugin's theme stands now: leave it, ours is gone anyway
       await patchLook($, () => ({ applied: "", foreign: false }));
+    } else if (look.applied && look.previous) {
+      // the theme that stood before ours (another plugin's, e.g. ds-seasons) comes back as it was
+      await $.theme.set(look.previous as ThemeSetArgs);
+      await patchLook($, () => ({ applied: "" }));
     } else if (look.applied) {
       await $.theme.clear();
       await patchLook($, () => ({ applied: "" }));
-      $.ui.toast(
-        "Tisch-Hintergrund aus. Ein anderes Farbschema (etwa ds-seasons) kommt nach einem Neustart von Claude zurück.",
-      );
     }
   } catch {
     // a look never stalls the table
@@ -199,8 +200,13 @@ export async function applyLook($: EngineInterface): Promise<void> {
 }
 
 /** Another plugin's theme.set / theme.clear (a plugin's own calls skip its own hooks): ours no longer stands. */
-async function noteForeignTheme($: EngineInterface): Promise<void> {
+async function noteForeignTheme($: EngineInterface, args?: ThemeSetArgs): Promise<void> {
   try {
+    // our own look is never "the one before" (the test engine hands a plugin its own calls)
+    const scene = String((args?.backdrop as { scene?: unknown } | undefined)?.scene ?? "");
+    if (scene.startsWith(SCENE_PREFIX)) return;
+    // remember the other plugin's theme (a clear forgets it): it is what our look gives back when it ends
+    await patchLook($, () => ({ previous: args ? { colors: args.colors, backdrop: args.backdrop } : null }));
     if ((await readLook($)).applied)
       await patchLook($, () => ({ foreign: true }));
   } catch {
@@ -211,7 +217,7 @@ async function noteForeignTheme($: EngineInterface): Promise<void> {
 export function registerLook(on: On): void {
   on("theme.set", async ($, e, next) => {
     const r = await next(e);
-    await noteForeignTheme($);
+    await noteForeignTheme($, e as ThemeSetArgs);
     return r;
   });
   on("theme.clear", async ($, e, next) => {

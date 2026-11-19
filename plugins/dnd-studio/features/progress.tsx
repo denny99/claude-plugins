@@ -24,8 +24,8 @@ import {
 import type { BuildProgress } from "../lib/progress";
 import { jsonOf, textOf } from "../lib/studio";
 import { patchProgress, readProgress, readRuns } from "../lib/state";
-import { Card, CardTitle, ProgressBlock, Sentence } from "../lib/ui";
-import type { Kit } from "../lib/ui";
+import { Card, ProgressBlock } from "../lib/ui";
+import type { Kit, StatusInfo } from "../lib/ui";
 
 type Obj = Record<string, unknown>;
 
@@ -136,22 +136,19 @@ export async function readBuildProgress($: EngineInterface): Promise<BuildProgre
 
 /**
  * The Build tab's progress card: the whole build on top ("Bau gesamt"), then each GPU step with „x von N“, a bar and
- * „noch ~M min · fertig gegen HH:MM“ (or „Schätzung folgt“), the texter's entries as a count only. Null: nothing runs.
+ * „noch ~M min · fertig gegen HH:MM“ (or „Schätzung folgt“), the texter's entries as a count only. `extra.rows` are
+ * further rows of the same card (the GPU's state), `extra.status` its status line. Null: nothing runs and no rows.
  */
 export function renderProgress(
   k: Kit,
   p: BuildProgress,
   now: number,
   offsetMin?: number,
+  extra: { rows?: RenderElement[]; status?: StatusInfo } = {},
 ): RenderElement | null {
-  if (!p.steps.length && !p.entries) return null;
-  const children: RenderElement[] = [
-    CardTitle(k, {
-      icon: "hammer",
-      title: "Fortschritt",
-      count: p.total ? `Bau gesamt ${countText(p.total.done, p.total.total)}` : undefined,
-    }),
-  ];
+  const rows = extra.rows ?? [];
+  if (!p.steps.length && !p.entries && !rows.length) return null;
+  const children: RenderElement[] = [];
   if (p.total && p.steps.length > 1)
     children.push(
       ProgressBlock(k, {
@@ -176,12 +173,6 @@ export function renderProgress(
         tone: "info",
       }),
     );
-  if (p.foreign)
-    children.push(
-      Sentence(k, `Davor ${p.foreign} ${p.foreign === 1 ? "Job" : "Jobs"} aus dem Studio in der Warteschlange`, {
-        faint: true,
-      }),
-    );
   if (p.entries)
     children.push(
       ProgressBlock(k, {
@@ -193,5 +184,17 @@ export function renderProgress(
         tone: "info",
       }),
     );
-  return Card(k, { key: "progress", children });
+  return Card(k, {
+    key: "progress",
+    title: {
+      icon: "hammer",
+      title: "Fortschritt",
+      count: p.total ? countText(p.total.done, p.total.total) : undefined,
+    },
+    children: [...children, ...rows],
+    hint: p.foreign
+      ? `Davor ${p.foreign} ${p.foreign === 1 ? "Job" : "Jobs"} aus dem Studio in der Warteschlange`
+      : undefined,
+    status: extra.status,
+  });
 }

@@ -14,30 +14,29 @@ Grundregel: **nichts im Studio ändern**, außer der Schritt sagt es. Profil vor
 ## 1. Zustand
 
 1. Tab **Zustand**: Kopf mit Houndsridge-Logo (nicht abgeschnitten), Studio-Farben (Filz/Messing).
-2. Karte Zustand: Studio-App ✓ mit Version und Port 37641, Verbindung zu Claude ✓ „Token gesetzt“, Plugin `dnd-studio 0.4.5`, Discord-Bot, Alter Studio-Server „keiner im Weg“.
-3. **Neu prüfen** aktualisiert die Uhrzeit oben rechts.
-4. **Token eintragen** zeigt nur einen Hinweis (Toast), wo der Token hingehört.
-5. Schalter Zuhörer, Tisch-Hintergrund: Name + Satz darunter verständlich? Schalten **nicht** nötig.
-6. **Regeln** aufklappen: fünf Schalter, jeder mit Erklärungssatz. Wortlaut verständlich?
+2. Karte Zustand: Studio-App ✓ mit Version und Port 37641, Verbindung zu Claude ✓ „Token gesetzt“, Plugin `dnd-studio 0.9.0`, Discord-Bot, Alter Studio-Server „keiner im Weg“.
+3. **Neu laden** (Kopf) aktualisiert die Uhrzeit oben rechts.
+4. Es gibt keinen Token-Knopf mehr.
+5. Karten **Hintergründe** und **Regeln am Tisch**: Schalter mit Name + Satz darunter verständlich? Schalten **nicht** nötig.
 
 ## 2. Bau
 
 1. Tab **Bau**: GPU-Zeile, Karte Bau-Abschnitte mit 8 Schritten. Nummern als **runde Kreise, Zahl mittig**, Linie dazwischen.
 2. Abschnitt „Agenten 0“ eingeklappt bzw. „Noch kein pnp-Agent gelaufen“.
-3. Abnahme-Liste (falls Kampagne offen): Lücken mit Pill „fix: <agent>“. Knöpfe nur ansehen.
+3. Karte **Abnahme-Check** (falls Kampagne offen): Lücken mit Pill „fix: <agent>“. Je Zeile **Details** klappt die Vorschau auf, **↗ Öffnen** als Link; **⚠ Bau-Stand zurücksetzen** nur ansehen (fragt vorher nach). Knöpfe nur ansehen.
 
-## 3. Prüfen
+## 3. Abnahme
 
-1. Tab **Prüfen** leer: verständlicher Leer-Zustand.
-2. Denny sagt: „leg einen vorhandenen Klang der Kampagne zur Prüfung ab“ → Claude nutzt `review` (`action: add`). Panel springt auf Prüfen, Eintrag erscheint.
-3. **Abspielen** spielt den Klang lokal. **Passt** / **Nochmal machen** (mit Notiz) → Fortschritt zählt mit.
+1. Tab **Abnahme** leer: verständlicher Leer-Zustand.
+2. Denny sagt: „leg einen vorhandenen Klang der Kampagne zur Prüfung ab“ → Claude nutzt `review` (`action: add`). Panel springt auf Abnahme, Eintrag erscheint.
+3. **Abspielen** spielt den Klang lokal. **Passt** / **Nochmal** (Notiz mit **Merken** hinter **Details**) → Fortschritt zählt mit.
 4. Ein Bild zur Prüfung: bleibt **verdeckt** bis _Aufdecken_, öffnet dann im System-Viewer.
-5. **Ergebnis an Claude** schickt einen Prompt mit Passt/Nochmal. Danach `review clear`.
+5. Karte **Prüfung**: **An Claude schicken** schickt einen Prompt mit Passt/Nochmal. Danach `review clear`.
 
 ## 4. Tisch (nur ansehen, wenn kein Abend läuft)
 
-1. Tab **Tisch** ohne laufenden Tisch: ruhiger Leer-Zustand, keine Fehler.
-2. Optional mit Testkampagne: Denny sagt „starte einen kurzen Testtisch“ → Panel öffnet von selbst auf Tisch, Szenenkarte, Klänge als Chips (spielen nur auf Druck), Startreihenfolge via `initiative`.
+1. Tab **Tisch** ohne laufenden Tisch: ruhiger Leer-Zustand, keine Fehler. `/dnd abnahme` öffnet den Tab Abnahme.
+2. Optional mit Testkampagne: Denny sagt „starte einen kurzen Testtisch“ → Panel öffnet von selbst auf Tisch, Karte **Tisch**, Szenenkarte, Klänge als Zeilen mit **Abspielen** (nur auf Druck) und ein **Klang stoppen**, Startreihenfolge im Feld **Reihenfolge** + **Starten** (oder via `initiative`). NPC-Zeilen mit **Sprechen**, **Gruppe übernehmen**, Discord **Beitreten**. Karten **Zuhörer** (Schalter **Offenes Mikro**, Ausschalten ohne Rückfrage), **Pause** · **Abendende** · **Einwürfe**; nur ansehen.
 3. Launcher-Zeile zeigt Tischzustand („… · Runde 1 · X ist dran“), Klick öffnet Tisch.
 4. Tisch-Hintergrund: am laufenden Tisch steht der Pixel-Spieltisch (Kerze flackert, ab und zu rollt ein Würfel), hell und dunkel; nach Ende kommt das normale Theme zurück.
 

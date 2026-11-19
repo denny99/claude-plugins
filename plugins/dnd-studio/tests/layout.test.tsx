@@ -30,17 +30,21 @@ test("no table running: a quiet empty state, no live buttons", async ($, on) => 
   await ui.unmount();
 });
 
-test("live table: folds closed with a chevron, Discord leave in the Discord card, fight end a real button", async ($, on) => {
+test("live table: folds closed behind the text action „Details“, Discord leave in the Discord card, fight end a real button", async ($, on) => {
   world(on, {
     table_state: { ...TABLE, scene: { kind: "show", title: "Das Tor" } },
   });
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd", args: "table" } as never);
   const ui = await $.ui.mount({ ...pane(90, 80), surface: "desktop" });
-  expect((await ui.find({ type: "Button", key: "sec-dice" }))?.text).toBe("▸");
+  expect((await ui.find({ type: "Button", key: "sec-dice" }))?.text).toBe(
+    "Details",
+  );
   expect(await findShown(ui, /Athletik/)).toBeUndefined();
   await ui.press({ key: "sec-dice" });
-  expect((await ui.find({ type: "Button", key: "sec-dice" }))?.text).toBe("▾");
+  expect((await ui.find({ type: "Button", key: "sec-dice" }))?.text).toBe(
+    "Schließen",
+  );
   expect(await findShown(ui, /Athletik/)).toBeDefined();
   expect(await ui.find({ type: "Button", key: "end-leave" })).toBeUndefined();
   expect(
@@ -58,7 +62,7 @@ test("the fight-order example comes from the real group", () => {
     {},
     0,
   );
-  expect(orderExample(view)).toBe("Reihenfolge, z. B. Ada, Borin, Wolf 1");
+  expect(orderExample(view)).toBe("z. B. Ada, Borin, Wolf 1");
 });
 
 test("launcher: the D&D starter says only „Tisch läuft · Runde N“, the scene stays in the Table tab", async ($, on) => {

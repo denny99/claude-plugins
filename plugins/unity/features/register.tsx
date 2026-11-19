@@ -13,6 +13,7 @@ import { draftConfig, draftJson } from './init'
 import { registerLauncher } from './launcher'
 import { REVIEW_TOOLS, registerReview } from './review/register'
 import { BRIDGE_GIT_URL, BRIDGE_README, openPane, PANE_ID, renderPane } from './pane'
+import { CARD_TOOLS, recordTestsCall, renderTestsResult } from './transcript'
 import {
   affectedTests,
   batchTarget,
@@ -317,7 +318,12 @@ export function registerUnity(on: On, options: Options): void {
     const mode = input.mode === 'PlayMode' ? 'PlayMode' : 'EditMode'
     const m = await ensureModel($, options)
     const filter = resolveFilter(m.presets, input.filter)
-    return { result: await runTests($, options, mode, filter, Math.max(0, input.waitSeconds ?? 120) * 1000) }
+    const before = m.tests?.runId
+    const result = await runTests($, options, mode, filter, Math.max(0, input.waitSeconds ?? 120) * 1000)
+    // a run this call started in the editor gets its card at the call's result row; a refusal or a batch job
+    // (no run yet) keeps the plain text
+    await recordTestsCall($, e.tool_use_id, { notRun: before }).catch(() => undefined)
+    return { result }
   }).catch(() => ({ deny: 'unity: run tests failed.' }))
 
   on('tool.call', { tool: 'mcp__unity__unity_affected_tests' }, async ($, e) => {
@@ -336,9 +342,11 @@ export function registerUnity(on: On, options: Options): void {
     return { result: await createWorktree($, options, String(input.name ?? '').trim()) }
   }).catch(() => ({ deny: 'unity: worktree failed.' }))
 
-  on('tool.call', { tool: 'mcp__unity__unity_test_results' }, async $ => ({
-    result: await testsText($, options),
-  })).catch(() => ({
+  on('tool.call', { tool: 'mcp__unity__unity_test_results' }, async ($, e) => {
+    const result = await testsText($, options)
+    await recordTestsCall($, e.tool_use_id).catch(() => undefined)
+    return { result }
+  }).catch(() => ({
     deny: 'unity: test results failed.',
   }))
 
@@ -437,4 +445,9 @@ export function registerUnity(on: On, options: Options): void {
 
   // --- pane ---
   on('ui.render', { component: 'Pane', requestId: PANE_ID }, async ($, e) => renderPane($, e, options))
+
+  // --- transcript: a test run's result as a card at the tool's own result row (the pane keeps the lasting state) ---
+  on('ui.render', { component: 'ToolResult', plugin: '*', props: { tool: CARD_TOOLS } }, async ($, e, next) =>
+    renderTestsResult($, e, next, options),
+  ).catch(($, e, next) => next(e))
 }

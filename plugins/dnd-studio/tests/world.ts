@@ -271,3 +271,14 @@ export function toolResult(body: unknown) {
     ],
   };
 }
+
+/** The table look is off by default (Zustand → Hintergründe): turn it on through its switch, as a person would. */
+export async function looksOn($: {
+  command: { run: (e: never) => Promise<unknown> };
+  ui: { mount: (t: never) => Promise<{ press: (q: { key: string }) => Promise<unknown>; unmount: () => Promise<void> }> };
+}): Promise<void> {
+  await $.command.run({ command: "dnd", args: "health" } as never);
+  const ui = await $.ui.mount({ ...pane(90, 80), surface: "desktop" } as never);
+  await ui.press({ key: "rule-looks" });
+  await ui.unmount();
+}

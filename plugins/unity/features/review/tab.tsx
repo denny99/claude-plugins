@@ -1,5 +1,5 @@
 /**
- * The Review tab: sub-tabs Anschauen · Entscheiden · Bilder · Sounds · Ideen · Laufend over the project's review files
+ * The Review tab: sub-tabs Anschauen · Entscheiden · Bilder · Klänge · Ideen · Laufend over the project's review files
  * (paths from `.claude/unity.json` → `review`), the picture viewer (frames, directions, views, painting) and the
  * "Problem melden" card. Answers are appended to the project's log, never rewritten.
  */
@@ -8,17 +8,21 @@ import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 import type { ReviewMark, ReviewUiState, ReviewViewState } from '../../types'
 import {
   ActionButton,
-  Actions,
   askAction,
   askClaude,
   Card,
   CardTitle,
+  clearFieldDraft,
   CopyButton,
   EmptyState,
+  Field,
+  fieldText,
   ListRow,
-  Pill,
+  reloadAction,
+  Segment,
   Sentence,
   Tabs,
+  Toggle,
   type Action,
   type Kit,
 } from '../../lib/ui'
@@ -53,7 +57,7 @@ const SUBS: { id: SubTab; label: string; icon: IconName }[] = [
   { id: 'look', label: 'Anschauen', icon: 'eye' },
   { id: 'decide', label: 'Entscheiden', icon: 'list' },
   { id: 'pictures', label: 'Bilder', icon: 'camera' },
-  { id: 'sounds', label: 'Sounds', icon: 'speaker' },
+  { id: 'sounds', label: 'Klänge', icon: 'speaker' },
   { id: 'ideas', label: 'Ideen', icon: 'bookmark' },
   { id: 'running', label: 'Laufend', icon: 'activity' },
 ]
@@ -75,7 +79,17 @@ function ago(time: string | undefined, now: number): string {
   return h < 48 ? `vor ${h} h` : `vor ${Math.round(h / 24)} Tagen`
 }
 
-const verdictText = (v: Verdict) => (v === 'passt' ? 'passt' : v === 'passt-nicht' ? 'passt nicht' : 'Kommentar')
+// One pair of words for a verdict in the whole mod (R6): buttons, pills and the notice read the same.
+const FITS = 'Passt'
+const FITS_NOT = 'Passt nicht'
+const verdictText = (v: Verdict) => (v === 'passt' ? FITS : v === 'passt-nicht' ? FITS_NOT : 'Kommentar')
+/** Where a marked option of a question waits until „Antwort schicken“ (the review atom has only `drafts` for it). */
+const choiceKey = (id: string) => `wahl:${id}`
+const commentKey = (id: string) => `rv-comment-${id}`
+const VIEW_NOTE = 'rv-view-note'
+const soundNoteKey = (id: string) => `rv-note-ton-${id}`
+/** `openGroup` when every sound group is folded (unset opens the first group with new sounds). */
+const NO_GROUP = '\u2205 none'
 const verdictTone = (v: Verdict) => (v === 'passt' ? 'ok' : v === 'passt-nicht' ? 'bad' : 'info')
 const isMusic = (x: { group: string; id: string }) => x.group === 'Music' || x.id.startsWith('music:')
 
@@ -105,10 +119,11 @@ export async function answerItem(
   try {
     const a = await appendAnswer($, { id, verdict, choice, comment, spot, screenshot })
     await patchReview($, s => ({
-      drafts: Object.fromEntries(Object.entries(s.drafts).filter(([key]) => key !== id)),
+      drafts: Object.fromEntries(Object.entries(s.drafts).filter(([key]) => key !== id && key !== choiceKey(id))),
       open: s.open === id ? undefined : s.open,
       ...say(`Antwort gespeichert: ${verdictText(verdict)}${screenshot ? ' · mit Screenshot' : ''}.`),
     }))
+    clearFieldDraft(commentKey(id))
     return a
   } catch (err) {
     await patchReview($, say(err instanceof Error ? err.message : String(err)))
@@ -120,7 +135,7 @@ export async function jump($: EngineInterface, options: Options, spot: unknown):
   const text = spotText(spot)
   if (!text) return
   const res = await gotoSpot($, options, text)
-  await patchReview($, say(play.isPlayError(res) ? `Hinspringen ging nicht: ${res.error}` : 'Im Spiel hingesprungen.'))
+  await patchReview($, say(play.isPlayError(res) ? `Hinspringen ging nicht: ${res.error}` : 'Hingesprungen.'))
 }
 
 /** Opens the viewer on one picture of the review list. */
@@ -246,31 +261,21 @@ export async function loadSounds($: EngineInterface, options: Options, tries = S
   }))
 }
 
-/** The last play's hint at the sounds, with „Unity vorn“ (macOS) when Unity in the background keeps it silent. */
-function soundHintRows(
-  $: EngineInterface,
-  k: Kit,
-  snd: { hint?: string; front?: boolean },
-  options: Options,
-): RenderElement[] {
-  if (!snd.hint) return []
-  const out: RenderElement[] = [Sentence(k, snd.hint, { tone: 'warn' })]
-  if (snd.front && canFront(knownPlatform()))
-    out.push(
-      Actions(k, 'rv-snd-front', [
-        {
-          key: 'rv-front',
-          label: 'Unity vorn',
-          icon: 'up',
-          variant: 'secondary',
-          onPress: () =>
-            void unityToFront($, options).then(err => {
-              if (err) $.ui.toast(err)
-            }),
-        },
-      ]),
-    )
-  return out
+/** „Unity vorholen“ (macOS) beside the last play's hint, when Unity in the background keeps the sound silent. */
+function frontAction($: EngineInterface, snd: { hint?: string; front?: boolean }, options: Options): Action[] {
+  if (!snd.hint || !snd.front || !canFront(knownPlatform())) return []
+  return [
+    {
+      key: 'rv-front',
+      label: 'Unity vorholen',
+      icon: 'up',
+      variant: 'secondary',
+      onPress: () =>
+        void unityToFront($, options).then(err => {
+          if (err) $.ui.toast(err)
+        }),
+    },
+  ]
 }
 
 export async function playSound($: EngineInterface, options: Options, id: string): Promise<void> {
@@ -281,7 +286,6 @@ export async function playSound($: EngineInterface, options: Options, id: string
   const hint = hints.map(h => h.text).join(' · ') || undefined
   const front = hints.some(h => h.front) || undefined
   await patchReview($, x => ({
-    open: `ton:${id}`,
     sounds: x.sounds
       ? { ...x.sounds, playing: play.isPlayError(res) ? undefined : id, hint, front }
       : x.sounds,
@@ -315,119 +319,144 @@ function table($: EngineInterface, e: RenderInput<'Pane'>): Record<string, El | 
   return $.ui.resolve(e) as unknown as Record<string, El | undefined>
 }
 
+const kindIcon = (kind: Question['kind']): IconName => (kind === 'entscheiden' ? 'list' : kind === 'bild' ? 'camera' : 'eye')
+
+/** The two verdicts of a question that asks nothing else: answered with one press. */
+const isVerdictPair = (choices: string[]) =>
+  choices.length === 2 && verdictOf(choices[0]!, '') === 'passt' && verdictOf(choices[1]!, '') === 'passt-nicht'
+
+/**
+ * The card of the one unfolded question, in the order of every card: text, the options (a decision), the comment
+ * field, then ONE action row. A plain „Passt“ / „Passt nicht“ question answers with one press; a question with
+ * options marks the option in its row and „Antwort schicken“ sends it with the comment.
+ */
 function questionCard(
   $: EngineInterface,
-  Input: El | undefined,
   k: Kit,
   options: Options,
   s: ReviewUiState,
   q: Question,
+  place: string,
 ): RenderElement {
-  const draft = s.drafts[q.id] ?? ''
-  const icon: IconName = q.kind === 'entscheiden' ? 'list' : q.kind === 'bild' ? 'camera' : 'eye'
-  const acts: Action[] = []
+  const stored = s.drafts[q.id] ?? ''
+  // the text of the moment: a press right after typing must not send the comment of a moment ago
+  const comment = () => fieldText(commentKey(q.id), stored)
+  const links: Action[] = []
   if (q.spot)
-    acts.push({
+    links.push({
       key: `rv-goto-${q.id}`,
-      label: 'Im Spiel hinspringen',
+      label: 'Hinspringen',
       icon: 'pin',
-      variant: 'secondary',
+      variant: 'link',
       onPress: () => void jump($, options, q.spot),
     })
   if (q.image)
-    acts.push({
+    links.push({
       key: `rv-img-${q.id}`,
       label: 'Bild ansehen',
       icon: 'eye',
-      variant: 'secondary',
+      variant: 'link',
       onPress: () => void viewItem($, q),
     })
-  const choices = q.options.length ? q.options : q.kind === 'entscheiden' ? [] : ['passt', 'passt nicht']
-  const letter = (i: number) => String.fromCharCode(65 + i)
-  const choiceIcon = (c: string): IconName =>
-    q.kind === 'entscheiden' ? 'arrow' : verdictOf(c, '') === 'passt' ? 'check' : 'x'
+  const decision = q.kind === 'entscheiden'
+  const choices = q.options.length ? q.options : decision ? [] : [FITS, FITS_NOT]
+  const pair = !decision && isVerdictPair(choices)
+  const chosen = pair ? -1 : choices.indexOf(s.drafts[choiceKey(q.id)] ?? '\u0000')
+  const shot = s.attachShot ? 'Screenshot geht mit' : ''
+  const send = () => {
+    const c = chosen >= 0 ? choices[chosen]! : null
+    const text = comment()
+    if (c === null && !text.trim()) {
+      void patchReview($, say('Erst eine Option wählen oder einen Kommentar schreiben.'))
+      return
+    }
+    void answerItem(
+      $,
+      options,
+      q.id,
+      decision || c === null ? 'kommentar' : verdictOf(c, text),
+      decision ? c : null,
+      text,
+      s.attachShot,
+    )
+  }
+  const verdict = (i: number): Action => ({
+    key: `rv-choice-${q.id}-${i}`,
+    label: i === 0 ? FITS : FITS_NOT,
+    variant: i === 0 ? 'primary' : 'secondary',
+    onPress: () => void answerItem($, options, q.id, verdictOf(choices[i]!, comment()), null, comment(), s.attachShot),
+  })
   return Card(k, {
     key: `rv-q-${q.id}`,
+    // no "Entscheiden" pill: the sub tab says it already; the place among the open ones stands on the right
+    title: { icon: kindIcon(q.kind), title: q.title, count: place },
     children: [
-      CardTitle(k, {
-        icon,
-        title: q.title,
-        // no "Entscheiden" pill: the sub tab says it already, and the title gets the room
-      }),
       q.text ? Sentence(k, q.text) : null,
-      acts.length ? Actions(k, `rv-acts-${q.id}`, acts, 3) : null,
-      choices.length && q.kind === 'entscheiden'
-        ? decisionChoices(
-            k,
-            q.id,
-            choices,
-            c => () => void answerItem($, options, q.id, 'kommentar', c, draft, s.attachShot),
-          )
-        : choices.length
-          ? Actions(
-              k,
-              `rv-choices-${q.id}`,
-              choices.map((c, i) => ({
-                key: `rv-choice-${q.id}-${i}`,
-                label: q.kind === 'entscheiden' ? `${letter(i)} · ${c}` : c,
-                icon: choiceIcon(c),
-                variant: 'secondary' as const,
-                onPress: () =>
-                  void answerItem(
-                    $,
-                    options,
-                    q.id,
-                    q.kind === 'entscheiden' ? 'kommentar' : verdictOf(c, draft),
-                    q.kind === 'entscheiden' ? c : null,
-                    draft,
-                    s.attachShot,
-                  ),
-              })),
-              4,
-            )
-          : null,
-      Input
-        ? Input({
-            key: `rv-comment-${q.id}`,
-            placeholder: 'Kommentar',
-            value: draft,
-            submitLabel: 'Antworten',
-            onInput: (v: string) => void patchReview($, x => ({ drafts: { ...x.drafts, [q.id]: v } })),
-            onSubmit: (v: string) => void answerItem($, options, q.id, 'kommentar', null, v, s.attachShot),
-          })
-        : null,
-      // One "Antworten": the comment field's own submit button; a separate one only where there is no field.
-      Actions(
-        k,
-        `rv-send-${q.id}`,
-        [
-          ...(Input
-            ? []
-            : [
-                {
-                  key: `rv-answer-${q.id}`,
-                  label: 'Antworten',
-                  icon: 'check' as const,
-                  variant: 'primary' as const,
-                  onPress: () => void answerItem($, options, q.id, 'kommentar', null, draft, s.attachShot),
-                },
-              ]),
-          {
-            key: `rv-shot-${q.id}`,
-            label: shotToggleLabel(s.attachShot),
-            variant: 'link',
-            onPress: () => void patchReview($, x => ({ attachShot: !x.attachShot })),
-          },
-        ],
-        2,
-      ),
+      ...(pair
+        ? []
+        : decisionRows(k, q.id, choices, chosen, i => () =>
+            void patchReview($, x => ({ drafts: { ...x.drafts, [choiceKey(q.id)]: choices[i]! } })),
+          )),
+      Field(k, {
+        key: commentKey(q.id),
+        label: 'Kommentar',
+        placeholder: 'z. B. lieber wärmer',
+        value: stored,
+        // with options the field only keeps the comment (the main action sends); without, it is the comment's answer
+        submitLabel: pair ? 'Antworten' : 'Merken',
+        onInput: v => void patchReview($, x => ({ drafts: { ...x.drafts, [q.id]: v } })),
+        onSubmit: v =>
+          pair
+            ? void answerItem($, options, q.id, 'kommentar', null, v, s.attachShot)
+            : void patchReview($, x => ({ drafts: { ...x.drafts, [q.id]: v } })),
+      }),
     ],
+    status: pair
+      ? shot || undefined
+      : chosen >= 0
+        ? `${String.fromCharCode(65 + chosen)} gewählt${shot ? ` · ${shot}` : ''}`
+        : shot || undefined,
+    actions: pair
+      ? { primary: verdict(0), secondary: [verdict(1)], links }
+      : {
+          primary: { key: `rv-answer-${q.id}`, label: 'Antwort schicken', variant: 'primary', onPress: send },
+          links,
+        },
   })
 }
 
-/** The screenshot switch as a checkbox, so it reads as a switch and not as a note: "☑ Screenshot mitschicken". */
-export function shotToggleLabel(on: boolean): string {
-  return `${on ? '☑' : '☐'} Screenshot mitschicken`
+/** Characters of an option that still stand in the row's title; a longer one wraps under its row. */
+const OPTION_ONE_LINE = 32
+
+/**
+ * The options of a decision as list rows: letter and option, the marked one with a pill, the others with „Wählen“ on
+ * the right. A long option stands under its row as wrapping text, so it is read in full before it is chosen (a row
+ * title is cut, a Button label does not wrap).
+ */
+export function decisionRows(
+  k: Kit,
+  id: string,
+  choices: string[],
+  chosen: number,
+  choose: (i: number) => () => void,
+): RenderElement[] {
+  const room = Math.min(OPTION_ONE_LINE, Math.max(8, k.cols - 20))
+  return choices.map((c, i) => {
+    const letter = String.fromCharCode(65 + i)
+    const long = [...c].length > room
+    return ListRow(k, {
+      key: `rv-choice-row-${id}-${i}`,
+      title: long ? `Option ${letter}` : `${letter} · ${c}`,
+      pill: i === chosen ? { text: 'gewählt', tone: 'ok' } : undefined,
+      actions:
+        i === chosen
+          ? []
+          : [{ key: `rv-choice-${id}-${i}`, label: 'Wählen', variant: 'link', onPress: choose(i) }],
+      // the marked row keeps the place of its button: marking moves nothing
+      actionSlot: 7,
+      under: long ? [Sentence(k, c, { wrap: 'wrap' })] : undefined,
+    })
+  })
 }
 
 function storedReportRow(
@@ -437,7 +466,7 @@ function storedReportRow(
   r: ReviewData['reports'][number],
 ): RenderElement {
   const acts: Action[] = [
-    askAction($, k, { key: `rv-rep-send-${r.id}`, label: 'An Claude schicken', text: () => storedReportPrompt($, r) }),
+    askAction($, k, { key: `rv-rep-send-${r.id}`, label: 'Schicken', text: () => storedReportPrompt($, r) }),
   ]
   if (r.spot)
     acts.push({
@@ -450,14 +479,17 @@ function storedReportRow(
     key: `rv-rep-${r.id}`,
     title: `${r.kind || 'Gemeldet'}${r.note ? `: ${r.note}` : ''}`,
     icon: 'flag',
-    meta: 'gemerkt, noch nicht an Claude',
+    pill: { text: 'gemerkt', tone: 'neutral', glyph: false },
     actions: acts,
   })
 }
 
+/**
+ * A question sub tab: the unfolded question as a card, then the cards „Offen“ (every open question as a row),
+ * „Gemerkt“ (reports kept for later, only under Anschauen) and „Erledigt“ (the last five answers).
+ */
 function questionsBody(
   $: EngineInterface,
-  Input: El | undefined,
   k: Kit,
   options: Options,
   s: ReviewUiState,
@@ -468,59 +500,83 @@ function questionsBody(
   const all = d.questions.filter(q => q.kind === kind)
   const open = all.filter(q => !d.answers.has(q.id))
   const done = all.filter(q => d.answers.has(q.id))
+  const kept = kind === 'anschauen' ? d.reports.filter(x => !x.sent) : []
+  if (!open.length && !kept.length && !done.length)
+    return [EmptyState(k, { icon: 'check', title: 'Nichts offen', text: 'Hier liegt gerade nichts.' })]
   const out: RenderElement[] = []
-  if (kind === 'anschauen') for (const r of d.reports.filter(x => !x.sent)) out.push(storedReportRow($, k, options, r))
-  if (!open.length && !out.length)
-    out.push(
-      EmptyState(k, {
-        icon: 'check',
-        title: 'Alles beantwortet',
-        text: all.length ? `${all.length} erledigt.` : 'Hier liegt gerade nichts.',
-      }),
-    )
   const expanded = open.find(q => q.id === s.open) ?? open[0]
-  for (const q of open) {
-    if (q === expanded) out.push(questionCard($, Input, k, options, s, q))
-    else
-      out.push(
-        ListRow(k, {
-          key: `rv-row-${q.id}`,
-          title: q.title,
-          icon: q.kind === 'entscheiden' ? 'list' : q.kind === 'bild' ? 'camera' : 'eye',
-          actions: [
-            {
-              key: `rv-open-${q.id}`,
-              label: 'Öffnen',
-              variant: 'link',
-              onPress: () => void patchReview($, { open: q.id }),
-            },
-          ],
-        }),
-      )
-  }
-  for (const q of done.slice(-5).reverse()) {
-    const a = d.answers.get(q.id)!
+  if (expanded)
     out.push(
-      ListRow(k, {
-        key: `rv-done-${q.id}`,
-        title: q.title,
-        status: 'ok',
-        meta: `${a.choice ?? verdictText(a.verdict)} · beantwortet ${ago(a.time, now)}`,
-        pill: { text: verdictText(a.verdict), tone: verdictTone(a.verdict) },
+      questionCard(
+        $,
+        k,
+        options,
+        s,
+        expanded,
+        open.length > 1 ? `${open.indexOf(expanded) + 1} von ${open.length}` : '',
+      ),
+    )
+  // one open question is the card above already; the list is drawn from two on (or to say that nothing is open)
+  if (open.length !== 1)
+    out.push(
+      Card(k, {
+        key: 'rv-open',
+        title: { icon: kindIcon(kind), title: 'Offen', count: open.length },
+        empty: 'Nichts offen.',
+        children: open.map(q =>
+          ListRow(k, {
+            key: `rv-row-${q.id}`,
+            title: q.title,
+            icon: kindIcon(q.kind),
+            pill: q === expanded ? { text: 'geöffnet', tone: 'info', glyph: false } : undefined,
+            actions:
+              q === expanded
+                ? []
+                : [
+                    {
+                      key: `rv-open-${q.id}`,
+                      label: 'Details',
+                      variant: 'link',
+                      onPress: () => void patchReview($, { open: q.id }),
+                    },
+                  ],
+            actionSlot: 8,
+          }),
+        ),
       }),
     )
-  }
+  if (kept.length)
+    out.push(
+      Card(k, {
+        key: 'rv-kept',
+        title: { icon: 'flag', title: 'Gemerkt', count: kept.length },
+        children: kept.map(r => storedReportRow($, k, options, r)),
+      }),
+    )
+  if (done.length)
+    out.push(
+      Card(k, {
+        key: 'rv-done',
+        title: { icon: 'check', title: 'Erledigt', count: done.length },
+        children: done
+          .slice(-5)
+          .reverse()
+          .map(q => {
+            const a = d.answers.get(q.id)!
+            return ListRow(k, {
+              key: `rv-done-${q.id}`,
+              title: q.title,
+              status: 'ok',
+              meta: [a.choice, ago(a.time, now)].filter(Boolean).join(' · '),
+              pill: { text: verdictText(a.verdict), tone: verdictTone(a.verdict) },
+            })
+          }),
+      }),
+    )
   return out
 }
 
-function soundsBody(
-  $: EngineInterface,
-  Input: El | undefined,
-  k: Kit,
-  options: Options,
-  s: ReviewUiState,
-  d: ReviewData,
-): RenderElement[] {
+function soundsBody($: EngineInterface, k: Kit, options: Options, s: ReviewUiState, d: ReviewData): RenderElement[] {
   const snd = s.sounds
   if (!snd)
     return [
@@ -528,13 +584,7 @@ function soundsBody(
         icon: 'speaker',
         title: 'Klänge aus dem Spiel',
         text: 'Liste und Mix kommen aus dem Unity-Editor vom Soundboard des Projekts.',
-        action: {
-          key: 'rv-snd-load',
-          label: 'Klänge holen',
-          icon: 'refresh',
-          variant: 'primary',
-          onPress: () => void loadSounds($, options),
-        },
+        action: { ...reloadAction(k, { key: 'rv-snd-load', onPress: () => void loadSounds($, options) }), variant: 'primary' },
       }),
     ]
   const out: RenderElement[] = []
@@ -543,196 +593,156 @@ function soundsBody(
       Card(k, {
         key: 'rv-snd-err',
         tone: 'warn',
-        children: [
-          CardTitle(k, { icon: 'alert', title: 'Soundboard nicht erreichbar' }),
-          Sentence(k, snd.error),
-          Actions(k, 'rv-snd-err-acts', [
-            {
-              key: 'rv-snd-retry',
-              label: 'Nochmal holen',
-              icon: 'refresh',
-              variant: 'secondary',
-              onPress: () => void loadSounds($, options),
-            },
-          ]),
-        ],
+        title: { icon: 'alert', title: 'Soundboard nicht erreichbar', tone: 'warn' },
+        status: { text: snd.error, tone: 'warn' },
+        actions: [reloadAction(k, { key: 'rv-snd-retry', onPress: () => void loadSounds($, options) })],
       }),
     )
   if (snd.mix.length)
     out.push(
       Card(k, {
         key: 'rv-mix',
-        children: [
-          CardTitle(k, {
-            icon: 'sliders',
-            title: 'Mix',
-            pill: { text: 'wirkt sofort im Spiel', tone: 'info', glyph: false },
+        title: { icon: 'sliders', title: 'Mix', count: snd.mix.length },
+        children: snd.mix.map(m =>
+          ListRow(k, {
+            key: `rv-mix-${m.group}`,
+            title: m.group,
+            meta: `${m.db > 0 ? '+' : m.db < 0 ? '−' : ''}${Math.abs(Math.round(m.db))} dB`,
+            actions: [
+              {
+                key: `rv-mix-${m.group}-down`,
+                label: '−3 dB',
+                variant: 'link',
+                onPress: () => void nudgeMix($, options, m.group, -3),
+              },
+              {
+                key: `rv-mix-${m.group}-up`,
+                label: '+3 dB',
+                variant: 'link',
+                onPress: () => void nudgeMix($, options, m.group, 3),
+              },
+            ],
           }),
-          ...snd.mix.map(m =>
-            ListRow(k, {
-              key: `rv-mix-${m.group}`,
-              title: m.group,
-              meta: `${m.db > 0 ? '+' : m.db < 0 ? '−' : ''}${Math.abs(Math.round(m.db))} dB`,
-              actions: [
-                {
-                  key: `rv-mix-${m.group}-down`,
-                  label: '−3 dB',
-                  variant: 'link',
-                  onPress: () => void nudgeMix($, options, m.group, -3),
-                },
-                {
-                  key: `rv-mix-${m.group}-up`,
-                  label: '+3 dB',
-                  variant: 'link',
-                  onPress: () => void nudgeMix($, options, m.group, 3),
-                },
-              ],
-            }),
-          ),
-          Sentence(k, 'Das Spiel speichert den Mix selbst.', { faint: true }),
-        ],
+        ),
+        hint: 'Wirkt sofort im Spiel, das Spiel speichert den Mix selbst.',
       }),
     )
   const fresh = snd.list.filter(x => !isMusic(x) && !d.answers.has(`ton:${x.id}`))
   const music = snd.list.filter(isMusic)
   const groups = soundGroups(snd.list, id => d.answers.has(id))
-  const openGroup = groups.find(g => g.name === snd.openGroup) ?? groups.find(g => g.fresh > 0) ?? groups[0]
+  const openGroup =
+    snd.openGroup === NO_GROUP
+      ? undefined
+      : (groups.find(g => g.name === snd.openGroup) ?? groups.find(g => g.fresh > 0) ?? groups[0])
   const secs = (n: number) => `${n.toFixed(1).replace('.', ',')} s`
-  const rate = (id: string, fits: boolean) =>
-    void answerItem($, options, `ton:${id}`, fits ? 'passt' : 'passt-nicht', id, s.drafts[`ton:${id}`] ?? '', false)
-  const rows: (RenderElement | null)[] = []
-  // One group unfolded at a time, 20 rows per page: hundreds of rows with three buttons each made a tree the app could
-  // not draw any more (and with it no other mod's pane or band).
-  groups.forEach((g, gi) => {
-    const isOpen = g === openGroup
-    rows.push(
-      ListRow(k, {
-        key: `rv-sgrp-${gi}`,
-        title: g.name || 'ohne Gruppe',
-        icon: isOpen ? 'folder' : 'circle',
-        meta: `${g.fresh} neu · ${g.items.length} gesamt`,
-        actions: isOpen
-          ? []
-          : [
-              {
-                key: `rv-sgrp-open-${gi}`,
-                label: 'Zeigen',
-                variant: 'link',
-                onPress: () =>
-                  void patchReview($, x => ({
-                    sounds: x.sounds && { ...x.sounds, openGroup: g.name, more: undefined },
-                  })),
-              },
-            ],
-      }),
-    )
-    if (!isOpen) return
-    const shownCount = Math.max(SOUND_PAGE, snd.more ?? SOUND_PAGE)
-    for (const x of g.items.slice(0, shownCount)) {
-      const a = d.answers.get(`ton:${x.id}`)
-      if (a) {
-        rows.push(
-          ListRow(k, {
-            key: `rv-snd-done-${x.id}`,
-            title: x.name,
-            meta: secs(x.duration),
-            pill: { text: verdictText(a.verdict), tone: verdictTone(a.verdict) },
+  const rate = (id: string, fits: boolean, note?: string) => {
+    const text = note ?? fieldText(soundNoteKey(id), s.drafts[`ton:${id}`] ?? '')
+    clearFieldDraft(soundNoteKey(id))
+    void answerItem($, options, `ton:${id}`, fits ? 'passt' : 'passt-nicht', id, text, false)
+  }
+  const shownCount = Math.max(SOUND_PAGE, snd.more ?? SOUND_PAGE)
+  /** One sound: play and „Passt“ in the row; „Nochmal“ with its note waits behind „Details“ (the row keeps its height). */
+  const soundRow = (x: SoundRow): RenderElement => {
+    const a = d.answers.get(`ton:${x.id}`)
+    if (a)
+      return ListRow(k, {
+        key: `rv-snd-done-${x.id}`,
+        title: x.name,
+        meta: secs(x.duration),
+        pill: { text: a.verdict === 'passt-nicht' ? 'Nochmal' : verdictText(a.verdict), tone: verdictTone(a.verdict) },
+      })
+    return ListRow(k, {
+      key: `rv-snd-${x.id}`,
+      title: x.name,
+      status: snd.playing === x.id ? 'running' : undefined,
+      meta: `${secs(x.duration)}${x.takes > 1 ? ` · ${x.takes} Varianten` : ''}`,
+      actions: [
+        {
+          key: `rv-play-${x.id}`,
+          label: 'Abspielen',
+          icon: 'play',
+          variant: 'secondary',
+          onPress: () => void playSound($, options, x.id),
+        },
+        { key: `rv-ok-${x.id}`, label: FITS, variant: 'secondary', onPress: () => rate(x.id, true) },
+      ],
+      details: () => [
+        Field(k, {
+          key: soundNoteKey(x.id),
+          label: 'Notiz',
+          placeholder: 'z. B. zu dumpf',
+          value: s.drafts[`ton:${x.id}`] ?? '',
+          submitLabel: 'Nochmal machen',
+          onInput: v => void patchReview($, y => ({ drafts: { ...y.drafts, [`ton:${x.id}`]: v } })),
+          onSubmit: v => rate(x.id, false, v),
+        }) ??
+          // a surface without input fields: the redo goes without a note
+          ActionButton(k, {
+            key: `rv-no-${x.id}`,
+            label: 'Nochmal',
+            variant: 'secondary',
+            onPress: () => rate(x.id, false),
           }),
-        )
-        continue
-      }
-      rows.push(
-        ListRow(k, {
-          key: `rv-snd-${x.id}`,
-          title: x.name,
-          status: snd.playing === x.id ? 'running' : undefined,
-          meta: `${secs(x.duration)}${x.takes > 1 ? ` · ${x.takes} Varianten` : ''}`,
-          actions: [
-            {
-              key: `rv-play-${x.id}`,
-              label: 'Abspielen',
-              icon: 'play',
-              variant: 'secondary',
-              onPress: () => void playSound($, options, x.id),
-            },
-            {
-              key: `rv-ok-${x.id}`,
-              label: 'passt',
-              icon: 'check',
-              variant: 'secondary',
-              onPress: () => rate(x.id, true),
-            },
-            {
-              key: `rv-no-${x.id}`,
-              label: 'nochmal',
-              icon: 'x',
-              variant: 'secondary',
-              onPress: () => rate(x.id, false),
-            },
-          ],
-        }),
-      )
-      if (s.open === `ton:${x.id}` && Input)
-        rows.push(
-          Input({
-            key: `rv-note-ton-${x.id}`,
-            placeholder: 'Notiz zum Klang',
-            value: s.drafts[`ton:${x.id}`] ?? '',
-            submitLabel: 'nochmal',
-            onInput: (v: string) => void patchReview($, y => ({ drafts: { ...y.drafts, [`ton:${x.id}`]: v } })),
-            onSubmit: () => rate(x.id, false),
-          }),
-        )
-    }
-    const left = g.items.length - shownCount
-    if (left > 0)
-      rows.push(
-        ActionButton(k, {
-          key: 'rv-snd-more',
-          label: `Weitere ${Math.min(SOUND_PAGE, left)} (noch ${left})`,
-          variant: 'link',
-          onPress: () =>
-            void patchReview($, x => ({
-              sounds: x.sounds && { ...x.sounds, more: shownCount + SOUND_PAGE },
-            })),
-        }),
-      )
-  })
+      ],
+    })
+  }
+  // One group unfolded at a time, 20 rows per page: hundreds of rows with their buttons made a tree the app could not
+  // draw any more (and with it no other mod's pane or band).
+  const rows = groups.map((g, gi) =>
+    ListRow(k, {
+      key: `rv-sgrp-${gi}`,
+      title: g.name || 'ohne Gruppe',
+      icon: g === openGroup ? 'folder' : 'circle',
+      meta: `${g.fresh} neu · ${g.items.length} gesamt`,
+      open: g === openGroup,
+      onToggle: open =>
+        void patchReview($, x => ({
+          sounds: x.sounds && { ...x.sounds, openGroup: open ? g.name : NO_GROUP, more: undefined },
+        })),
+      details: () => g.items.slice(0, shownCount).map(soundRow),
+    }),
+  )
+  const left = openGroup ? openGroup.items.length - shownCount : 0
   out.push(
     Card(k, {
       key: 'rv-snd-new',
-      children: [
-        CardTitle(k, { icon: 'speaker', title: 'Neue Klänge', count: fresh.length }),
-        Actions(
-          k,
-          'rv-snd-mode',
-          [
-            {
-              key: 'rv-mode-near',
-              label: 'An der Figur (3D)',
-              icon: snd.mode === 'near' ? 'check' : 'circle',
-              variant: 'secondary',
-              onPress: () => void setSoundMode($, 'near'),
-            },
-            {
-              key: 'rv-mode-flat',
-              label: 'ohne Raum (2D)',
-              icon: snd.mode === 'flat' ? 'check' : 'circle',
-              variant: 'secondary',
-              onPress: () => void setSoundMode($, 'flat'),
-            },
-            {
-              key: 'rv-snd-stop',
-              label: 'Stopp',
-              icon: 'stop',
-              variant: 'secondary',
-              onPress: () => void stopSounds($, options),
-            },
-          ],
-          3,
-        ),
-        ...soundHintRows($, k, snd, options),
-        ...rows,
+      title: { icon: 'speaker', title: 'Neue Klänge', count: fresh.length },
+      // how a sound is played is a setting, not an action
+      filter: Segment(k, {
+        key: 'rv-mode',
+        options: [
+          { id: 'near', label: 'Räumlich (3D)' },
+          { id: 'flat', label: 'Ohne Raum (2D)' },
+        ],
+        active: snd.mode,
+        onSelect: mode => void setSoundMode($, mode),
+      }),
+      children: rows,
+      empty: 'Das Soundboard hat keine Klänge.',
+      // why the last play may stay silent stands here (a toast alone was gone before the button could be pressed)
+      status: snd.hint ? { text: snd.hint, tone: 'warn' } : undefined,
+      actions: [
+        {
+          key: 'rv-snd-stop',
+          label: 'Stoppen',
+          icon: 'stop',
+          variant: 'secondary',
+          onPress: () => void stopSounds($, options),
+        },
+        ...frontAction($, snd, options),
+        ...(left > 0
+          ? [
+              {
+                key: 'rv-snd-more',
+                label: `Weitere ${Math.min(SOUND_PAGE, left)}`,
+                variant: 'link' as const,
+                onPress: () =>
+                  void patchReview($, x => ({
+                    sounds: x.sounds && { ...x.sounds, more: shownCount + SOUND_PAGE },
+                  })),
+              },
+            ]
+          : []),
       ],
     }),
   )
@@ -742,46 +752,49 @@ function soundsBody(
     out.push(
       Card(k, {
         key: 'rv-music',
-        children: [
-          CardTitle(k, { icon: 'music', title: `Musik · ${music.length} Stücke` }),
-          ...(snd.musicOpen
-            ? music.slice(0, musicShown).map(x =>
-                ListRow(k, {
-                  key: `rv-mus-${x.id}`,
-                  title: x.name,
-                  status: snd.playing === x.id ? 'running' : undefined,
-                  actions: [
-                    {
-                      key: `rv-mplay-${x.id}`,
-                      label: 'Anspielen',
-                      icon: 'play',
-                      variant: 'secondary',
-                      onPress: () => void playSound($, options, x.id),
-                    },
-                  ],
-                }),
-              )
-            : [Sentence(k, 'Jedes Stück einzeln anspielen.', { faint: true })]),
-          snd.musicOpen && musicLeft > 0
-            ? ActionButton(k, {
-                key: 'rv-music-more',
-                label: `Weitere ${Math.min(SOUND_PAGE, musicLeft)} (noch ${musicLeft})`,
-                variant: 'link',
-                onPress: () =>
-                  void patchReview($, x => ({
-                    sounds: x.sounds && { ...x.sounds, musicMore: musicShown + SOUND_PAGE },
-                  })),
-              })
-            : null,
-          ActionButton(k, {
+        title: { icon: 'music', title: 'Musik', count: music.length },
+        children: snd.musicOpen
+          ? music.slice(0, musicShown).map(x =>
+              ListRow(k, {
+                key: `rv-mus-${x.id}`,
+                title: x.name,
+                status: snd.playing === x.id ? 'running' : undefined,
+                actions: [
+                  {
+                    key: `rv-mplay-${x.id}`,
+                    label: 'Anspielen',
+                    icon: 'play',
+                    variant: 'secondary',
+                    onPress: () => void playSound($, options, x.id),
+                  },
+                ],
+              }),
+            )
+          : [],
+        status: false,
+        actions: [
+          {
             key: 'rv-music-toggle',
-            label: snd.musicOpen ? 'Musik einklappen' : 'Musik zeigen',
+            label: snd.musicOpen ? k.s.close : k.s.details,
             variant: 'link',
             onPress: () =>
               void patchReview($, x => ({
                 sounds: x.sounds && { ...x.sounds, musicOpen: !x.sounds.musicOpen, musicMore: undefined },
               })),
-          }),
+          },
+          ...(snd.musicOpen && musicLeft > 0
+            ? [
+                {
+                  key: 'rv-music-more',
+                  label: `Weitere ${Math.min(SOUND_PAGE, musicLeft)}`,
+                  variant: 'link' as const,
+                  onPress: () =>
+                    void patchReview($, x => ({
+                      sounds: x.sounds && { ...x.sounds, musicMore: musicShown + SOUND_PAGE },
+                    })),
+                },
+              ]
+            : []),
         ],
       }),
     )
@@ -814,79 +827,96 @@ export function soundGroups(
   return [...by].map(([name, g]) => ({ name, items: [...g.fresh, ...g.rated], fresh: g.fresh.length }))
 }
 
-function ideasBody(
-  $: EngineInterface,
-  Input: El | undefined,
-  k: Kit,
-  options: Options,
-  s: ReviewUiState,
-  d: ReviewData,
-): RenderElement[] {
+/** The ideas: the unfolded one as a card built like a question card (one verdict is the main action), then the list. */
+function ideasBody($: EngineInterface, k: Kit, options: Options, s: ReviewUiState, d: ReviewData): RenderElement[] {
   if (!d.ideas.length)
     return [
       EmptyState(k, {
         icon: 'bookmark',
         title: 'Keine Ideen',
-        text: d.cfg?.ideas ? `Nichts in ${d.cfg.ideas}.` : 'review.ideas ist nicht eingetragen.',
+        text: d.cfg?.ideas ? 'Die Ideen-Datei ist leer.' : 'Für Ideen ist keine Datei eingetragen.',
       }),
     ]
-  return d.ideas.map(i => {
-    const a = d.answers.get(i.id)
-    if (s.open !== i.id)
-      return ListRow(k, {
-        key: `rv-idea-${i.id}`,
-        title: i.title,
-        icon: 'bookmark',
-        pill: a ? { text: verdictText(a.verdict), tone: verdictTone(a.verdict) } : undefined,
-        actions: [
-          {
-            key: `rv-idea-open-${i.id}`,
-            label: 'Öffnen',
-            variant: 'link',
-            onPress: () => void patchReview($, { open: i.id }),
-          },
+  const out: RenderElement[] = []
+  const shown = d.ideas.find(i => i.id === s.open)
+  if (shown) {
+    const stored = s.drafts[shown.id] ?? ''
+    const comment = () => fieldText(commentKey(shown.id), stored)
+    out.push(
+      Card(k, {
+        key: `rv-idea-card-${shown.id}`,
+        title: { icon: 'bookmark', title: shown.title },
+        children: [
+          shown.text ? Sentence(k, shown.text) : null,
+          Field(k, {
+            key: commentKey(shown.id),
+            label: 'Kommentar',
+            placeholder: 'z. B. erst nach dem Dorf',
+            value: stored,
+            submitLabel: 'Antworten',
+            onInput: v => void patchReview($, x => ({ drafts: { ...x.drafts, [shown.id]: v } })),
+            onSubmit: v => void answerItem($, options, shown.id, 'kommentar', null, v, false),
+          }),
         ],
-      })
-    const draft = s.drafts[i.id] ?? ''
-    return Card(k, {
-      key: `rv-idea-card-${i.id}`,
-      children: [
-        CardTitle(k, { icon: 'bookmark', title: i.title }),
-        i.text ? Sentence(k, i.text) : null,
-        Input
-          ? Input({
-              key: `rv-idea-c-${i.id}`,
-              placeholder: 'Kommentar',
-              value: draft,
-              submitLabel: 'Antworten',
-              onInput: (v: string) => void patchReview($, x => ({ drafts: { ...x.drafts, [i.id]: v } })),
-              onSubmit: (v: string) => void answerItem($, options, i.id, 'kommentar', null, v, false),
-            })
-          : null,
-        Actions(
-          k,
-          `rv-idea-acts-${i.id}`,
-          [
+        actions: {
+          primary: {
+            key: `rv-idea-yes-${shown.id}`,
+            label: 'Gute Idee',
+            variant: 'primary',
+            onPress: () => void answerItem($, options, shown.id, 'passt', null, comment(), false),
+          },
+          secondary: [
             {
-              key: `rv-idea-yes-${i.id}`,
-              label: 'Gute Idee',
-              icon: 'check',
-              variant: 'primary',
-              onPress: () => void answerItem($, options, i.id, 'passt', null, draft, false),
-            },
-            {
-              key: `rv-idea-no-${i.id}`,
+              key: `rv-idea-no-${shown.id}`,
               label: 'Eher nicht',
-              icon: 'x',
               variant: 'secondary',
-              onPress: () => void answerItem($, options, i.id, 'passt-nicht', null, draft, false),
+              onPress: () => void answerItem($, options, shown.id, 'passt-nicht', null, comment(), false),
             },
           ],
-          2,
-        ),
-      ],
-    })
-  })
+          links: [
+            {
+              key: `rv-idea-close-${shown.id}`,
+              label: k.s.close,
+              variant: 'link',
+              onPress: () => void patchReview($, { open: undefined }),
+            },
+          ],
+        },
+      }),
+    )
+  }
+  out.push(
+    Card(k, {
+      key: 'rv-ideas',
+      title: { icon: 'bookmark', title: 'Ideen', count: d.ideas.length },
+      children: d.ideas.map(i => {
+        const a = d.answers.get(i.id)
+        return ListRow(k, {
+          key: `rv-idea-${i.id}`,
+          title: i.title,
+          icon: 'bookmark',
+          pill: a
+            ? { text: verdictText(a.verdict), tone: verdictTone(a.verdict) }
+            : i === shown
+              ? { text: 'geöffnet', tone: 'info', glyph: false }
+              : undefined,
+          actions:
+            i === shown
+              ? []
+              : [
+                  {
+                    key: `rv-idea-open-${i.id}`,
+                    label: 'Details',
+                    variant: 'link',
+                    onPress: () => void patchReview($, { open: i.id }),
+                  },
+                ],
+          actionSlot: 8,
+        })
+      }),
+    }),
+  )
+  return out
 }
 
 function runningBody(k: Kit, d: ReviewData): RenderElement[] {
@@ -916,7 +946,10 @@ function runningBody(k: Kit, d: ReviewData): RenderElement[] {
   return out
 }
 
-/** The picture viewer: frame (Svg + paint overlay on desktop; file path elsewhere), frame/direction controls. */
+/**
+ * The picture viewer: frame (Svg + paint overlay on desktop; a copy button for the file elsewhere). What is chosen
+ * (view, tool, colour) is a `Segment`, never an action button; verdicts and paging share the one action row.
+ */
 export async function viewerCard(
   $: EngineInterface,
   e: RenderInput<'Pane'>,
@@ -955,164 +988,206 @@ export async function viewerCard(
       )
     }
   }
+  // no picture on this surface: the file's path only behind a copy button, never as running text (R10)
   const fileNote: (RenderElement | null)[] = picture
     ? []
     : frame
-      ? [Sentence(k, `Bild in Datei ${frame}`, { faint: true }), CopyButton(k, { key: 'rv-copy-frame', text: frame })]
+      ? [
+          Sentence(k, 'Das Bild liegt als Datei vor.', { faint: true }),
+          CopyButton(k, { key: 'rv-copy-frame', text: frame, label: 'Pfad kopieren' }),
+        ]
       : [Sentence(k, 'Kein Bild.', { faint: true })]
-  const tools: Action[] = picture
-    ? [
-        {
-          key: 'rv-tool-pen',
-          label: 'Stift',
-          icon: v.tool === 'pen' ? 'check' : 'pen',
-          variant: 'secondary',
-          onPress: () => void patchView($, () => ({ tool: 'pen' })),
-        },
-        {
-          key: 'rv-tool-arrow',
-          label: 'Pfeil',
-          icon: v.tool === 'arrow' ? 'check' : 'arrow',
-          variant: 'secondary',
-          onPress: () => void patchView($, () => ({ tool: 'arrow' })),
-        },
-        ...(['red', 'yellow', 'blue'] as const).map(c => ({
-          key: `rv-color-${c}`,
-          label: c === 'red' ? 'Rot' : c === 'yellow' ? 'Gelb' : 'Blau',
-          icon: (v.color === c ? 'check' : 'circle') as IconName,
-          variant: 'secondary' as const,
-          onPress: () => void patchView($, () => ({ color: c })),
-        })),
-        {
-          key: 'rv-undo',
-          label: 'Rückgängig',
-          icon: 'rerun',
-          variant: 'secondary',
-          onPress: () => void patchView($, x => ({ marks: x.marks.slice(0, -1) })),
-        },
-      ]
-    : []
-  const Input = els.Input
   const step = (d: number) => (x: ReviewViewState) => ({
     playing: false,
     frame: (x.frame + d + frames.length) % frames.length,
   })
+  const marks = v.marks.length ? `${v.marks.length} Markierung${v.marks.length > 1 ? 'en' : ''}` : ''
+  const where = [
+    total > 1 ? `Ansicht ${v.group + 1} von ${total}` : '',
+    g?.label ?? '',
+    frames.length > 1 ? `Bild ${v.frame + 1}/${frames.length}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  // The note field keeps what is typed until typing pauses: an answer takes the text of the moment along, and the
+  // draft ends with the view (the field's key is the same for the next picture).
+  const send = (fits: boolean) => {
+    const note = fieldText(VIEW_NOTE, v.note)
+    clearFieldDraft(VIEW_NOTE)
+    void patchView($, () => ({ note })).then(() => sendView($, options, fits))
+  }
+  const verdicts: { primary?: Action; secondary: Action[] } =
+    v.source === 'report'
+      ? { secondary: [] }
+      : v.source === 'item'
+        ? {
+            // two verdicts of equal rank look the same
+            secondary: [
+              { key: 'rv-view-ok', label: FITS, variant: 'secondary', onPress: () => send(true) },
+              {
+                key: 'rv-view-send',
+                label: FITS_NOT,
+                variant: 'secondary',
+                onPress: () => send(false),
+              },
+            ],
+          }
+        : {
+            primary: {
+              key: 'rv-view-send',
+              label: 'Markierung an Claude',
+              icon: 'claude',
+              variant: 'primary',
+              onPress: () => send(false),
+            },
+            secondary: [
+              { key: 'rv-view-ok', label: FITS, variant: 'secondary', onPress: () => send(true) },
+            ],
+          }
+  const links: Action[] = []
+  if (frames.length > 1)
+    links.push(
+      // paging stays reachable in one press, whatever else stands in the row
+      { key: 'rv-prev', label: 'Zurück', variant: 'link', keep: true, onPress: () => void patchView($, step(-1)) },
+      { key: 'rv-next', label: 'Weiter', variant: 'link', keep: true, onPress: () => void patchView($, step(1)) },
+      {
+        key: 'rv-play',
+        label: v.playing ? 'Anhalten' : 'Abspielen',
+        icon: v.playing ? 'stop' : 'play',
+        variant: 'link',
+        onPress: () => void patchView($, x => ({ playing: !x.playing })),
+      },
+    )
+  if (picture && v.marks.length)
+    links.push({
+      key: 'rv-undo',
+      label: 'Rückgängig',
+      variant: 'link',
+      onPress: () => void patchView($, x => ({ marks: x.marks.slice(0, -1) })),
+    })
+  if (v.source !== 'report')
+    links.push({
+      key: 'rv-view-close',
+      label: k.s.close,
+      variant: 'link',
+      onPress: () => {
+        clearFieldDraft(VIEW_NOTE)
+        void patchReview($, { view: undefined })
+      },
+    })
   return Card(k, {
     key: 'rv-viewer',
+    title: { icon: 'eye', title: v.title, subtitle: where || undefined, count: marks },
+    filter:
+      total > 1
+        ? Segment(k, {
+            key: 'rv-group',
+            options: v.groups.map((x, i) => ({ id: String(i), label: x.label })),
+            active: String(v.group),
+            onSelect: id => void patchView($, () => ({ group: Number(id), frame: 0 })),
+          })
+        : null,
     children: [
-      CardTitle(k, {
-        icon: 'eye',
-        title: v.title,
-        count: total > 1 ? `${v.group + 1} von ${total}` : frames.length > 1 ? `${frames.length} Bilder` : '',
-      }),
       v.question ? Sentence(k, v.source === 'claude' ? `Claude fragt: „${v.question}“` : v.question) : null,
       picture,
       ...fileNote,
-      Sentence(k, `${g?.label ?? ''}${frames.length > 1 ? ` · Bild ${v.frame + 1}/${frames.length}` : ''}`, {
-        faint: true,
+      picture ? (
+        <Box key="rv-tools" flexDirection="row" alignItems="center" gap={2} flexWrap="wrap">
+          {Segment(k, {
+            key: 'rv-tool',
+            options: [
+              { id: 'pen', label: 'Stift' },
+              { id: 'arrow', label: 'Pfeil' },
+            ],
+            active: v.tool,
+            onSelect: tool => void patchView($, () => ({ tool })),
+          })}
+          {Segment(k, {
+            key: 'rv-color',
+            options: [
+              { id: 'red', label: 'Rot' },
+              { id: 'yellow', label: 'Gelb' },
+              { id: 'blue', label: 'Blau' },
+            ],
+            active: v.color,
+            onSelect: color => void patchView($, () => ({ color })),
+          })}
+        </Box>
+      ) : null,
+      Field(k, {
+        key: VIEW_NOTE,
+        label: 'Notiz',
+        placeholder: 'z. B. Schatten zu hart',
+        value: v.note,
+        submitLabel: 'Merken',
+        onInput: t => void patchView($, () => ({ note: t })),
+        onSubmit: t => void patchView($, () => ({ note: t })),
       }),
-      v.marks.length
-        ? Pill(k, { text: `${v.marks.length} Markierung${v.marks.length > 1 ? 'en' : ''}`, tone: 'bad', glyph: false })
-        : null,
-      total > 1
-        ? Actions(
-            k,
-            'rv-groups',
-            v.groups.map((x, i) => ({
-              key: `rv-group-${i}`,
-              label: x.label,
-              icon: (i === v.group ? 'check' : 'circle') as IconName,
-              variant: 'secondary' as const,
-              onPress: () => void patchView($, () => ({ group: i, frame: 0 })),
-            })),
-            8,
-          )
-        : null,
-      frames.length > 1
-        ? Actions(
-            k,
-            'rv-frames',
-            [
-              {
-                key: 'rv-prev',
-                label: 'Zurück',
-                icon: 'arrow',
-                variant: 'secondary',
-                onPress: () => void patchView($, step(-1)),
-              },
-              {
-                key: 'rv-play',
-                label: v.playing ? 'Anhalten' : 'Abspielen',
-                icon: v.playing ? 'stop' : 'play',
-                variant: 'secondary',
-                onPress: () => void patchView($, x => ({ playing: !x.playing })),
-              },
-              {
-                key: 'rv-next',
-                label: 'Weiter',
-                icon: 'next',
-                variant: 'secondary',
-                onPress: () => void patchView($, step(1)),
-              },
-            ],
-            3,
-          )
-        : null,
-      tools.length ? Actions(k, 'rv-tools', tools, 6) : null,
-      Input
-        ? Input({
-            key: 'rv-view-note',
-            placeholder: v.marks.length ? 'Notiz zu Markierung 1' : 'Notiz',
-            value: v.note,
-            submitLabel: 'Notiz',
-            onInput: (t: string) => void patchView($, () => ({ note: t })),
-            onSubmit: (t: string) => void patchView($, () => ({ note: t })),
-          })
-        : null,
-      v.source === 'report'
-        ? null
-        : Actions(
-            k,
-            'rv-view-acts',
-            [
-              {
-                key: 'rv-view-send',
-                label: v.source === 'item' ? 'Passt nicht' : 'Markierung an Claude',
-                icon: v.source === 'item' ? 'x' : 'claude',
-                variant: 'primary',
-                onPress: () => void sendView($, options, false),
-              },
-              {
-                key: 'rv-view-ok',
-                label: 'Passt so',
-                icon: 'check',
-                variant: 'secondary',
-                onPress: () => void sendView($, options, true),
-              },
-              {
-                key: 'rv-view-close',
-                label: 'Schließen',
-                variant: 'link',
-                onPress: () => void patchReview($, { view: undefined }),
-              },
-            ],
-            3,
-          ),
-      v.source === 'claude'
-        ? Sentence(k, 'Claude bekommt das Bild mit deiner Markierung, Ansicht, Bildnummer und Notiz.', { faint: true })
-        : null,
     ],
+    hint:
+      v.source === 'claude'
+        ? 'Claude bekommt das Bild mit deiner Markierung, Ansicht, Bildnummer und Notiz.'
+        : undefined,
+    status: false,
+    actions: { ...verdicts, links },
+    maxActions: 5,
   })
 }
 
-/** Setup hint when the project has no `review` block. */
-function setupHint(k: Kit): RenderElement {
+/** Setup state when the project has no `review` block: what it is for and the one way to get it. */
+function setupHint($: EngineInterface, k: Kit): RenderElement {
   return EmptyState(k, {
     icon: 'gear',
     title: 'Review ist nicht eingerichtet',
-    text: 'Trag in .claude/unity.json einen Block „review“ ein: questions (Fragen-JSON), answers (Antwort-Log), shots (Ordner für Screenshots), ideas, running, queue. Sounds und Problem melden gehen auch ohne.',
+    text: 'Fragen, Antworten und Ideen brauchen einen Eintrag in den Projekt-Einstellungen. Klänge und Meldungen gehen auch ohne.',
+    action: askAction($, k, {
+      key: 'rv-setup-draft',
+      label: 'Entwurf erstellen',
+      icon: 'wand',
+      variant: 'primary',
+      text: 'Führe /unity-init aus und ergänze in der .claude/unity.json den Block „review“ (questions: Fragen-JSON, answers: Antwort-Log, shots: Ordner für Screenshots, ideas, running, queue). Zeig mir den Entwurf und schreib ihn erst, wenn ich zustimme.',
+    }),
   })
 }
+
+/**
+ * The tab's own card above the sub tabs: the one place of „Problem melden“ (it works in every sub tab and without a
+ * `review` block) and the screenshot switch, which holds for every answer of the tab.
+ */
+function frameCard($: EngineInterface, k: Kit, options: Options, s: ReviewUiState, d: ReviewData): RenderElement | null {
+  const canShoot = !!d.cfg?.shots
+  if (s.report && !canShoot) return null
+  return Card(k, {
+    key: 'rv-frame',
+    title: { icon: 'flag', title: 'Review', count: openTotal(d) || '' },
+    children: canShoot
+      ? [
+          Toggle(k, {
+            key: 'rv-shot',
+            label: 'Screenshot mitschicken',
+            on: s.attachShot,
+            onToggle: on => void patchReview($, { attachShot: on }),
+          }),
+        ]
+      : [],
+    status: false,
+    actions: s.report
+      ? []
+      : [
+          {
+            key: 'rv-report-open',
+            label: 'Problem melden',
+            icon: 'flag',
+            variant: 'secondary',
+            onPress: () => void openReport($, options),
+          },
+        ],
+  })
+}
+
+/** Unanswered questions plus reports not yet sent, as the tab badge counts them. */
+const openTotal = (d: ReviewData) =>
+  d.questions.filter(q => !d.answers.has(q.id)).length + d.reports.filter(r => !r.sent).length
 
 export async function reviewTab(
   $: EngineInterface,
@@ -1123,7 +1198,6 @@ export async function reviewTab(
   const { Box } = k
   const s = await readReview($)
   const d = await loadReview($)
-  const Input = table($, e).Input
   const now = Date.now()
   const sub = (SUBS.some(x => x.id === s.sub) ? s.sub : 'look') as SubTab
   const count = (kind: Question['kind']) => d.questions.filter(q => q.kind === kind && !d.answers.has(q.id)).length
@@ -1137,16 +1211,7 @@ export async function reviewTab(
   if (s.report) parts.push(await reportCard($, e, k, options, s))
   if (s.view) parts.push(await viewerCard($, e, k, options, s.view))
   // `s.notice` (what the last press said) stands in the pane's fixed status line, see renderPane
-  if (!s.report)
-    parts.push(
-      ActionButton(k, {
-        key: 'rv-report-open',
-        label: 'Problem melden',
-        icon: 'flag',
-        variant: 'secondary',
-        onPress: () => void openReport($, options),
-      }),
-    )
+  parts.push(frameCard($, k, options, s, d))
   parts.push(
     Tabs(k, {
       tabs: SUBS.map(x => ({ id: x.id, label: x.label, icon: x.icon, count: counts[x.id] || undefined })),
@@ -1157,45 +1222,14 @@ export async function reviewTab(
     }),
   )
   const kind = KIND_OF[sub]
-  if (sub === 'sounds') parts.push(...soundsBody($, Input, k, options, s, d))
-  else if (!d.cfg) parts.push(setupHint(k))
-  else if (kind) parts.push(...questionsBody($, Input, k, options, s, d, kind, now))
-  else if (sub === 'ideas') parts.push(...ideasBody($, Input, k, options, s, d))
+  if (sub === 'sounds') parts.push(...soundsBody($, k, options, s, d))
+  else if (!d.cfg) parts.push(setupHint($, k))
+  else if (kind) parts.push(...questionsBody($, k, options, s, d, kind, now))
+  else if (sub === 'ideas') parts.push(...ideasBody($, k, options, s, d))
   else parts.push(...runningBody(k, d))
   return (
     <Box key="rv" flexDirection="column" gap={1}>
       {parts.filter(Boolean)}
-    </Box>
-  )
-}
-
-/**
- * The options of a decision, one per row: a short letter button ("A") and the whole option as wrapping text beside it,
- * so a long option is read in full before it is chosen (a native Button cuts its label). The button's accessible
- * label carries the whole option.
- */
-/**
- * The options of a decision, one per block: the option as wrapping text ("A: warmes Orange"), below it a short button
- * "A wählen". The button carries no option text: a long label did not wrap but kept its width, which tore the card
- * apart at ~300 px and drew the option twice (button plus text).
- */
-export function decisionChoices(k: Kit, id: string, choices: string[], choose: (c: string) => () => void): RenderElement {
-  const { Box, Button } = k
-  return (
-    <Box key={`rv-choices-${id}`} flexDirection="column" gap={k.graphical ? 'sm' : 0}>
-      {choices.map((c, i) => {
-        const letter = String.fromCharCode(65 + i)
-        return (
-          <Box key={`rv-choice-row-${id}-${i}`} flexDirection="column" gap={k.graphical ? 'xs' : 0} minWidth={0}>
-            {Sentence(k, `${letter}: ${c}`)}
-            <Box flexDirection="row">
-              <Box flexShrink={0}>
-                <Button key={`rv-choice-${id}-${i}`} label={`${letter} wählen`} variant="secondary" onPress={choose(c)} />
-              </Box>
-            </Box>
-          </Box>
-        )
-      })}
     </Box>
   )
 }

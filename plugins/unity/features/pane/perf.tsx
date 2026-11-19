@@ -10,7 +10,7 @@ import { canFront, FRONT_HINT } from '../../lib/front'
 import { knownPlatform } from '../../lib/host'
 import { isPlayError } from '../../lib/play'
 import { schemeSvg } from '../../lib/theme'
-import { Actions, askAction, Card, type Action, CardTitle, ProblemCard, Sentence, sanitize, truncate, type Kit } from '../../lib/ui'
+import { askAction, Card, KeyValue, ListRow, ProblemCard, Sentence, sanitize, truncate, type Action, type Kit } from '../../lib/ui'
 import { gotoSpot, patchModel, type Options } from '../state'
 import { bridgeUpdateAction, clockTime, dec, thousands } from './common'
 import { measure, measuringSeconds } from './measure'
@@ -149,12 +149,12 @@ export function frontMeasureAction(
   $: EngineInterface,
   options: Options,
   seconds: number,
-  variant: Action['variant'] = 'link',
+  variant: 'primary' | 'secondary' = 'secondary',
 ): Action {
   return {
-    key: variant === 'link' ? 'perf-front' : 'perf-front-run',
+    key: variant === 'secondary' ? 'perf-front' : 'perf-front-run',
     label: 'Unity vorn messen',
-    ...(variant === 'link' ? {} : { icon: 'gauge' as const }),
+    icon: 'gauge',
     variant,
     onPress: () => void measure($, options, Math.max(1, Math.round(seconds)), false, true),
   }
@@ -174,32 +174,36 @@ function runCard(
   const bg = perfBackground(p)
   const throttled = bg === 'throttled'
   const front = canFront(knownPlatform())
+  const outlier = outlierNote(p)
+  const legend = `Gestrichelt: ${dec(p.budgetMs)} ms (60 Bilder/s)${p.worst > chartTop(p) ? ' · ▲ Frames über der Achse' : ''}`
   return Card(k, {
     key: 'perf-run',
+    title: {
+      icon: 'gauge',
+      title: `Messung ${clockTime(at)}`,
+      pill: throttled
+        ? { text: 'nicht aussagekräftig', tone: 'bad' }
+        : p.hitches
+          ? { text: `${p.hitches} ${p.hitches === 1 ? 'Ruckler' : 'Ruckler'}`, tone: 'warn' }
+          : { text: 'flüssig', tone: 'ok' },
+    },
     children: [
-      CardTitle(k, {
-        icon: 'gauge',
-        title: `Messung ${clockTime(at)}`,
-        pill: throttled
-          ? { text: 'nicht aussagekräftig', tone: 'bad' }
-          : p.hitches
-            ? { text: `${p.hitches} ${p.hitches === 1 ? 'Ruckler' : 'Ruckler'}`, tone: 'warn' }
-            : { text: 'flüssig', tone: 'ok' },
+      // the figures as label/value rows (R5), not as pale sentences joined with „·“
+      KeyValue(k, {
+        key: 'perf-facts',
+        bare: true,
+        rows: [
+          ...(where ? [{ label: 'Stelle', value: where }] : []),
+          {
+            label: 'Länge',
+            value: `${perfLength(p, bridgeVersion)} · ${thousands(p.frames)} Frames${p.aborted ? ` · abgebrochen: ${p.aborted}` : ''}`,
+          },
+          { label: 'Median', value: `${dec(p.p50)} ms` },
+          { label: 'p95', value: `${dec(p.p95)} ms` },
+          { label: 'Schlimmster', value: `${dec(p.worst)} ms` },
+          ...(outlier ? [{ label: 'Auffällig', value: outlier, wrap: true }] : []),
+        ],
       }),
-      throttled ? Sentence(k, `${THROTTLED_TEXT} (${throttleDetail(p)}).`, { tone: 'bad' }) : null,
-      throttled && !front ? Sentence(k, `${FRONT_HINT} und neu messen.`, { faint: true }) : null,
-      bg === 'kept' ? Sentence(k, KEPT_TEXT, { faint: true }) : null,
-      Sentence(
-        k,
-        `${where ? `${where} · ` : ''}${perfLength(p, bridgeVersion)} · ${thousands(p.frames)} Frames${p.aborted ? ` · abgebrochen: ${p.aborted}` : ''}`,
-        { faint: true },
-      ),
-      outlierNote(p) ? Sentence(k, outlierNote(p)!, { faint: true }) : null,
-      Sentence(
-        k,
-        `${throttled ? 'Gedrosselt gemessen: ' : ''}${dec(p.p50)} ms Median · ${dec(p.p95)} ms p95 · ${dec(p.worst)} ms schlimmster`,
-        throttled ? { faint: true } : {},
-      ),
       k.graphical && Svg ? (
         <Box key="perf-chart" flexDirection="column">
           <Svg
@@ -212,43 +216,42 @@ function runCard(
       ) : (
         Sentence(k, sparkline(p, Math.max(8, k.cols - 2)))
       ),
-      Sentence(
-        k,
-        `Gestrichelt: ${dec(p.budgetMs)} ms (60 Bilder/s) · y-Achse bis ${dec(chartTop(p), 0)} ms${p.worst > chartTop(p) ? ', höhere Frames als ▲ oben' : ''}`,
-        { faint: true },
-      ),
-      costs.length ? Sentence(k, 'Was kostet in den Rucklern', { faint: true }) : null,
+      // a group label, not a hint: it names what the rows under it are
+      costs.length ? Sentence(k, p.hitches ? 'Kosten in den Rucklern' : 'Kosten im Schnitt') : null,
       ...costs.map((c, i) => costRow(k, `cost-${i}`, c.name, p.hitches ? c.hitchAvgMs : c.avgMs)),
-      !costs.length ? Sentence(k, noCostsText(p), { faint: true }) : null,
-      Actions(k, 'perf-run-acts', [
-        ...(throttled && front ? [frontMeasureAction($, options, p.requestedSeconds || 10, 'primary')] : []),
-        askAction($, k, {
-          key: 'perf-ask',
-          label: 'Claude analysieren lassen',
-          text: perfPrompt(at, p),
-          ...(throttled ? { variant: 'secondary' as const } : {}),
-        }),
-        ...(p.spot
-          ? [
-              {
-                key: 'perf-goto',
-                label: 'Hinspringen',
-                icon: 'pin' as const,
-                variant: 'secondary' as const,
-                onPress: () =>
-                  void gotoSpot($, options, p.spot ?? {}).then(r =>
-                    $.ui.toast(isPlayError(r) ? `Hinspringen ging nicht: ${r.error}` : 'Hingesprungen'),
-                  ),
-              },
-            ]
-          : []),
-      ]),
-      p.spot ? null : Sentence(k, NO_SPOT, { faint: true }),
+    ],
+    // one hint (R7): how far the values hold, else why no costs are named, else how to read the chart
+    hint: throttled
+      ? front
+        ? undefined
+        : `${FRONT_HINT} und neu messen.`
+      : bg === 'kept'
+        ? KEPT_TEXT
+        : !costs.length
+          ? noCostsText(p)
+          : legend,
+    status: throttled ? { text: `${THROTTLED_TEXT} (${throttleDetail(p)})`, tone: 'bad' } : undefined,
+    actions: [
+      ...(throttled && front ? [frontMeasureAction($, options, p.requestedSeconds || 10, 'primary')] : []),
+      askAction($, k, { key: 'perf-ask', label: 'Analysieren', text: perfPrompt(at, p) }),
+      // without a spot there is no button, and no sentence about the missing one
+      ...(p.spot
+        ? [
+            {
+              key: 'perf-goto',
+              label: 'Hinspringen',
+              icon: 'pin' as const,
+              variant: 'secondary' as const,
+              onPress: () =>
+                void gotoSpot($, options, p.spot ?? {}).then(r =>
+                  $.ui.toast(isPlayError(r) ? `Hinspringen ging nicht: ${r.error}` : 'Hingesprungen'),
+                ),
+            },
+          ]
+        : []),
     ],
   })
 }
-
-export const NO_SPOT = 'Stelle unbekannt: das Projekt meldet bei der Messung keine Stelle, darum kein Hinspringen.'
 
 /**
  * The recording's length; says when it ran clearly shorter than asked (under 95 %, so 9,5 of 10 s stays quiet). Only a
@@ -303,7 +306,7 @@ export function noCostsText(p: Pick<ModelPerf, 'sources'>): string {
   return 'Keine Kosten gemeldet (diese Version des Unity-Pakets sagt nicht, ob eine Kostenquelle registriert ist).'
 }
 
-/** The prompt behind "Claude analysieren lassen". */
+/** The prompt behind „Analysieren“. */
 export function perfPrompt(at: number, p: ModelPerf): string {
   return [
     `Analysiere diese Frame-Zeit-Messung aus Unity (${clockTime(at)}, ${dec(p.seconds, 0)} s, ${p.frames} Frames, Budget ${p.budgetMs} ms):`,
@@ -366,61 +369,51 @@ export function perfTab($: EngineInterface, k: Kit, m: UnityModel, options: Opti
         : null}
       {Card(k, {
         key: 'perf-start',
-        children: [
-          CardTitle(k, {
-            icon: 'activity',
-            title: 'Es ruckelt gerade?',
-            pill: measuring ? { text: `Messe ${secs} s …`, tone: 'warn', glyph: '◷' } : undefined,
-          }),
-          Sentence(
-            k,
-            measuring
-              ? `Messe ${secs} s Leistung … Spiel einfach weiter, das Ergebnis erscheint hier.`
-              : playing
-                ? 'Lauf einfach weiter. Das Panel misst die nächsten Sekunden im laufenden Spiel und merkt sich, wo du warst.'
-                : 'Messen geht im Play-Modus: starte das Spiel, lauf zur Stelle, dann messen.',
-            { faint: true },
-          ),
-          measuring
-            ? null
-            : Actions(
-                k,
-                'perf-start-acts',
-                playing
-                  ? [
-                      {
-                        key: 'perf-10',
-                        label: '10 s messen',
-                        icon: 'gauge',
-                        variant: 'primary',
-                        primary: true,
-                        onPress: () => void measure($, options, 10),
-                      },
-                      { key: 'perf-30', label: '30 s', variant: 'link', onPress: () => void measure($, options, 30) },
-                      ...(canFront(knownPlatform()) ? [frontMeasureAction($, options, 10)] : []),
-                    ]
-                  : m.bridge.up
-                    ? playActions($, k, m, options).filter(a => a.key === 'play')
-                    : [],
-              ),
-        ],
+        title: { icon: 'activity', title: 'Es ruckelt gerade?' },
+        hint: measuring
+          ? 'Spiel einfach weiter, das Ergebnis erscheint hier.'
+          : playing
+            ? 'Die Messung läuft im Spiel mit und merkt sich, wo du warst.'
+            : 'Messen geht nur im Play-Modus.',
+        // the running measurement is said once, here (no pill beside it)
+        status: measuring ? { text: `Messe ${secs} s Leistung …`, running: true } : undefined,
+        actions: measuring
+          ? []
+          : playing
+            ? [
+                {
+                  key: 'perf-10',
+                  label: '10 s messen',
+                  icon: 'gauge',
+                  variant: 'primary',
+                  onPress: () => void measure($, options, 10),
+                },
+                {
+                  key: 'perf-30',
+                  label: '30 s messen',
+                  icon: 'gauge',
+                  variant: 'secondary',
+                  onPress: () => void measure($, options, 30),
+                },
+                ...(canFront(knownPlatform()) ? [frontMeasureAction($, options, 10)] : []),
+              ]
+            : m.bridge.up
+              ? playActions($, k, m, options).filter(a => a.key === 'play')
+              : [],
       })}
       {runs[0] ? runCard($, k, options, runs[0].at, runs[0].perf, m.bridge.version ?? m.bridgeInstalled) : null}
       {runs.length > 1
         ? Card(k, {
             key: 'perf-history',
-            children: [
-              CardTitle(k, { icon: 'list', title: 'Frühere Messungen', count: runs.length - 1 }),
-              ...runs
-                .slice(1)
-                .map(r =>
-                  Sentence(
-                    k,
-                    `${clockTime(r.at)}${spotLine(r.perf.spot) ? ` · ${spotLine(r.perf.spot)}` : ''} · p95 ${dec(r.perf.p95)} ms`,
-                    { faint: true },
-                  ),
-                ),
-            ],
+            title: { icon: 'list', title: 'Frühere Messungen', count: runs.length - 1 },
+            children: runs.slice(1).map((r, i) =>
+              ListRow(k, {
+                key: `perf-old-${i}`,
+                icon: 'gauge',
+                title: clockTime(r.at),
+                meta: [spotLine(r.perf.spot), `p95 ${dec(r.perf.p95)} ms`].filter(Boolean).join(' · '),
+              }),
+            ),
           })
         : null}
     </Box>

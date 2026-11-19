@@ -45,10 +45,9 @@ import {
   profileName,
 } from "../lib/state";
 import {
-  Actions,
   Card,
-  CardTitle,
   EmptyState,
+  Field,
   Line,
   ListRow,
   Section,
@@ -792,11 +791,11 @@ export function bandHint(
 
 type InputEl = (props: Record<string, unknown>) => RenderElement;
 
-/** The fight-order field's example from the real group: "z. B. Ada, Borin, Wolf 1". */
+/** The fight-order field's example from the real group: "z. B. Ada, Borin, Wolf 1" (the label names the thing). */
 export function orderExample(view: TableView): string {
   const names = view.party.filter((h) => !h.foe).map((h) => h.name).slice(0, 3);
   const foe = view.party.find((h) => h.foe)?.name ?? "Wolf 1";
-  return `Reihenfolge, z. B. ${[...(names.length ? names : ["Ada", "Borin"]), foe].join(", ")}`;
+  return `z. B. ${[...(names.length ? names : ["Ada", "Borin"]), foe].join(", ")}`;
 }
 
 function ago(ms: number): string {
@@ -823,80 +822,137 @@ export function renderTable(
 ): RenderElement[] {
   const { view, ini, live, rules, now, evening } = d;
   const out: RenderElement[] = [];
+  // A whole-tab empty state carries the one action that helps (R8); cards never repeat the header's „Neu laden“.
+  const reload: Action = {
+    key: "table-reload",
+    label: k.s.reload,
+    variant: "primary",
+    onPress: () => void refreshTable($),
+  };
   if (!view) {
     out.push(
       EmptyState(k, {
         icon: "dice",
         title: "Kein Tisch gelesen",
-        text: "Aktualisieren drücken (die Studio-App muss laufen).",
+        text: "Die Studio-App muss laufen.",
+        action: reload,
       }),
     );
     return out;
   }
   // `view.error` (a failed read) stands in the pane's fixed status line, see the pane's render in hooks/register.tsx
 
-  // Table status: one sentence, problems first
-  const status = [
-    view.playersWindow ? "Spielerfenster offen" : "Spielerfenster zu",
-    view.discord ? "Discord" : "",
-    view.listening
-      ? `hört zu${view.speaker ? ` · ${view.speaker} spricht` : ""}`
-      : "",
-    view.turnsWaiting ? `${view.turnsWaiting} Züge warten` : "",
-    view.paused ? "Pause" : "",
-    isListenerMode(view) ? "Zuhörer an" : "",
-  ].filter(Boolean);
+  // The card „Tisch“: what is open and who hears the players, problems as rows of their own. The listener's own
+  // state stands only in the Zuhörer card (one place per state).
   const running = isLive(view, ini);
-  if (running) out.push(Sentence(k, status.join(" · "), { faint: true }));
-  const stranded = strandedTurns(
-    view,
-    ini,
-    evening.watcher.state === "running",
-  );
+  const watching = evening.watcher.state === "running";
+  const stranded = strandedTurns(view, ini, watching);
+  const problems: RenderElement[] = [];
   if (stranded)
-    out.push(
-      Sentence(
-        k,
-        `⚠ ${stranded === 1 ? "1 Zug wartet" : `${stranded} Züge warten`}, keine Spielleitung hört zu`,
-        { tone: "warn" },
-      ),
-      Actions(
-        k,
-        "stranded",
-        [
-          {
-            key: "turns-drop",
-            label: stranded === 1 ? "Zug verwerfen" : "Züge verwerfen",
-            icon: "x",
-            variant: "secondary",
-            confirm: "Wirklich verwerfen?",
-            onPress: () => void discardTurns($, stranded),
-          },
-        ],
-        3,
-      ) as RenderElement,
-    );
-  if (evening.stale)
-    out.push(Sentence(k, `⚠ ${evening.stale}`, { tone: "bad" }));
-  if (isLive(view, ini) && isListenerMode(view)) {
-    const ev = bandEvening(evening, true);
-    out.push(
-      Sentence(k, `${ev.watching ? "●" : "○"} ${ev.watch}`, {
-        tone: ev.watching ? "ok" : "warn",
+    problems.push(
+      ListRow(k, {
+        key: "desk-stranded",
+        status: "warning",
+        title: stranded === 1 ? "1 Zug wartet" : `${stranded} Züge warten`,
+        meta: "keine Spielleitung hört zu",
       }),
     );
-  } else if (isLive(view, ini))
-    out.push(
-      Sentence(
-        k,
-        evening.watcher.state === "running"
-          ? "● Claude hört auf die Spieler"
-          : "○ Niemand hört auf die Spieler – ihre Züge kommen nicht an. Claude wird beim nächsten Zug erinnert; sonst Claude bitten, wieder zuzuhören.",
-        { tone: evening.watcher.state === "running" ? "ok" : "warn" },
-      ),
+  else if (running && view.turnsWaiting)
+    problems.push(
+      ListRow(k, {
+        key: "desk-turns",
+        status: "idle",
+        title:
+          view.turnsWaiting === 1
+            ? "1 Zug wartet"
+            : `${view.turnsWaiting} Züge warten`,
+      }),
+    );
+  if (evening.stale)
+    problems.push(
+      ListRow(k, {
+        key: "desk-stale",
+        status: "failed",
+        title: evening.stale,
+        wrap: true,
+      }),
     );
   if (view.unheard)
-    out.push(Sentence(k, `Ungehört: ${view.unheard}`, { tone: "warn" }));
+    problems.push(
+      ListRow(k, {
+        key: "desk-unheard",
+        status: "warning",
+        title: `Ungehört: ${view.unheard}`,
+        wrap: true,
+      }),
+    );
+  const unheardTable = running && !isListenerMode(view) && !watching;
+  const desk: RenderElement[] = running
+    ? [
+        ListRow(k, {
+          key: "desk-window",
+          status: view.playersWindow ? "ok" : "idle",
+          title: "Spielerfenster",
+          pill: view.playersWindow
+            ? { text: "offen", tone: "ok" }
+            : { text: "zu", tone: "neutral", glyph: false },
+        }),
+        ...(view.discord || view.listening
+          ? [
+              ListRow(k, {
+                key: "desk-discord",
+                status: "ok",
+                title: "Discord",
+                meta: view.listening
+                  ? view.speaker
+                    ? `${view.speaker} spricht`
+                    : "hört zu"
+                  : "",
+              }),
+            ]
+          : []),
+        ...(isListenerMode(view)
+          ? []
+          : [
+              ListRow(k, {
+                key: "desk-gm",
+                status: watching ? "ok" : "warning",
+                title: watching
+                  ? "Claude hört auf die Spieler"
+                  : "Niemand hört auf die Spieler",
+              }),
+            ]),
+      ]
+    : [];
+  if (desk.length || problems.length)
+    out.push(
+      Card(k, {
+        key: "desk",
+        title: {
+          icon: "dice",
+          title: "Tisch",
+          pill: view.paused ? { text: "Pause", tone: "warn" } : undefined,
+        },
+        children: [...desk, ...problems],
+        hint: unheardTable
+          ? "Solange niemand zuhört, kommen die Züge der Spieler nicht an; Claude wird beim nächsten Zug erinnert."
+          : undefined,
+        actions: stranded
+          ? [
+              {
+                key: "turns-drop",
+                label: stranded === 1 ? "Zug verwerfen" : "Züge verwerfen",
+                icon: "x",
+                variant: "secondary",
+                danger: true,
+                confirm: "Wartende Züge wirklich verwerfen?",
+                confirmWord: "Verwerfen",
+                onPress: () => void discardTurns($, stranded),
+              },
+            ]
+          : [],
+      }),
+    );
 
   // No table running: a quiet empty state instead of the full desk with live buttons; Discord stays to join early.
   if (!running) {
@@ -904,26 +960,35 @@ export function renderTable(
       EmptyState(k, {
         icon: "dice",
         title: "Kein Tisch läuft",
-        text: "Claude bitten, den Abend zu beginnen (etwa „Wir spielen weiter“). Sobald das Spielerfenster oder Discord eine Szene zeigt, erscheint hier das Pult.",
+        text: "Der Abend beginnt, sobald Claude ihn eröffnet (etwa „Wir spielen weiter“).",
+        action: reload,
       }),
     );
     out.push(renderDiscord($, k, { evening, view, rules, now }));
     return out;
   }
 
-  // Scene card: title in brass, the goal (not spoiler-safe), sound chips that play only on a press
+  // Scene card: title in brass, the goal (not spoiler-safe), the scene's sounds as rows that play only on a press
   const { Box, Text } = k;
+  const stopSound = (key: string): Action => ({
+    key,
+    label: "Klang stoppen",
+    icon: "stop",
+    variant: "secondary",
+    onPress: () =>
+      void tableAction($, "Klang gestoppt", "play_sound", { stop: true }),
+  });
   out.push(
     Card(k, {
       key: "scene",
+      title: {
+        icon: "book",
+        title: view.scene?.place ? `Szene · ${view.scene.place}` : "Szene",
+        pill: ini.isActive
+          ? { text: `Runde ${ini.round}`, tone: "accent", glyph: false }
+          : undefined,
+      },
       children: [
-        CardTitle(k, {
-          icon: "book",
-          title: view.scene?.place ? `Szene · ${view.scene.place}` : "Szene",
-          pill: ini.isActive
-            ? { text: `Runde ${ini.round}`, tone: "accent", glyph: false }
-            : undefined,
-        }),
         view.scene?.title
           ? k.graphical
             ? (
@@ -936,38 +1001,29 @@ export function renderTable(
         view.scene?.notes && !rules.spoilerSafe
           ? Sentence(k, view.scene.notes)
           : null,
-        view.sounds.length
-          ? Actions(
-              k,
-              "sounds",
-              [
-                ...view.sounds.map((s, i): Action => ({
-                  key: `snd-${i}`,
-                  label: truncate(s.name, 22),
-                  icon: s.loop ? "music" : "speaker",
-                  variant: "secondary",
-                  onPress: () =>
-                    void tableAction($, `Spielt ${s.name}`, "play_sound", {
-                      sound: s.file,
-                      loop: s.loop,
-                      volume: s.volume,
-                    }),
-                })),
-                {
-                  key: "snd-stop",
-                  label: "Stille",
-                  icon: "stop",
-                  variant: "secondary",
-                  onPress: () =>
-                    void tableAction($, "Atmosphäre aus", "play_sound", {
-                      stop: true,
-                    }),
-                },
-              ],
-              4,
-            )
-          : null,
+        ...view.sounds.map((s, i) =>
+          ListRow(k, {
+            key: `sound-${i}`,
+            icon: s.loop ? "music" : "speaker",
+            title: s.name,
+            meta: s.loop ? "Schleife" : "",
+            actions: [
+              {
+                key: `snd-${i}`,
+                label: "Abspielen",
+                variant: "secondary",
+                onPress: () =>
+                  void tableAction($, `Spielt ${s.name}`, "play_sound", {
+                    sound: s.file,
+                    loop: s.loop,
+                    volume: s.volume,
+                  }),
+              },
+            ],
+          }),
+        ),
       ],
+      actions: view.sounds.length ? [stopSound("snd-stop")] : [],
     }),
   );
 
@@ -979,269 +1035,247 @@ export function renderTable(
   };
   const Progress = k.Progress;
   const current = ini.isActive ? ini.order[ini.index] : "";
+  const orderField = {
+    key: "ini-order",
+    placeholder: orderExample(view),
+    onSubmit: (v: string) => void startInitiative($, parseOrder(v)),
+  };
   out.push(
     Card(k, {
       key: "ini",
-      children: [
-        CardTitle(k, {
-          icon: "dice",
-          title: ini.isActive ? "Reihenfolge · Kampf" : "Reihenfolge",
-          pill: current
-            ? { text: `${current} ist dran`, tone: "accent", glyph: "▶" }
-            : undefined,
-        }),
-        ...(ini.isActive
-          ? ini.order.map((n, i) => {
-              const hp = hpOf(n);
-              const on = i === ini.index;
-              if (!k.graphical || !Progress)
-                return (
-                  <Text key={`ini-${i}`} bold={on} dimColor={!on}>
-                    {truncate(
-                      `${on ? "▶" : " "} ${n}${hp ? `  ${hp.hp}/${hp.max}` : ""}`,
-                      k.cols,
-                    )}
-                  </Text>
-                );
-              const low = hp && hp.hp * 3 <= hp.max;
+      title: {
+        icon: "dice",
+        title: ini.isActive ? "Reihenfolge · Kampf" : "Reihenfolge",
+        pill: current
+          ? { text: `${current} ist dran`, tone: "accent", glyph: false }
+          : undefined,
+      },
+      children: ini.isActive
+        ? ini.order.map((n, i) => {
+            const hp = hpOf(n);
+            const on = i === ini.index;
+            if (!k.graphical || !Progress)
               return (
-                <Box
-                  key={`ini-${i}`}
-                  flexDirection="row"
-                  alignItems="center"
-                  gap={1}
-                >
-                  <Box width={14} flexShrink={0}>
-                    <Text
-                      size="footnote"
-                      weight={on ? "bold" : undefined}
-                      color={on ? k.t.accentTintText : k.t.text}
-                      wrap="truncate-end"
-                    >
-                      {sanitize(`${on ? "▶ " : ""}${n}`)}
-                    </Text>
-                  </Box>
-                  <Box flexGrow={1} flexShrink={1} minWidth={0}>
-                    {hp ? (
-                      <Progress
-                        label={sanitize(n)}
-                        value={hp.hp}
-                        max={hp.max}
-                        valueText={`${hp.hp}/${hp.max}`}
-                        color={low ? k.t.tones.bad.fg : k.t.tones.ok.fg}
-                      />
-                    ) : null}
-                  </Box>
-                </Box>
+                <Text key={`ini-${i}`} bold={on} dimColor={!on}>
+                  {truncate(
+                    `${on ? ">" : " "} ${n}${hp ? `  ${hp.hp}/${hp.max}` : ""}`,
+                    k.cols,
+                  )}
+                </Text>
               );
-            })
-          : [
+            const low = hp && hp.hp * 3 <= hp.max;
+            return (
+              <Box
+                key={`ini-${i}`}
+                flexDirection="row"
+                alignItems="center"
+                gap={1}
+              >
+                {/* Whose turn: bold in the accent (▶ is kept for „start“). */}
+                <Box width={14} flexShrink={0}>
+                  <Text
+                    size="footnote"
+                    weight={on ? "bold" : undefined}
+                    color={on ? k.t.accentTintText : k.t.text}
+                    wrap="truncate-end"
+                  >
+                    {sanitize(n)}
+                  </Text>
+                </Box>
+                <Box flexGrow={1} flexShrink={1} minWidth={0}>
+                  {hp ? (
+                    <Progress
+                      label={sanitize(n)}
+                      value={hp.hp}
+                      max={hp.max}
+                      valueText={`${hp.hp}/${hp.max}`}
+                      color={low ? k.t.tones.bad.fg : k.t.tones.ok.fg}
+                    />
+                  ) : null}
+                </Box>
+              </Box>
+            );
+          })
+        : [
+            // Label | field | deed (R4); a surface whose kit has no Input falls back to the pane's own element.
+            Field(k, {
+              ...orderField,
+              label: "Reihenfolge",
+              submitLabel: "Starten",
+            }) ?? (
               <Box key="ini-order-box" flexDirection="column" width="100%" minWidth={0}>
-                {Input({
-                  key: "ini-order",
-                  placeholder: orderExample(view),
-                  submitLabel: "Start",
-                  onSubmit: (v: string) => void startInitiative($, parseOrder(v)),
-                })}
-              </Box>,
-            ]),
-        Actions(
-          k,
-          "ini-acts",
-          ini.isActive
-            ? [
-                {
-                  key: "ini-next",
-                  label: "Nächster Zug",
-                  icon: "next",
-                  variant: "primary",
-                  onPress: () => void nextTurn($),
-                },
-                {
-                  key: "ini-end",
-                  label: "Kampf beenden",
-                  icon: "x",
-                  variant: "secondary",
-                  confirm: "Wirklich beenden?",
-                  onPress: () => void endInitiative($),
-                },
-              ]
-            : view.party.length
-              ? [
-                  {
-                    key: "ini-party",
-                    label: "Gruppe als Reihenfolge",
-                    icon: "list",
-                    variant: "secondary",
-                    onPress: () =>
-                      void startInitiative(
-                        $,
-                        view.party.filter((h) => !h.foe).map((h) => h.name),
-                      ),
-                  },
-                ]
-              : [],
-          3,
-        ),
-      ],
+                {Input({ ...orderField, submitLabel: "Starten" })}
+              </Box>
+            ),
+          ],
+      actions: ini.isActive
+        ? [
+            {
+              key: "ini-next",
+              label: "Nächster Zug",
+              icon: "next",
+              variant: "primary",
+              onPress: () => void nextTurn($),
+            },
+            {
+              key: "ini-end",
+              label: "Kampf beenden",
+              icon: "x",
+              variant: "secondary",
+              danger: true,
+              confirm: "Kampf wirklich beenden?",
+              confirmWord: "Beenden",
+              onPress: () => void endInitiative($),
+            },
+          ]
+        : view.party.length
+          ? [
+              {
+                key: "ini-party",
+                label: "Gruppe übernehmen",
+                icon: "list",
+                variant: "secondary",
+                onPress: () =>
+                  void startInitiative(
+                    $,
+                    view.party.filter((h) => !h.foe).map((h) => h.name),
+                  ),
+              },
+            ]
+          : [],
     }),
   );
 
-  // Party, with values, conditions and spotlight fairness
+  // Party: the name is the title, values and spotlight fairness the meta, a condition (or „Gegner“) the pill
   const fair = live.turnAt > 0 || Object.keys(live.addressed).length > 0;
   out.push(
     Card(k, {
       key: "party",
-      children: [
-        CardTitle(k, {
-          icon: "user",
-          title: "Gruppe",
-          count: view.party.length,
+      title: { icon: "user", title: "Gruppe", count: view.party.length },
+      empty: "Keine Gruppe.",
+      children: view.party.map((h) =>
+        ListRow(k, {
+          key: `hero-${h.name}`,
+          status: h.conditions.length ? "warning" : h.foe ? "idle" : "ok",
+          title: h.name,
+          meta: [
+            h.values,
+            h.foe && h.conditions.length ? "Gegner" : "",
+            fair && !h.foe
+              ? live.addressed[h.name]
+                ? `angesprochen vor ${ago(now - live.addressed[h.name]!)}`
+                : "noch nicht angesprochen"
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          pill: h.conditions.length
+            ? { text: h.conditions.join(", "), tone: "warn" }
+            : h.foe
+              ? { text: "Gegner", tone: "neutral", glyph: false }
+              : undefined,
         }),
-        ...(view.party.length
-          ? view.party.map((h) =>
-              ListRow(k, {
-                key: `hero-${h.name}`,
-                status: h.conditions.length ? "warning" : h.foe ? "idle" : "ok",
-                title: `${h.name}${h.foe ? " (Gegner)" : ""}${h.values ? ` · ${h.values}` : ""}`,
-                meta: [
-                  h.conditions.join(", "),
-                  fair && !h.foe
-                    ? live.addressed[h.name]
-                      ? `angesprochen vor ${ago(now - live.addressed[h.name]!)}`
-                      : "noch nicht angesprochen"
-                    : "",
-                ]
-                  .filter(Boolean)
-                  .join(" · "),
-              }),
-            )
-          : [Sentence(k, "Keine Gruppe.", { faint: true })]),
-      ],
+      ),
     }),
   );
 
-  // NPCs: stock lines in their voice, picked by hand
+  // NPCs: stock lines in their voice, picked by hand; a line is a row (the text wraps), the deed is „Sprechen“
   for (const n of view.npcs)
     out.push(
       Card(k, {
         key: `npc-card-${n.name}`,
-        children: [
-          CardTitle(k, {
-            icon: "chat",
-            title: n.place ? `${n.name} · ${n.place}` : n.name,
-            pill: { text: "mit Stimme", tone: "neutral", glyph: false },
+        title: {
+          icon: "chat",
+          title: n.place ? `${n.name} · ${n.place}` : n.name,
+        },
+        empty: "Keine vorbereiteten Sätze.",
+        children: n.stock.map((l, i) =>
+          ListRow(k, {
+            key: `npc-line-${n.name}-${i}`,
+            title: `„${l.text}“`,
+            meta: l.how,
+            wrap: true,
+            actions: [
+              {
+                key: `npc-${n.name}-${i}`,
+                label: "Sprechen",
+                variant: "secondary",
+                onPress: () =>
+                  void tableAction($, `${n.name}: ${l.text}`, "say_line", {
+                    voice: n.name,
+                    text: l.text,
+                    ...(l.how ? { how: l.how } : {}),
+                  }),
+              },
+            ],
           }),
-          Actions(
-            k,
-            `npc-${n.name}`,
-            n.stock.length
-              ? n.stock.map((l, i): Action => ({
-                  key: `npc-${n.name}-${i}`,
-                  label: truncate(
-                    `„${l.text}“${l.how ? ` (${l.how})` : ""}`,
-                    40,
-                  ),
-                  variant: "link",
-                  onPress: () =>
-                    void tableAction($, `${n.name}: ${l.text}`, "say_line", {
-                      voice: n.name,
-                      text: l.text,
-                      ...(l.how ? { how: l.how } : {}),
-                    }),
-                }))
-              : [
-                  {
-                    key: `npc-${n.name}-greet`,
-                    label: "Begrüßen",
-                    variant: "link",
-                    onPress: () =>
-                      void tableAction($, `${n.name} grüßt`, "say_line", {
-                        voice: n.name,
-                        text: "",
-                        opener: "greet",
-                      }),
-                  },
-                ],
-            k.narrow ? 1 : 4,
-          ),
-        ],
+        ),
+        actions: n.stock.length
+          ? []
+          : [
+              {
+                key: `npc-${n.name}-greet`,
+                label: "Begrüßen",
+                variant: "secondary",
+                onPress: () =>
+                  void tableAction($, `${n.name} grüßt`, "say_line", {
+                    voice: n.name,
+                    text: "",
+                    opener: "greet",
+                  }),
+              },
+            ],
       }),
     );
 
-  // Listener line: who listens on Discord and what was said last
-  const disc = evening.discord;
-  if (view.discord || isListenerMode(view)) {
-    const last = view.turnsWaiting ? "" : (evening.notes.at(-1)?.text ?? "");
-    out.push(
-      ListRow(k, {
-        key: "listener-line",
-        icon: "mic",
-        tone: isListenerMode(view) ? "ok" : "neutral",
-        title: isListenerMode(view) ? "Zuhörer hört zu" : "Zuhörer aus",
-        meta: [
-          "Discord",
-          disc?.members.length ? `${disc.members.length} Spieler` : "",
-          last ? `zuletzt: „${truncate(last, 40)}“` : "",
-        ]
-          .filter(Boolean)
-          .join(" · "),
-      }),
-    );
-  }
-
-  // Dice and secrets
+  // Dice and secrets: drawn only when there is something (R8)
   const rolls = view.rolls.slice(-5);
-  out.push(
-    Fold(k, {
-      key: "dice",
-      icon: "dice",
-      title: "Würfel",
-      defaultOpen: false,
-      count: view.rolls.length,
-      children: rolls.length
-        ? rolls.map((r, i) =>
-            Sentence(
-              k,
-              r.hidden && rules.spoilerSafe
-                ? `${r.who}: verdeckter Wurf`
-                : `${r.who}${r.label ? ` · ${r.label}` : ""}: ${r.total}${r.verdict ? ` · ${r.verdict}` : ""}${r.hidden ? " (verdeckt)" : ""}`,
-              { faint: i < rolls.length - 1 },
-            ),
-          )
-        : [Sentence(k, "Noch nicht gewürfelt.", { faint: true })],
-    }),
-  );
-  out.push(
-    Fold(k, {
-      key: "secrets",
-      icon: "eye",
-      title: "Geheimes und Geflüstertes",
-      count: view.secrets.length,
-      defaultOpen: false,
-      children: rules.spoilerSafe
-        ? [
-            Sentence(
-              k,
-              "Verborgen (spoilerfrei). Abschalten unter Zustand → Regeln.",
-              { faint: true },
-            ),
-          ]
-        : view.secrets.slice(-5).map((s) => Sentence(k, `${s.who}: ${s.text}`)),
-    }),
-  );
+  if (rolls.length)
+    out.push(
+      Fold(k, {
+        key: "dice",
+        icon: "dice",
+        title: "Würfel",
+        defaultOpen: false,
+        count: view.rolls.length,
+        children: rolls.map((r, i) =>
+          Sentence(
+            k,
+            r.hidden && rules.spoilerSafe
+              ? `${r.who}: verdeckter Wurf`
+              : `${r.who}${r.label ? ` · ${r.label}` : ""}: ${r.total}${r.verdict ? ` · ${r.verdict}` : ""}${r.hidden ? " (verdeckt)" : ""}`,
+            { faint: i < rolls.length - 1 },
+          ),
+        ),
+      }),
+    );
+  if (view.secrets.length)
+    out.push(
+      Fold(k, {
+        key: "secrets",
+        icon: "eye",
+        title: "Geheimes und Geflüstertes",
+        count: view.secrets.length,
+        defaultOpen: false,
+        // spoiler-safe: nothing to unfold, one sentence that names the switch by its place in the Zustand tab
+        empty:
+          "Verborgen, solange „Spoilerfrei“ an ist (Zustand → Regeln am Tisch).",
+        children: rules.spoilerSafe
+          ? []
+          : view.secrets.slice(-5).map((s) => Sentence(k, `${s.who}: ${s.text}`)),
+      }),
+    );
 
   out.push(renderListener($, k, { evening, view, rules }));
   out.push(renderDiscord($, k, { evening, view, rules, now }));
 
-  // Pause / end of the evening
+  // Pause · end of the evening · interjections: one card per topic, each with one action row and one hint
   out.push(
-    Fold(k, {
-      key: "evening",
-      icon: "moon",
-      title: "Pause und Abendende",
-      pill: view.paused ? { text: "Pause", tone: "warn" } : undefined,
-      defaultOpen: false,
+    Card(k, {
+      key: "pause",
+      // the state itself stands once, as the pill of the card „Tisch“
+      title: { icon: "pause", title: "Pause" },
+      hint: "Für lange Abende: Claude hält das Erlebte fest, sortiert sich und macht danach dort weiter, wo ihr wart.",
       actions: [
         view.paused
           ? {
@@ -1261,47 +1295,26 @@ export function renderTable(
                 void tableAction($, "Pause", "set_pause", { on: true }),
             },
       ],
-      children: [
-        Sentence(
-          k,
-          "Wenn Claude der Faden ausgeht (langer Abend): Pause drücken, Claude hält das Erlebte fest, sortiert sich und macht nach „Weiter“ dort weiter, wo ihr wart.",
-          { faint: true },
-        ),
-        Actions(
-          k,
-          "end",
-          [
-            {
-              key: "end-clear",
-              label: "Fenster leeren",
-              icon: "x",
-              variant: "secondary",
-              onPress: () =>
-                void tableAction($, "Fenster geleert", "show_players", {
-                  clear: true,
-                }),
-            },
-            {
-              key: "end-stop",
-              label: "Klang stoppen",
-              icon: "stop",
-              variant: "secondary",
-              onPress: () =>
-                void tableAction($, "Klang gestoppt", "play_sound", {
-                  stop: true,
-                }),
-            },
-          ],
-          3,
-        ),
-        Sentence(
-          k,
-          "Nach dem Abend: Rückblick und Ausklang · Claude schreibt die Sitzung auf und merkt sich offene Fäden und wo die Gruppe steht · Nachbesprechung.",
-          { faint: true },
-        ),
-        ...renderInterjections($, k, evening),
+    }),
+    Card(k, {
+      key: "evening",
+      title: { icon: "moon", title: "Abendende" },
+      hint: "Nach dem Abend schreibt Claude die Sitzung auf und merkt sich offene Fäden und wo die Gruppe steht.",
+      actions: [
+        {
+          key: "end-clear",
+          label: "Fenster leeren",
+          icon: "x",
+          variant: "secondary",
+          onPress: () =>
+            void tableAction($, "Fenster geleert", "show_players", {
+              clear: true,
+            }),
+        },
+        stopSound("end-stop"),
       ],
     }),
+    renderInterjections($, k, evening),
   );
   return out;
 }

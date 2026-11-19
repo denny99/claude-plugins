@@ -16,8 +16,7 @@ import { consoleWarningsLine } from '../features/pane/overview'
 import { perfLength } from '../features/pane/perf'
 import { launcherStatus } from '../features/launcher'
 import { statusPill } from '../features/pane'
-import { jobDescription, jobLabel, jobNotes } from '../features/pane/overview'
-import { decisionChoices } from '../features/review/tab'
+import { jobDescription, jobLabel, jobTasks } from '../features/pane/overview'
 import { findShown, reveal } from './shown'
 import { BRIDGE, fakeWorld, PANE, ROOT, settle } from './world'
 
@@ -94,10 +93,10 @@ test('(a) paging: "Weitere" adds 20 rows, another group unfolds, music pages too
   const plays = async () => (await nodes()).filter(n => String(n.key ?? n.props.key).startsWith('rv-play-')).length
   // Crafting holds 38 sounds (300 / 8 groups, music aside)
   expect(await plays()).toBe(SOUND_PAGE)
-  expect((await ui.find({ type: 'Button', text: /Weitere 18 \(noch 18\)/ } as never)) as unknown).toBeDefined()
+  expect((await ui.find({ type: 'Button', key: 'rv-snd-more' }))?.props.label).toBe('Weitere 18')
   await settle(world, ui.press({ key: 'rv-snd-more' }))
   expect(await plays()).toBe(38)
-  await settle(world, ui.press({ key: 'rv-sgrp-open-1' }))
+  await settle(world, ui.press({ key: 'rv-sgrp-1-details' }))
   expect(await plays()).toBe(SOUND_PAGE)
   expect((await nodes()).some(n => n.text === 'Ambience – Klang Nummer 1 · Variante „lang“' || n.text === 'Wind böig lang')).toBe(true)
   await settle(world, ui.press({ key: 'rv-music-toggle' }))
@@ -190,7 +189,6 @@ test('(d) overview screenshot: Game-view error comes in German with the way; an 
   await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await settle(world, ui.press({ key: 'refresh' }))
-  await settle(world, ui.press({ key: 'editor-acts-more' }))
   await settle(world, ui.press({ key: 'shot' }))
   const last = () => world.toasts.at(-1) ?? ''
   expect(last()).toMatch(/^Screenshot fehlgeschlagen: Unity hat kein Bild geschrieben\. Unity-Fenster nach vorn holen/)
@@ -303,7 +301,7 @@ test('(f) area choice: field stays free, the cleaned filter runs, the run card n
   const cmd = Object.entries(world.files).find(([f, t]) => f.includes('/cmd-') && t.includes('run-tests'))
   expect(JSON.parse(cmd?.[1] ?? '{}').filter).toBe('Game.Tests.Core;Game.Tests.Fehlt')
   await settle(world, ui.press({ key: 'refresh' }))
-  expect((await findShown(ui, `Bereich ${area}`))?.text).toBeDefined()
+  expect((await findShown(ui, new RegExp(`^Bereich ${area} · `)))?.text).toBeDefined()
   expect(await findShown(ui, /-testFilter "/)).toBeUndefined()
   expect((await findShown(ui, /Bereich trifft Game\.Tests\.Fehlt nicht/))?.text).toBeDefined()
   await ui.unmount()
@@ -330,11 +328,11 @@ test('(2) the measurement result is drawn by itself, without Aktualisieren or an
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await settle(world, ui.press({ key: 'tab-perf' }))
   await ui.press({ key: 'perf-10' })
-  expect((await findShown(ui, /^Messe 10 s Leistung/))?.text).toBeDefined()
+  expect((await findShown(ui, /Messe 10 s Leistung/))?.text).toBeDefined()
   // only the clock runs: the live watch fetches the result file and patches the model
   for (let i = 0; i < 12 && !(await findShown(ui, /^Messung \d\d:\d\d$/)); i++) await world.clock.advance(500)
   expect((await findShown(ui, /^Messung \d\d:\d\d$/))?.text).toBeDefined()
-  expect(await findShown(ui, /^Messe 10 s Leistung/)).toBeUndefined()
+  expect(await findShown(ui, /Messe 10 s Leistung/)).toBeUndefined()
   await ui.unmount()
   stopLive()
 })
@@ -375,27 +373,35 @@ const walkEl = (n: El | undefined, out: El[] = []): El[] => {
 const textOf = (n: El): string =>
   (n.children ?? []).map(c => (typeof c === 'string' || typeof c === 'number' ? String(c) : textOf(c))).join('')
 
-test('(4) decision at ~300 px: each option a wrapping text with a short "A wählen" button, no option text twice', () => {
-  const k = {
-    Box: 'Box',
-    Text: 'Text',
-    Button: 'Button',
-    graphical: true,
-    cols: 38,
-    t: { text: 't', muted: 'm', faint: 'f', tones: {} },
-  } as never as Kit
-  const choices = ['Fackel an der Wand lassen, aber wärmer und etwas heller machen', 'warmes Orange', 'so lassen']
-  const tree = decisionChoices(k, 'fackel', choices, () => () => {}) as unknown as El
-  const nodes = walkEl(tree)
-  const buttons = nodes.filter(n => n.type === 'Button')
-  expect(buttons.map(b => b.props?.label)).toEqual(['A wählen', 'B wählen', 'C wählen'])
-  const texts = nodes.filter(n => n.type === 'Text').map(textOf)
-  expect(texts).toEqual(['A: Fackel an der Wand lassen, aber wärmer und etwas heller machen', 'B: warmes Orange', 'C: so lassen'])
+test('(4) decision: options are list rows with „Wählen“; a long option wraps under its row, no option text twice', async ($, on) => {
+  const long = 'Fackel an der Wand lassen, aber wärmer und etwas heller machen'
+  const world = fakeWorld(on, { config: { review: { questions: 'docs/fragen.json', answers: 'docs/antworten.jsonl' } } })
+  world.files[`${ROOT}/docs/fragen.json`] = JSON.stringify({
+    version: 1,
+    items: [{ id: 'fackel', kind: 'entscheiden', title: 'Welche Fackel?', options: [long, 'warmes Orange', 'so lassen'] }],
+  })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
+  await settle(world, $.command.run({ command: 'unity', args: '' } as never))
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await settle(world, ui.press({ key: 'tab-review' }))
+  await reveal(ui, 'rv-tab-decide', 'rv-tab-')
+  await settle(world, ui.press({ key: 'rv-tab-decide' }))
+  await settle(world, ui.press({ key: 'rv-choice-fackel-1' }))
+  const choose = (await ui.findAll({ type: 'Button' })).filter(b => String(b.props.key ?? '').startsWith('rv-choice-fackel-'))
+  // the marked option (B) has no button, the others one short „Wählen“ each
+  expect(choose.map(b => [b.props.key, b.props.label])).toEqual([
+    ['rv-choice-fackel-0', 'Wählen'],
+    ['rv-choice-fackel-2', 'Wählen'],
+  ])
+  const texts = (await ui.findAll({ type: 'Text' })).map(t => String(t.text))
+  expect(texts.filter(t => t === long).length).toBe(1)
+  expect(texts).toContain('Option A')
+  expect(texts).toContain('B · warmes Orange')
   expect(texts.filter(t => t.includes('so lassen')).length).toBe(1)
-  // the text wraps (a Sentence), the button sits in its own row below, never beside a long label
-  for (const t of nodes.filter(n => n.type === 'Text')) expect(t.props?.wrap).toBe('wrap')
-  const rows = nodes.filter(n => String(n.props?.key ?? '').startsWith('rv-choice-row-'))
-  for (const r of rows) expect(r.props?.flexDirection).toBe('column')
+  // the long option wraps (a Sentence under its row), it is never a Button label
+  expect((await ui.findAll({ type: 'Text' })).find(t => String(t.text) === long)?.props.wrap).toBe('wrap')
+  expect((await ui.find({ type: 'Button', key: 'rv-answer-fackel' }))?.props).toMatchObject({ label: 'Antwort schicken', variant: 'primary' })
+  await ui.unmount()
 })
 
 test('(5) narrow strip pages like the band: „+N“ on, „‹“ back; a choice shows its own page, also from the header', async ($, on) => {
@@ -434,8 +440,10 @@ test('(6) project tasks without label/description: German names for known ones, 
   expect(jobDescription({ name: 'smoke' })).toContain('prüft')
   expect(jobDescription({ name: 'bake', command: 'node tools/unity.mjs bake' })).toBe('führt „node tools/unity.mjs bake“ aus.')
   expect(jobDescription({ name: 'x', description: 'eigen' })).toBe('eigen')
-  const notes = jobNotes([{ name: 'smoke-timing', command: 'node tools/unity.mjs smoke-timing' }], true)
-  expect(notes[1]).toBe('Smoke: Zeiten: misst die Ladezeiten beim Lauf durch die Welt; wird nie wegen der Zeit rot.')
+  // a task is a row: its name, what it does as the row's meta (a sentence of its own)
+  const tasks = jobTasks({ customJobs: [{ name: 'smoke-timing', command: 'node tools/unity.mjs smoke-timing' }] }, true)
+  expect(tasks.map(t => t.title)).toEqual(['Kompilieren prüfen', 'Smoke: Zeiten'])
+  expect(tasks[1]!.meta).toBe('Misst die Ladezeiten beim Lauf durch die Welt; wird nie wegen der Zeit rot.')
 
   const world = fakeWorld(on, {
     config: { customJobs: [{ name: 'warm-stop', command: 'node tools/unity.mjs warm-stop' }, { name: 'bake', command: 'node bake.mjs' }] },
@@ -443,9 +451,12 @@ test('(6) project tasks without label/description: German names for known ones, 
   await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: false })
   await settle(world, $.command.run({ command: 'unity', args: '' } as never))
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect((await ui.find({ type: 'Button', key: 'custom-warm-stop' }))?.props.label).toBe('Warmen Editor beenden')
-  expect((await ui.find({ type: 'Button', key: 'custom-bake' }))?.props.label).toBe('Bake')
-  expect((await findShown(ui, 'Bake: führt „node bake.mjs“ aus.'))?.text).toBeDefined()
+  // each task is a row: its name as the title, what it does as the meta, „Starten“ on the right
+  expect((await findShown(ui, 'Warmen Editor beenden'))?.text).toBeDefined()
+  expect((await findShown(ui, 'Bake'))?.text).toBeDefined()
+  expect((await findShown(ui, 'Führt „node bake.mjs“ aus.'))?.text).toBeDefined()
+  expect((await ui.find({ type: 'Button', key: 'custom-warm-stop' }))?.props.label).toBe('▶︎ Starten')
+  expect((await ui.find({ type: 'Button', key: 'custom-bake' }))?.props.label).toBe('▶︎ Starten')
   await ui.unmount()
 })
 

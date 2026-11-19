@@ -312,6 +312,11 @@ export type LookState = {
   applied: string;
   /** Another plugin set (or cleared) the theme after ours: ours no longer stands, so we never clear. */
   foreign?: boolean;
+  /**
+   * The theme another plugin set last (its `$.theme.set` arguments, e.g. ds-seasons' season), set again when our
+   * look ends instead of clearing to the app's default. Structural: colors and backdrop as the engine took them.
+   */
+  previous?: { colors?: unknown; backdrop?: unknown } | null;
 };
 
 /** What a person reviews in the Review tab: a new sound, picture or video, spoiler-free until revealed. */

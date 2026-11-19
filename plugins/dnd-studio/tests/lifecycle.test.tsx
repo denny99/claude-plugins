@@ -10,7 +10,7 @@ import {
   toTableView,
 } from "../lib/model";
 import { findShown } from "./shown";
-import { pane, TABLE, world } from "./world";
+import { pane, TABLE, world, looksOn } from "./world";
 
 const IDLE = { order: [], index: -1, round: 0, isActive: false };
 const view = (s: Record<string, unknown>) => toTableView(s, {}, 0);
@@ -56,6 +56,7 @@ test("a live table gets the game table backdrop, with or without a picture, and 
     },
   });
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await looksOn($ as never);
   await $.command.run({ command: "dnd-scene", args: "" } as never);
   // a picture: it is made into a look in a job of its own, meanwhile (and when no result has it) the game table stands
   expect(w.themes).toEqual(["dnd-table"]);
@@ -77,7 +78,8 @@ test("stranded turns show with a button that takes them through wait_for_players
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd", args: "table" } as never);
   const ui = await $.ui.mount({ ...pane(90, 80), surface: "desktop" });
-  expect(await findShown(ui, /2 Züge warten, keine Spielleitung hört zu/)).toBeDefined();
+  expect(await findShown(ui, /^2 Züge warten$/)).toBeDefined();
+  expect(await findShown(ui, /keine Spielleitung hört zu/)).toBeDefined();
   // no evening: no watcher warning
   expect(await findShown(ui, /Niemand hört auf die Spieler/)).toBeUndefined();
   expect(w.calls.some((c) => c.tool === "wait_for_players")).toBe(false);
@@ -103,11 +105,12 @@ test("the build's kept state is reset only on the second press", async ($, on) =
   } as never);
   await $.command.run({ command: "dnd", args: "build" } as never);
   const ui = await $.ui.mount({ ...pane(90, 80), surface: "desktop" });
-  expect(await findShown(ui, /Noch kein Agent gelaufen/)).toBeUndefined();
+  // the agents' card is there while a run is kept, and gone (not drawn empty) after the reset
+  expect(await findShown(ui, "Agenten")).toBeDefined();
   await ui.press({ key: "build-reset" });
-  expect(await findShown(ui, /Noch kein Agent gelaufen/)).toBeUndefined();
+  expect(await findShown(ui, "Agenten")).toBeDefined();
   await ui.press({ key: "build-reset" });
-  expect(await findShown(ui, /Noch kein Agent gelaufen/)).toBeDefined();
+  expect(await findShown(ui, "Agenten")).toBeUndefined();
   expect(w.store.has("runs")).toBe(false);
   expect(w.store.has("plan-approval")).toBe(false);
   await ui.unmount();
@@ -121,4 +124,19 @@ test("after a break the pause button says Weiter", async ($, on) => {
   expect(await ui.find({ type: "Button", key: "pause-off" })).toBeDefined();
   expect(await ui.find({ type: "Button", key: "pause-on" })).toBeUndefined();
   await ui.unmount();
+});
+
+test("the table look is off by default: a live table leaves the person's theme alone", async ($, on) => {
+  const w = world(on, {
+    table_state: { ...TABLE, scene: { kind: "show", title: "Im Tänzelnden Pony" } },
+  });
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd-scene", args: "" } as never);
+  expect(w.themes).toEqual([]);
+  // turned on, our own look is never kept as „the theme before“: the table's end clears, it does not set dnd-table again
+  await looksOn($ as never);
+  await $.command.run({ command: "dnd-scene", args: "" } as never);
+  w.answers.table_state = { ...TABLE, discord: false, scene: { kind: "clear" } };
+  await $.command.run({ command: "dnd-scene", args: "" } as never);
+  expect(w.themes).toEqual(["dnd-table", "clear"]);
 });

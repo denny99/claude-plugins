@@ -31,7 +31,7 @@ stehen im Skill `pnp-kampagne`, Abschnitt 3.
 5. Eine Datei, die schon im Studio liegt (frühere Kapitel), wiederverwenden statt neu laden.
 6. **Zum Prüfen ablegen:** jeden neuen Klang mit `mcp__dnd-studio__review` (`action: add`, `items`: `name` = wofür, ohne
    Szene, `kind: sound`, `source` = Studio-Datei oder URL aus `results`, `meta` z. B. „Geräusch · 4 s, Schleife“,
-   `agent: pnp-klang`). Der Mensch hört sie im D&D-Panel (Tab Prüfen) an; „nochmal machen“ kommt mit seiner Notiz
+   `agent: pnp-klang`). Der Mensch hört sie im D&D-Panel (Tab Abnahme) an; „nochmal machen“ kommt mit seiner Notiz
    als neuer Auftrag zurück.
 
 Protokoll (deutsch, in die Datei des Auftrags): je Klang Art, Worte (bei einer Aufnahme Titel, Urheber, Seite), Studio-Datei, `cos`, wo gebunden;

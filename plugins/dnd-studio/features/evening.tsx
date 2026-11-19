@@ -37,17 +37,16 @@ import {
 } from "../lib/state";
 import { studioCall } from "../lib/studio";
 import {
-  Actions,
   askAction,
   askClaude,
   askTurnStart,
   isAsked,
-  CardTitle,
+  Card,
   CopyButton,
-  ErrorState,
   sanitize,
   ListRow,
   Sentence,
+  Toggle,
   truncate,
 } from "../lib/ui";
 import { Fold } from "./dnd-ui";
@@ -696,7 +695,10 @@ export function bandEvening(
   };
 }
 
-/** The Zuhörer card of the Table tab: switch, state, last wake and turn, what the group discussed without the GM. */
+/**
+ * The Zuhörer card of the Table tab, the one place the listener's state stands: the switch (key `listener`), then
+ * what the listener does right now, its last wake and turn, and what the group discussed without the GM.
+ */
 export function renderListener(
   $: EngineInterface,
   k: Kit,
@@ -704,150 +706,134 @@ export function renderListener(
 ): RenderElement {
   const on = isListenerMode(d.view);
   const l: ListenerState = d.evening.listener ?? EMPTY_LISTENER;
-  const children: RenderElement[] = [];
-  if (!on && !l.returned && !l.running.length)
-    children.push(
-      Sentence(
-        k,
-        "Aus: die Spieler drücken einen Sprechknopf, wenn sie dran sind. An: offenes Mikro, sie sprechen einfach los, und Claude meldet sich nur, wenn ein Zug die Spielleitung braucht.",
-        { faint: true },
-      ),
-    );
-  else {
-    const n = l.running.length;
-    children.push(
+  const n = l.running.length;
+  const rows: (RenderElement | null)[] = [
+    Toggle(k, {
+      key: "listener",
+      label: "Offenes Mikro",
+      on,
+      onToggle: (next) => void setListener($, next ? "haiku" : "off"),
+    }),
+  ];
+  // The switch says on/off; this row only says what the switch cannot: whether a listener really runs. A listener
+  // that woke the GM is the normal hand-over (the GM answers now), not a warning.
+  const woke = l.returned && l.woke;
+  const skipped = l.returned && !l.woke ? l.between.length : 0;
+  if (n || on)
+    rows.push(
       ListRow(k, {
         key: "ls-state",
-        status: n === 1 ? "running" : "warning",
+        status: n === 1 ? "running" : !n && woke ? "ok" : "warning",
         title:
           n > 1
-            ? `${n} Zuhörer laufen – einer reicht`
+            ? `${n} Zuhörer laufen`
             : n
-              ? "Zuhörer wartet auf die Spieler"
-              : on
-                ? "Kein Zuhörer läuft"
-                : "Zuhörer ist aus",
+              ? "Wartet auf die Spieler"
+              : woke
+                ? "Spielleitung ist dran"
+                : "Kein Zuhörer läuft",
+        meta:
+          n > 1
+            ? "einer reicht"
+            : n && skipped
+              ? `${skipped} übersprungen`
+              : "",
       }),
     );
-    if (l.error)
-      children.push(
-        ListRow(k, { key: "ls-err", status: "failed", title: l.error }),
-      );
-    if (l.returned)
-      children.push(
-        Sentence(
-          k,
-          `Zuletzt zurück: ${l.woke ? "geweckt" : "nicht geweckt"}${l.why ? ` · ${l.why}` : ""}${l.sent ? " · gesendet" : ""}`,
-          { faint: !l.woke },
-        ),
-      );
-    if (l.turn.length) {
-      const hide = l.secret && d.rules.spoilerSafe;
-      children.push(Sentence(k, "Letzter Zug:"));
-      for (const t of hide ? ["(geheimer Zug, verborgen)"] : l.turn.slice(-6))
-        children.push(Sentence(k, t, { faint: true }));
-    }
-    children.push(
-      Sentence(k, `Ohne Spielleitung besprochen: ${l.between.length}`),
+  if (l.returned)
+    rows.push(
+      ListRow(k, {
+        key: "ls-back",
+        icon: "clock",
+        title: "Zuletzt zurück",
+        meta: [l.why, l.sent ? "gesendet" : ""].filter(Boolean).join(" · "),
+        pill: l.woke
+          ? { text: "geweckt", tone: "ok" }
+          : { text: "nicht geweckt", tone: "neutral", glyph: false },
+      }),
     );
-    for (const b of l.between.slice(-8))
-      children.push(Sentence(k, b, { faint: true }));
+  if (l.turn.length) {
+    const hide = l.secret && d.rules.spoilerSafe;
+    rows.push(
+      ListRow(k, {
+        key: "ls-turn",
+        icon: "chat",
+        title: "Letzter Zug",
+        meta: hide ? "geheim, verborgen" : "",
+        under: hide
+          ? undefined
+          : l.turn.slice(-6).map((t) => Sentence(k, t, { faint: true })),
+      }),
+    );
   }
-  return Fold(k, {
-    key: "listener",
-    icon: "mic",
-    title: "Zuhörer",
-    pill: on
-      ? { text: "an", tone: "ok" }
-      : { text: "aus", tone: "neutral", glyph: false },
-    defaultOpen: on,
-    actions: [
-      on
-        ? {
-            key: "listener-off",
-            label: "Zuhörer aus",
-            icon: "stop",
-            variant: "secondary",
-            confirm: "Zuhörer wirklich ausschalten?",
-            onPress: () => void setListener($, "off"),
-          }
-        : {
-            key: "listener-on",
-            label: "Zuhörer an",
-            icon: "mic",
-            variant: "secondary",
-            onPress: () => void setListener($, "haiku"),
-          },
-    ],
-    children,
+  if (l.between.length)
+    rows.push(
+      ListRow(k, {
+        key: "ls-between",
+        icon: "chat",
+        title: "Ohne Spielleitung besprochen",
+        meta: String(l.between.length),
+        details: () =>
+          l.between.slice(-8).map((b) => Sentence(k, b, { faint: true })),
+      }),
+    );
+  return Card(k, {
+    key: "listener-card",
+    title: { icon: "mic", title: "Zuhörer" },
+    children: rows,
+    hint: "Mit offenem Mikro sprechen die Spieler ohne Sprechknopf; Claude meldet sich, wenn ein Zug die Spielleitung braucht.",
+    status: l.error ? { text: l.error, tone: "bad" } : undefined,
   });
 }
 
-/** The interjection list, inside the end-of-evening card. */
+/** The Einwürfe card of the Table tab: what the person typed at the running table, kept for the debrief. */
 export function renderInterjections(
   $: EngineInterface,
   k: Kit,
   s: EveningState,
-): RenderElement[] {
+): RenderElement {
   // older entries may still carry the app's attached blocks: shown (and counted) as the person typed them
   const notes = personsNotes(s.notes);
-  const head = CardTitle(k, {
-    icon: "chat",
-    title: "Einwürfe für die Nachbesprechung",
-    count: notes.length,
-  });
+  const shown = notes.slice(-Math.max(3, Math.min(10, k.rows - 8)));
   const file = s.notesFile
     ? CopyButton(k, {
         key: "notes-file",
         text: s.notesFile,
+        label: "Datei kopieren",
         show: !k.graphical,
       })
     : null;
-  const what = Sentence(
-    k,
-    "Alles, was du bei laufendem Tisch in den Chat tippst, landet hier für die Nachbesprechung nach dem Abend.",
-    { faint: true },
-  );
-  if (!notes.length)
-    return [
-      head,
-      what,
-      Sentence(k, "Am laufenden Tisch noch nichts getippt.", { faint: true }),
-      ...(file
-        ? [
-            Sentence(k, "Die Einwürfe des letzten Abends stehen in dieser Datei:", {
+  return Card(k, {
+    key: "notes",
+    title: { icon: "chat", title: "Einwürfe", count: notes.length },
+    children: [
+      ...(shown.length
+        ? shown.map((n) =>
+            Sentence(k, `${clockTime(n.at)} ${n.text}`, { faint: true }),
+          )
+        : [
+            Sentence(k, "Am laufenden Tisch noch nichts getippt.", {
               faint: true,
             }),
-            file,
-          ]
-        : []),
-    ];
-  const shown = notes.slice(-Math.max(3, Math.min(10, k.rows - 8)));
-  return [
-    head,
-    what,
-    ...shown.map((n) =>
-      Sentence(k, `${clockTime(n.at)} ${n.text}`, {
-        faint: true,
-      }),
-    ),
-    Actions(
-      k,
-      "notes",
-      [
-        {
-          key: "notes-clear",
-          label: "Liste leeren",
-          icon: "trash",
-          variant: "secondary",
-          confirm: "Wirklich leeren?",
-          onPress: () => void clearInterjections($),
-        },
-      ],
-      3,
-    ),
-    file,
-  ].filter((x): x is RenderElement => !!x);
+          ]),
+      file,
+    ],
+    hint: "Was du bei laufendem Tisch in den Chat tippst, steht hier für die Nachbesprechung.",
+    actions: notes.length
+      ? [
+          {
+            key: "notes-clear",
+            label: "Liste leeren",
+            icon: "trash",
+            variant: "secondary",
+            danger: true,
+            confirm: "Einwürfe wirklich leeren?",
+            confirmWord: "Leeren",
+            onPress: () => void clearInterjections($),
+          },
+        ]
+      : [],
+  });
 }
 
 /** The Discord card of the Table tab: players, rooms, last whisper, warnings; buttons only on press. */
@@ -865,35 +851,18 @@ export function renderDiscord(
   const info = evening.discord;
   const atTable = !!view?.discord || !!info?.connected;
   const children: RenderElement[] = [];
-  if (!info)
-    children.push(
-      Sentence(
-        k,
-        atTable
-          ? "„Aktualisieren“ fragt den Bot, wer da ist."
-          : "Der Bot ist nicht am Tisch.",
-        { faint: true },
-      ),
-    );
-  else {
-    if (info.error)
+  // One hint per card (R7), the most urgent: what the people at the table have to do, never a sentence per row.
+  let hint = "";
+  if (info) {
+    if (info.connected && info.channel)
       children.push(
-        ErrorState(k, {
-          key: "discord-err",
-          title: "Discord antwortet nicht",
-          message: info.error,
-          onRetry: () => void refreshDiscord($),
+        ListRow(k, {
+          key: "d-channel",
+          icon: "mic",
+          title: "Sprachkanal",
+          meta: info.channel,
         }),
       );
-    children.push(
-      Sentence(
-        k,
-        info.connected
-          ? `Im Sprachkanal ${info.channel || ""}`.trim()
-          : "In keinem Sprachkanal",
-        { faint: true },
-      ),
-    );
     const mappedChars = new Set(
       info.members.map((m) => m.character).filter(Boolean),
     );
@@ -902,29 +871,35 @@ export function renderDiscord(
         ListRow(k, {
           key: `dm-${m.name}`,
           status: m.character ? "ok" : "warning",
-          title: m.character
-            ? `${m.character} · ${m.name}`
-            : `${m.name} · nicht zugeordnet`,
+          title: m.character || m.name,
+          meta: m.character ? m.name : "",
+          pill: m.character
+            ? undefined
+            : { text: "nicht zugeordnet", tone: "warn" },
         }),
       );
+    let unmapped = info.members.some((m) => !m.character);
     if (info.connected)
       for (const h of view?.party ?? [])
-        if (!h.foe && !mappedChars.has(h.name))
+        if (!h.foe && !mappedChars.has(h.name)) {
+          unmapped = true;
           children.push(
             ListRow(k, {
               key: `dh-${h.name}`,
               status: "warning",
-              title: `${h.name}: kein Spieler da`,
-              meta: "Spieler im Discord /ich-bin tippen lassen oder in der Gruppe zuordnen",
+              title: h.name,
+              pill: { text: "kein Spieler", tone: "warn" },
             }),
           );
+        }
     for (const r of info.rooms)
       children.push(
         ListRow(k, {
           key: `dr-${r.name}`,
           icon: r.bot ? "speaker" : "dots",
           tone: r.bot ? "ok" : undefined,
-          title: `${r.bot ? "▶ " : ""}${r.name}: ${r.members.join(", ") || "leer"}`,
+          title: r.name,
+          meta: r.members.join(", ") || "leer",
         }),
       );
     if (info.missing.length)
@@ -932,7 +907,8 @@ export function renderDiscord(
         ListRow(k, {
           key: "d-missing",
           status: "warning",
-          title: `Einrichtung fehlt: ${info.missing.join(", ")}`,
+          title: "Einrichtung fehlt",
+          meta: info.missing.join(", "),
         }),
       );
     if (info.streamEnded.length)
@@ -940,8 +916,8 @@ export function renderDiscord(
         ListRow(k, {
           key: "d-stream",
           status: "failed",
-          title: `Bildschirmfreigabe beendet: ${info.streamEnded.join(", ")}`,
-          meta: "bitte das Spielerfenster wieder teilen lassen",
+          title: "Bildschirmfreigabe beendet",
+          meta: info.streamEnded.join(", "),
         }),
       );
     if (info.unheard.length)
@@ -949,14 +925,26 @@ export function renderDiscord(
         ListRow(k, {
           key: "d-unheard",
           status: "warning",
-          title: `Hört den Bot evtl. nicht: ${info.unheard.join(", ")}`,
-          meta: "Raum verlassen und neu betreten lassen",
+          title: "Hört den Bot evtl. nicht",
+          meta: info.unheard.join(", "),
         }),
       );
     if (info.warning && !info.streamEnded.length && !info.unheard.length)
       children.push(
-        ListRow(k, { key: "d-warn", status: "warning", title: info.warning }),
+        ListRow(k, {
+          key: "d-warn",
+          status: "warning",
+          title: info.warning,
+          wrap: true,
+        }),
       );
+    hint = info.streamEnded.length
+      ? "Wer die Freigabe beendet hat, teilt das Spielerfenster neu."
+      : info.unheard.length
+        ? "Wer den Bot nicht hört, betritt den Raum neu."
+        : unmapped
+          ? "Spieler ordnen sich im Discord mit /ich-bin einem Helden zu."
+          : "";
   }
   const w = evening.whisper;
   if (w)
@@ -964,68 +952,80 @@ export function renderDiscord(
       ListRow(k, {
         key: "d-whisper",
         status: w.delivered ? "ok" : "failed",
-        title: `Letztes Flüstern an ${w.to || "?"}: ${w.delivered ? "zugestellt" : `nicht zugestellt (${w.reason || "fehlgeschlagen"})`}`,
-        meta: w.delivered ? "" : truncate(w.why, 200),
+        title: `Letztes Flüstern an ${w.to || "?"}`,
+        meta: w.delivered ? "" : w.reason || "fehlgeschlagen",
+        pill: w.delivered
+          ? { text: "zugestellt", tone: "ok" }
+          : { text: "nicht zugestellt", tone: "bad" },
+        details:
+          !w.delivered && w.why
+            ? [Sentence(k, truncate(w.why, 200), { faint: true })]
+            : undefined,
       }),
     );
+  const actions: Action[] = [];
+  // Without a voice channel joining is what the card is for; the header's „Neu laden“ re-reads the bot.
+  if (!info?.connected)
+    actions.push({
+      key: "discord-join",
+      label: "Beitreten",
+      icon: "plug",
+      variant: "primary",
+      onPress: () =>
+        void discordAction($, "Bot ist im Sprachkanal", { action: "join" }),
+    });
+  else if (info.rooms.length > 1)
+    actions.push({
+      key: "discord-merge",
+      label: "Räume zusammenlegen",
+      icon: "link",
+      variant: "secondary",
+      confirm: "Räume wirklich zusammenlegen?",
+      confirmWord: "Zusammenlegen",
+      onPress: () =>
+        void discordAction($, "Gruppe wieder zusammen", { action: "merge" }),
+    });
+  if (atTable)
+    actions.push({
+      key: "discord-leave",
+      label: "Verlassen",
+      icon: "power",
+      variant: "secondary",
+      danger: true,
+      confirm: "Discord wirklich verlassen?",
+      onPress: () =>
+        void discordAction($, "Bot hat Discord verlassen", {
+          action: "leave",
+        }),
+    });
+  // Only a failed read gets its own retry: the header's „Neu laden“ asks the bot only while it is at the table.
+  if (info?.error)
+    actions.push({
+      key: "discord-status",
+      label: k.s.retry,
+      variant: "link",
+      onPress: () => void refreshDiscord($),
+    });
   return Fold(k, {
     key: "discord",
     icon: "chat",
     title: "Discord",
-    count: info ? `${info.members.length} Spieler` : "",
+    pill: info
+      ? info.connected
+        ? {
+            text: `${info.members.length} Spieler`,
+            tone: "ok",
+            glyph: false,
+          }
+        : { text: "nicht verbunden", tone: "neutral", glyph: false }
+      : undefined,
     defaultOpen: atTable,
-    actions: [
-      {
-        key: "discord-status",
-        label: "Aktualisieren",
-        icon: "refresh",
-        variant: "secondary",
-        onPress: () => void refreshDiscord($),
-      },
-      ...(atTable
-        ? [
-            {
-              key: "discord-leave",
-              label: "Verlassen",
-              icon: "power" as const,
-              variant: "secondary" as const,
-              confirm: "Discord wirklich verlassen?",
-              onPress: () =>
-                void discordAction($, "Bot hat Discord verlassen", {
-                  action: "leave",
-                }),
-            },
-          ]
-        : []),
-      ...(info?.connected
-        ? info.rooms.length > 1
-          ? [
-              {
-                key: "discord-merge",
-                label: "Räume zusammenlegen",
-                icon: "link" as const,
-                variant: "secondary" as const,
-                confirm: "Wirklich zusammenlegen?",
-                onPress: () =>
-                  void discordAction($, "Gruppe wieder zusammen", {
-                    action: "merge",
-                  }),
-              },
-            ]
-          : []
-        : [
-            {
-              key: "discord-join",
-              label: "Beitreten",
-              icon: "plug" as const,
-              variant: "secondary" as const,
-              onPress: () =>
-                void discordAction($, "Bot ist im Sprachkanal", {
-                  action: "join",
-                }),
-            },
-          ]),
-    ],
+    actions,
+    hint,
+    status: info?.error
+      ? { text: `Discord antwortet nicht: ${info.error}`, tone: "bad" }
+      : undefined,
+    empty: atTable ? "Der Bot ist am Tisch." : "Der Bot ist nicht am Tisch.",
     children,
   });
 }

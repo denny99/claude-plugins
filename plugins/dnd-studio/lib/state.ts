@@ -35,7 +35,8 @@ export const DEFAULT_RULES: Rules = {
   denyTalkNpc: true,
   denyFamily: true,
   spoilerSafe: true,
-  looks: true,
+  // the D&D look behind the chat while a table runs: off unless the person turns it on (Zustand tab)
+  looks: false,
   buildLooks: true,
 };
 

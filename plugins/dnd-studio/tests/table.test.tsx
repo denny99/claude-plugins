@@ -124,9 +124,9 @@ test("the GM screen shows scene, party, NPCs and sounds on every surface", async
 
   for (const surface of ["terminal", "desktop", "vscode", "mobile"] as const) {
     const ui = await $.ui.mount({ ...PANE, surface });
-    expect((await findShown(ui, /Thorin · Ausdauer 18\/22/))?.text).toContain(
-      "Thorin",
-    );
+    // a group row: the name is the title, the values are the meta
+    expect(await findShown(ui, /Thorin/)).toBeDefined();
+    expect(await findShown(ui, /Ausdauer 18\/22/)).toBeDefined();
     expect(
       await ui.find({ type: "Button", key: "npc-Bartel-0" }),
     ).toBeDefined();

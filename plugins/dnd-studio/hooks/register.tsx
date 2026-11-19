@@ -27,6 +27,7 @@ import { registerLanguage } from "../features/language";
 import { clashText, healthText, probe, renderHealth } from "../features/health";
 import { pluginVersion } from "../lib/brand";
 import { registerLook } from "../features/look";
+import { registerTranscript } from "../features/transcript";
 import {
   bandHint,
   bandStatus,
@@ -86,7 +87,9 @@ import {
 const TABS: { id: Tab; label: string; icon: IconName }[] = [
   { id: "table", label: "Tisch", icon: "dice" },
   { id: "build", label: "Bau", icon: "hammer" },
-  { id: "review", label: "Prüfen", icon: "speaker" },
+  // the id stays "review" (state, /dnd review, skills): only the word on the tab is „Abnahme“, so „prüfen“ keeps one
+  // meaning (a check that runs)
+  { id: "review", label: "Abnahme", icon: "speaker" },
   { id: "health", label: "Zustand", icon: "heart" },
 ];
 const TAB_ALIASES: Record<string, Tab> = {
@@ -94,6 +97,7 @@ const TAB_ALIASES: Record<string, Tab> = {
   bau: "build",
   pruefen: "review",
   prüfen: "review",
+  abnahme: "review",
   zustand: "health",
 };
 
@@ -267,6 +271,7 @@ export const register: Register = (on, options) => {
   registerBuild(on);
   registerProgress(on);
   registerLook(on);
+  registerTranscript(on);
   registerEvening(on);
   registerLanguage(on);
 
@@ -469,7 +474,7 @@ export const register: Register = (on, options) => {
               check: await readCheck($),
             })
           : tab === "review"
-            ? renderReview($, k, Input as never, review)
+            ? renderReview($, k, review)
             : renderHealth($, k, options, {
                 health: await readHealth($),
                 rules,
@@ -507,7 +512,7 @@ export const register: Register = (on, options) => {
           {
             key: "refresh",
             icon: "refresh",
-            label: "Aktualisieren",
+            label: k.s.reload,
             onPress: () => void refreshTab($, tab, options),
           },
         ],

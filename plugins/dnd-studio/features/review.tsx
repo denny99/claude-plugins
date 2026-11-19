@@ -6,7 +6,7 @@
  */
 import type { EngineInterface, RenderElement } from "claude-code";
 
-import { agentLabel, clockTime } from "../lib/model";
+import { clockTime } from "../lib/model";
 import { autoOpen } from "./dnd-ui";
 import { personAsk, submitForPerson } from "./evening";
 import { createHost } from "../lib/host";
@@ -16,23 +16,22 @@ import { studioCall } from "../lib/studio";
 import {
   Actions,
   Card,
-  CardTitle,
   EmptyState,
+  Field,
   ListRow,
-  ProgressBlock,
-  Sentence,
+  clearFieldDraft,
+  fieldText,
   isAsked,
 } from "../lib/ui";
 import type { Action, Kit } from "../lib/ui";
 import type { ReviewItem, ReviewKind, ReviewState } from "../types";
 
 type Obj = Record<string, unknown>;
-type InputEl = (props: Record<string, unknown>) => RenderElement;
 
 export const REVIEW_TOOL = "review";
 
 export const REVIEW_TOOL_DESCRIPTION =
-  "The review queue of the D&D pane (tab Prüfen): a person listens to new sounds and looks at new pictures/videos there and says ok or redo (with a note). action add + items puts new things in (each: name = what it is for, spoiler-free, e.g. 'Torknarren'; kind sound|image|video; source = local file path, http(s) URL, or a Studio result's file as the Studio names it (e.g. 'dnd-dland/x.mp3', with or without ' [output]') or its result id: fetched to this computer with results save; refused as not reviewable when no result has the file (uploads, downloaded sounds: give their local path or URL) or it was not made through the Studio's tools; meta = short facts like 'Geräusch · 4 s, Schleife'; agent = who redoes it, pnp-klang for sounds, pnp-maler for pictures; scene = optional, never shown before the person uncovers it). list (default) shows the queue with verdicts; clear empties it. The person's result arrives later as a prompt naming what passed and what to redo with which note.";
+  "The review queue of the D&D pane (tab Abnahme): a person listens to new sounds and looks at new pictures/videos there and says ok or redo (with a note). action add + items puts new things in (each: name = what it is for, spoiler-free, e.g. 'Torknarren'; kind sound|image|video; source = local file path, http(s) URL, or a Studio result's file as the Studio names it (e.g. 'dnd-dland/x.mp3', with or without ' [output]') or its result id: fetched to this computer with results save; refused as not reviewable when no result has the file (uploads, downloaded sounds: give their local path or URL) or it was not made through the Studio's tools; meta = short facts like 'Geräusch · 4 s, Schleife'; agent = who redoes it, pnp-klang for sounds, pnp-maler for pictures; scene = optional, never shown before the person uncovers it). list (default) shows the queue with verdicts; clear empties it. The person's result arrives later as a prompt naming what passed and what to redo with which note.";
 
 function str(v: unknown): string {
   return typeof v === "string"
@@ -113,7 +112,7 @@ export async function reviewTool(
       ],
     }));
     await autoOpen($, "build", "review");
-    return `${items.length} added; ${r.items.filter((i) => !i.verdict).length} waiting for the person in the D&D pane (tab Prüfen).${why}`;
+    return `${items.length} added; ${r.items.filter((i) => !i.verdict).length} waiting for the person in the D&D pane (tab Abnahme).${why}`;
   }
   const r = await readReview($);
   return r.items.length
@@ -527,11 +526,11 @@ async function patchItem(
   }));
 }
 
-/** The prompt "Ergebnis an Claude" sends: what passed, what to redo with which note, and who redoes it. */
+/** The prompt „An Claude schicken“ sends: what passed, what to redo with which note, and who redoes it. */
 export function resultPrompt(items: ReviewItem[]): string {
   const ok = items.filter((i) => i.verdict === "ok");
   const redo = items.filter((i) => i.verdict === "redo");
-  const parts = ["Prüfergebnis aus dem D&D-Panel (Tab Prüfen):"];
+  const parts = ["Prüfergebnis aus dem D&D-Panel (Tab Abnahme):"];
   if (ok.length)
     parts.push(
       `Passt: ${ok.map((i) => `${i.name} (${i.source})`).join("; ")}.`,
@@ -550,16 +549,13 @@ export function resultPrompt(items: ReviewItem[]): string {
   return parts.join("\n");
 }
 
-/** What the person typed into a "Nochmal" note field without pressing "Notiz" (by item id): sent with the result. */
-const drafts = new Map<string, string>();
-
-/** The judged items not sent yet: what "Ergebnis an Claude" sends (never one twice). */
+/** The judged items not sent yet: what „An Claude schicken“ sends (never one twice). */
 export function unsent(items: ReviewItem[]): ReviewItem[] {
   return items.filter((i) => i.verdict && !i.sent);
 }
 
 /**
- * Producer of „Ergebnis an Claude“ (runs inside the kit's `askClaude`, after its lock is taken): marks the judged
+ * Producer of „An Claude schicken“ (runs inside the kit's `askClaude`, after its lock is taken): marks the judged
  * items sent and returns the prompt; nothing judged → a toast and `undefined` (nothing is sent, the lock is freed).
  * A note typed but not confirmed goes along.
  */
@@ -573,10 +569,13 @@ export async function takeResult(
     const ids = new Set(unsent(s.items).map((i) => i.id));
     const items = s.items.map((i): ReviewItem => {
       if (!ids.has(i.id)) return i;
-      const draft = (drafts.get(i.id) ?? "").trim();
+      // a note typed but not kept with „Merken“ goes along (the kit holds the field's text)
       return {
         ...i,
-        note: i.verdict === "redo" && !i.note && draft ? draft : i.note,
+        note:
+          i.verdict === "redo"
+            ? fieldText(noteKey(i.id), i.note).trim()
+            : i.note,
         sent: true,
         sentAt: now,
       };
@@ -588,11 +587,11 @@ export async function takeResult(
     $.ui.toast("Noch nichts beurteilt.");
     return undefined;
   }
-  for (const i of judged) drafts.delete(i.id);
+  for (const i of judged) clearFieldDraft(noteKey(i.id));
   return resultPrompt(judged);
 }
 
-/** „Ergebnis an Claude“: the judged items once (kit `askClaude`, key `rv-send`); not delivered → open again. */
+/** „An Claude schicken“: the judged items once (kit `askClaude`, key `rv-send`); not delivered → open again. */
 export async function sendResult($: EngineInterface): Promise<void> {
   let at = 0;
   const result = await submitForPerson($, {
@@ -618,38 +617,42 @@ export function openCount(r: ReviewState): number {
   return r.items.filter((i) => !i.verdict).length;
 }
 
+/** Key of the note field of an item (the kit keeps what is typed there until „Merken“ or the send). */
+function noteKey(id: string): string {
+  return `rv-note-${id}`;
+}
+
+/** An item is waiting for its first look or listen (covered pictures included). */
+function isUnseen(i: ReviewItem): boolean {
+  return !i.sent && !i.heard;
+}
+
 function itemRow(
   $: EngineInterface,
   k: Kit,
-  Input: InputEl,
   i: ReviewItem,
   playing: boolean,
-): RenderElement[] {
-  if (i.sent) {
-    // done: one dimmed line, no pill, no buttons; it stays until Claude adds the new version (same source replaces it)
-    const name =
-      i.kind !== "sound" && !i.revealed
-        ? `${i.kind === "image" ? "Bild" : "Video"} (verdeckt)`
-        : i.name;
-    const what =
-      i.verdict === "redo"
-        ? i.note
-          ? `nochmal („${i.note}“)`
-          : "nochmal ohne Notiz"
-        : "passt";
-    const when = i.sentAt ? ` ${clockTime(i.sentAt)}` : "";
-    return [
-      Sentence(k, `✓ ${name} · ${what} · an Claude geschickt${when}`, {
-        faint: true,
-      }),
-    ];
-  }
+): RenderElement {
   const covered = i.kind !== "sound" && !i.revealed;
   const kindText =
     i.kind === "sound" ? "Klang" : i.kind === "image" ? "Bild" : "Video";
-  const title = covered
-    ? `${kindText} · Szene verdeckt, könnte spoilern`
-    : i.name;
+  if (i.sent) {
+    // done: a quiet row with its verdict; it stays until Claude adds the new version (same source replaces it)
+    const when = i.sentAt ? `geschickt ${clockTime(i.sentAt)}` : "geschickt";
+    return ListRow(k, {
+      key: `rv-${i.id}`,
+      status: "ok",
+      title: covered ? `${kindText} (verdeckt)` : i.name,
+      meta:
+        i.verdict === "redo"
+          ? `${i.note ? `„${i.note}“` : "ohne Notiz"} · ${when}`
+          : when,
+      pill:
+        i.verdict === "redo"
+          ? { text: "nochmal", tone: "warn" }
+          : { text: "passt", tone: "ok" },
+    });
+  }
   const pill =
     i.verdict === "ok"
       ? { text: "passt", tone: "ok" as const }
@@ -661,15 +664,13 @@ function itemRow(
     acts.push({
       key: `rv-reveal-${i.id}`,
       label: "Aufdecken",
-      icon: "eye",
       variant: "secondary",
       onPress: () => void patchItem($, i.id, { revealed: true }),
     });
   else if (i.kind === "sound")
     acts.push({
       key: `rv-play-${i.id}`,
-      label: playing ? "Stopp" : "Abspielen",
-      icon: playing ? "stop" : "play",
+      label: playing ? "Stoppen" : "Abspielen",
       variant: "secondary",
       onPress: () => void (playing ? stopPlaying($) : playItem($, i)),
     });
@@ -677,91 +678,76 @@ function itemRow(
     acts.push({
       key: `rv-open-${i.id}`,
       label: "Ansehen",
-      icon: "external",
-      variant: "secondary",
+      variant: "link",
       onPress: () => void openItem($, i),
     });
-  if (!covered && i.heard) {
+  // a verdict only on what was heard or seen
+  const judged = !covered && !!i.heard;
+  if (judged)
     acts.push({
       key: `rv-ok-${i.id}`,
       label: "Passt",
-      icon: "check",
       variant: "secondary",
       onPress: () =>
         void patchItem($, i.id, { verdict: i.verdict === "ok" ? "" : "ok" }),
     });
-    acts.push({
-      key: `rv-redo-${i.id}`,
-      label: "Nochmal machen",
-      icon: "x",
-      variant: "secondary",
-      onPress: () =>
-        void patchItem($, i.id, {
-          verdict: i.verdict === "redo" ? "" : "redo",
-        }),
-    });
-  }
-  const out: RenderElement[] = [
-    ListRow(k, {
-      key: `rv-${i.id}`,
-      icon:
-        i.kind === "sound" ? "speaker" : i.kind === "image" ? "camera" : "play",
-      title,
-      meta: covered ? "" : i.meta,
-      pill,
-    }),
-    Actions(k, `rv-acts-${i.id}`, acts, 3) as RenderElement,
-  ];
   // `i.error` (playing or opening failed) stands in the pane's fixed status line, see hooks/register.tsx
-  if (!i.error && !covered && !i.heard)
-    out.push(
-      Sentence(
-        k,
-        i.kind === "sound"
-          ? "Erst anhören, dann urteilen."
-          : "Erst ansehen, dann urteilen.",
-        { faint: true },
-      ),
-    );
-  if (i.verdict === "redo")
-    out.push(
-      ...(i.note
-        ? [Sentence(k, `Notiz: „${i.note}“ → ${agentLabel(i.agent)}`, { faint: true })]
-        : [
-            Input({
-              key: `rv-note-${i.id}`,
-              placeholder: "Was soll anders werden?",
-              submitLabel: "Notiz",
-              value: drafts.get(i.id) ?? "",
-              // what is typed goes with "Ergebnis an Claude" even without Enter
-              onInput: (v: string) => void drafts.set(i.id, v),
-              onSubmit: (v: string) => {
-                drafts.delete(i.id);
-                void patchItem($, i.id, { note: v.trim() });
-              },
+  return ListRow(k, {
+    key: `rv-${i.id}`,
+    icon:
+      i.kind === "sound" ? "speaker" : i.kind === "image" ? "camera" : "play",
+    title: covered ? `${kindText} · Szene verdeckt, könnte spoilern` : i.name,
+    meta: covered ? "" : i.meta,
+    pill,
+    actions: acts,
+    // the redo with its note is the rarer verdict: behind „Details“, so the row keeps two short actions
+    ...(judged
+      ? {
+          details: () => [
+            Field(k, {
+              key: noteKey(i.id),
+              label: "Notiz",
+              value: i.note,
+              placeholder:
+                i.kind === "sound" ? "z. B. leiser, dumpfer" : "z. B. heller, mehr Nebel",
+              submitLabel: "Merken",
+              // a kept note means "redo": nobody notes what passes
+              onSubmit: (v: string) =>
+                void patchItem($, i.id, { note: v.trim(), verdict: "redo" }),
             }),
-            Sentence(
+            Actions(
               k,
-              "Was hier steht, geht mit „Ergebnis an Claude“ mit; leer geht es als „Nochmal ohne Notiz“.",
-              { faint: true },
+              `rv-redo-acts-${i.id}`,
+              [
+                {
+                  key: `rv-redo-${i.id}`,
+                  label: "Nochmal",
+                  variant: "secondary",
+                  onPress: () =>
+                    void patchItem($, i.id, {
+                      verdict: i.verdict === "redo" ? "" : "redo",
+                    }),
+                },
+              ],
+              1,
             ),
-          ]),
-    );
-  return out;
+          ],
+        }
+      : {}),
+  });
 }
 
 export function renderReview(
   $: EngineInterface,
   k: Kit,
-  Input: InputEl,
   r: ReviewState,
 ): RenderElement[] {
   if (!r.items.length)
     return [
       EmptyState(k, {
         icon: "speaker",
-        title: "Nichts zu prüfen",
-        text: "Neue Klänge und Bilder vom Klang-Macher und vom Maler landen hier, sobald Claude sie zum Prüfen ablegt.",
+        title: "Nichts abzunehmen",
+        text: "Neue Klänge und Bilder vom Klang-Macher und vom Maler landen hier, sobald Claude sie zur Abnahme ablegt.",
       }),
     ];
   const done = r.items.filter((i) => i.verdict).length;
@@ -769,90 +755,73 @@ export function renderReview(
   const sounds = r.items.filter((i) => i.kind === "sound");
   const pictures = r.items.filter((i) => i.kind !== "sound");
   const out: RenderElement[] = [];
-  out.push(
-    ProgressBlock(k, {
-      key: "rv-progress",
-      label: "Geprüft",
-      value: done,
-      max: r.items.length,
-      valueText: `${done} von ${r.items.length}`,
-      tone: done === r.items.length ? "ok" : "warn",
-    }),
-  );
   if (sounds.length)
     out.push(
       Card(k, {
         key: "rv-sounds",
-        children: [
-          CardTitle(k, {
-            icon: "speaker",
-            title: "Neue Klänge prüfen",
-            count: `${sounds.filter((i) => i.verdict).length} von ${sounds.length}`,
-          }),
-          Sentence(
-            k,
-            "Spoilerfrei: du hörst nur, wofür der Klang ist, nicht in welcher Szene.",
-            { faint: true },
-          ),
-          ...sounds.flatMap((i) => itemRow($, k, Input, i, r.playing === i.id)),
-        ],
+        title: { icon: "speaker", title: "Neue Klänge", count: sounds.length },
+        children: sounds.map((i) => itemRow($, k, i, r.playing === i.id)),
+        hint: sounds.some(isUnseen)
+          ? "Erst anhören, dann urteilen."
+          : "Spoilerfrei: du hörst nur, wofür der Klang ist, nicht in welcher Szene.",
       }),
     );
   if (pictures.length)
     out.push(
       Card(k, {
         key: "rv-pictures",
-        children: [
-          CardTitle(k, {
-            icon: "camera",
-            title: "Neue Bilder und Videos",
-            count: `${pictures.filter((i) => i.verdict).length} von ${pictures.length}`,
-          }),
-          ...pictures.flatMap((i) => itemRow($, k, Input, i, false)),
-        ],
+        title: {
+          icon: "camera",
+          title: "Neue Bilder und Videos",
+          count: pictures.length,
+        },
+        children: pictures.map((i) => itemRow($, k, i, false)),
+        hint: pictures.some(isUnseen)
+          ? "Erst ansehen, dann urteilen."
+          : undefined,
       }),
     );
-  // the kit's ask button: „✓ An Claude geschickt“ until Claude answered the result, else only while something
-  // judged is not sent yet (nothing goes to Claude twice)
+  // The one card the tab is for: how far the review is, and its result to Claude. The kit's ask button shows
+  // „geschickt“ until Claude answered; else it stands only while something judged is not sent yet (nothing goes twice).
   const asked = isAsked(k.asked, "rv-send");
-  if (toSend || asked)
-    out.push(
-      Actions(
-        k,
-        "rv-send-acts",
-        [
-          personAsk(
-            $,
-            k,
-            {
-              key: "rv-send",
-              label: `Ergebnis an Claude (${toSend})`,
-              icon: "claude",
-              variant: "primary",
-              text: () => takeResult($),
-            },
-            { fresh: true },
-          ),
-          // a prompt that did not go out puts its items back to open
-        ].map((a) => ({ ...a, onPress: asked ? a.onPress : () => void sendResult($) })),
-        1,
-      ) as RenderElement,
-    );
-  // after Claude's answer: when it went out
-  if (!toSend && !asked && r.items.some((i) => i.sent) && !r.items.some((i) => !i.verdict))
-    out.push(
-      Sentence(
-        k,
-        `Alles an Claude geschickt${r.sentAt ? ` (${clockTime(r.sentAt)})` : ""}.`,
-        { faint: true },
-      ),
-    );
+  const open = r.items.length - done;
+  const send = personAsk(
+    $,
+    k,
+    {
+      key: "rv-send",
+      label: "An Claude schicken",
+      icon: "claude",
+      variant: "primary",
+      text: () => takeResult($),
+    },
+    { fresh: true },
+  );
   out.push(
-    Sentence(
-      k,
-      "„Nochmal machen“ geht mit deiner Notiz nach „Ergebnis an Claude“ an den Klang-Macher (Bilder an den Maler).",
-      { faint: true },
-    ),
+    Card(k, {
+      key: "rv-result",
+      title: {
+        icon: "check",
+        title: "Prüfung",
+        count: `${done} von ${r.items.length}`,
+      },
+      hint: "Was nochmal soll, geht mit seiner Notiz an den Klang-Macher oder den Maler.",
+      status: toSend
+        ? `${toSend} beurteilt, noch nicht geschickt`
+        : !asked && !open
+          ? {
+              text: `Alles an Claude geschickt${r.sentAt ? ` (${clockTime(r.sentAt)})` : ""}.`,
+              tone: "ok",
+            }
+          : open
+            ? `${open} offen`
+            : null,
+      // a prompt that did not go out puts its items back to open
+      actions:
+        toSend || asked
+          ? [{ ...send, onPress: asked ? send.onPress : () => void sendResult($) }]
+          : undefined,
+    }),
   );
   return out;
 }
