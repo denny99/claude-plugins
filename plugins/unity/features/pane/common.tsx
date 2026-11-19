@@ -45,11 +45,14 @@ export function fixAction($: EngineInterface, k: Kit, key: string, ask: string, 
   return askAction($, k, { key, label: 'Claude reparieren lassen', icon: 'claude', text: fixPrompt(ask, detail) })
 }
 
-/** A button handler: marks the pane busy, toasts the first line of the result, keeps a thrown error in the model. */
+/**
+ * A button handler: marks the pane busy, toasts the first line of the result, keeps a thrown error in the model (the
+ * pane's status line shows it until the next press).
+ */
 export function run($: EngineInterface, label: string, work: () => Promise<string | undefined | void>): () => void {
   return () =>
     void (async () => {
-      await patchModel($, { busy: label })
+      await patchModel($, { busy: label, error: undefined })
       try {
         const text = await work()
         if (text) void $.ui.toast(text.split('\n')[0] ?? text)

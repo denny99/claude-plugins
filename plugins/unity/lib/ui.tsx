@@ -50,7 +50,10 @@ export {
   type ToneColors,
 } from './theme'
 
-const EMPTY_UI: UiKitState = { toggled: [], more: [], details: [], logMore: [] }
+/** The kit state plus the question of the pending confirm (kept here, so a plugin's `types` need no new field). */
+type UiState = UiKitState & { confirmText?: string }
+
+const EMPTY_UI: UiState = { toggled: [], more: [], details: [], logMore: [] }
 // On copy into another plugin: change the plugin name (it must stay a string literal).
 const uiAtom = atom({ plugin: 'unity', key: 'ui' } as const, EMPTY_UI, { shape: 'ui-1' })
 
@@ -234,7 +237,8 @@ export type Kit = Els & {
   pageOf?: (key: string) => number | undefined
   setPage?: (key: string, page: number | undefined) => void
   isConfirming: (key: string) => boolean
-  askConfirm: (key: string) => void
+  /** Arms a two-step button; `text` is its question, shown in the fixed `StatusLine` (never as a new line). */
+  askConfirm: (key: string, text?: string) => void
   clearConfirm: () => void
   /**
    * One press of a two-step button, decided on the kit state at press time (not at render time): asks when nothing is
@@ -242,7 +246,7 @@ export type Kit = Els & {
    * before (same key, re-rendered as the question): with this, such a press confirms instead of asking again
    * (unity Runde 3: the first click on „Sperre … lösen?“ did nothing).
    */
-  pressConfirm: (key: string, onConfirm: () => void) => void
+  pressConfirm: (key: string, onConfirm: () => void, text?: string) => void
   hasDetails: (key: string) => boolean
   toggleDetails: (key: string) => void
   isLogMore: (key: string) => boolean
@@ -266,7 +270,7 @@ export function confirmStep(pending: string | undefined, key: string): { fire: b
 /** Patches the kit state (exported for tests and for actions that reset a confirm). */
 export async function patchUi(
   $: EngineInterface,
-  patch: Partial<UiKitState> | ((s: UiKitState) => Partial<UiKitState>),
+  patch: Partial<UiState> | ((s: UiState) => Partial<UiState>),
 ): Promise<void> {
   await update($, uiAtom, s => ({ ...s, ...(typeof patch === 'function' ? patch(s) : patch) }))
 }
@@ -307,6 +311,15 @@ export async function kit(
   const brand = opts.brand ?? 'neutral'
   const mode: Mode =
     opts.mode === 'dark' || opts.mode === 'light' ? opts.mode : graphical ? await detectMode($) : 'dark'
+  // the status line holds one row: a question that does not fit it is also toasted in full (a toast moves nothing)
+  const tellQuestion = (text?: string) => {
+    if (!text || [...text].length <= cols) return
+    try {
+      $.ui.toast(text)
+    } catch {
+      // no toast on this surface
+    }
+  }
   return {
     Box: els.Box,
     Text: els.Text,
@@ -339,17 +352,21 @@ export async function kit(
         return { pages }
       }),
     isConfirming: key => state.confirm === key,
-    askConfirm: key => void patchUi($, { confirm: key }),
-    clearConfirm: () => void patchUi($, { confirm: undefined }),
-    pressConfirm: (key, onConfirm) =>
+    askConfirm: (key, text) => {
+      void patchUi($, { confirm: key, confirmText: text })
+      tellQuestion(text)
+    },
+    clearConfirm: () => void patchUi($, { confirm: undefined, confirmText: undefined }),
+    pressConfirm: (key, onConfirm, text) =>
       void (async () => {
         let fire = false
         await patchUi($, s => {
           const step = confirmStep(s.confirm, key)
           fire = step.fire
-          return { confirm: step.confirm }
+          return { confirm: step.confirm, confirmText: step.confirm === undefined ? undefined : text }
         })
         if (fire) onConfirm()
+        else tellQuestion(text)
       })(),
     hasDetails: key => state.details.includes(key),
     toggleDetails: key => void patchUi($, s => ({ details: flip(s.details, key) })),
@@ -444,6 +461,12 @@ export type PillProps = {
   glyph?: string | false
   /** An icon in place of the glyph on graphical surfaces. Default per tone (TONE_ICON: warn → clock). */
   icon?: IconName
+  /**
+   * Makes the pill pressable, and visibly so: a native Button "<mark> <text> ›" (secondary on graphical surfaces: an
+   * Svg takes no press and may not sit in a Button; the terminal keeps the tone color). `key` addresses it.
+   */
+  onPress?: () => void
+  key?: string
 }
 
 /** Escapes text for SVG markup. */
@@ -500,6 +523,21 @@ export function Pill(k: Kit, p: PillProps & { shrink?: boolean }): RenderElement
   const tone = p.tone ?? 'neutral'
   const glyph = p.glyph === false ? '' : (p.glyph ?? TONE_GLYPH[tone])
   const Svg = k.Svg
+  if (p.onPress) {
+    const { Button } = k
+    const label = `${glyph ? `${glyph} ` : ''}${(sanitize(p.text).split('\n')[0] ?? '').trim()} ›`
+    return (
+      <Button
+        key={p.key ?? `pill-${p.text}`}
+        label={label}
+        plain={k.graphical ? undefined : true}
+        variant={k.graphical ? 'secondary' : undefined}
+        onPress={p.onPress}
+      >
+        {k.graphical ? label : <Text color={terminalColor(k.brand, tone)}>{label}</Text>}
+      </Button>
+    )
+  }
   if (!k.graphical || !Svg) {
     return (
       <Text color={terminalColor(k.brand, tone)} dimColor={tone === 'neutral' ? true : undefined}>
@@ -775,13 +813,27 @@ export type Space = number | 'xs' | 'sm' | 'md' | 'lg' | 'xl'
  */
 export function PaneBody(
   k: Kit,
-  b: { key?: string; header?: RenderElement | null; gap?: Space; children: Kids },
+  b: {
+    key?: string
+    header?: RenderElement | null
+    gap?: Space
+    /**
+     * The pane's fixed status line under the header: always one row, so nothing below moves when a press writes into
+     * it. It shows the question of a pending two-step button, else this status ("läuft …", a result, an error), else
+     * stays blank. `false` leaves the line out (a pane that places `StatusLine` itself).
+     */
+    status?: StatusInfo | string | null | false
+    children: Kids
+  },
 ): RenderElement {
   const { Box } = k
+  const line =
+    b.status === false ? null : StatusLine(k, { key: b.key ? `${b.key}-status` : undefined, status: b.status })
   if (!k.graphical)
     return (
       <Box key={b.key} flexDirection="column" gap={b.gap ?? 1}>
         {b.header ?? null}
+        {line}
         {kids(b.children)}
       </Box>
     )
@@ -791,9 +843,54 @@ export function PaneBody(
         <Box flexDirection="column" gap="sm">
           {b.header}
           {Rule(k)}
+          {line}
         </Box>
-      ) : null}
+      ) : (
+        line
+      )}
       {kids(b.children)}
+    </Box>
+  )
+}
+
+/** What a status line says: a running step, a result or an error. `running` puts ◷ in front (tone `warn` unless set). */
+export type StatusInfo = { text: string; tone?: Tone; running?: boolean }
+
+/** The blank a status line holds its row with (a no-break space: an empty Text takes no row). */
+export const STATUS_BLANK = '\u00a0'
+
+/**
+ * A fixed status line: exactly one row that is always there, so writing into it moves nothing. It shows, in this
+ * order: the question of a pending two-step button (ConfirmButton; `scope` limits that to confirm keys starting with
+ * it), the `status` given ("läuft …", result, error), or a blank of the same height. One line, cut at the end.
+ * `PaneBody` draws one under the header for every pane; put another in a card whose own actions report there.
+ */
+export function StatusLine(
+  k: Kit,
+  s: { key?: string; status?: StatusInfo | string | null; scope?: string } = {},
+): RenderElement {
+  const { Box, Text } = k
+  const pending = k.state.confirm
+  const asked = (k.state as UiState).confirmText
+  const question =
+    pending !== undefined && asked && (s.scope === undefined || pending.startsWith(s.scope)) ? asked : undefined
+  const given = typeof s.status === 'string' ? { text: s.status } : (s.status ?? undefined)
+  const info: StatusInfo | undefined = question ? { text: question, tone: 'warn' } : given?.text ? given : undefined
+  const tone = info ? (info.tone ?? (info.running ? 'warn' : undefined)) : undefined
+  const raw = info ? (sanitize(`${info.running ? '◷ ' : ''}${info.text}`).split('\n')[0] ?? '') : ''
+  if (!k.graphical)
+    return (
+      <Box key={s.key} height={1} flexShrink={0}>
+        <Text color={tone ? terminalColor(k.brand, tone) : undefined} dimColor={tone ? undefined : true}>
+          {raw ? truncate(raw, k.cols) : STATUS_BLANK}
+        </Text>
+      </Box>
+    )
+  return (
+    <Box key={s.key} flexDirection="row" minHeight={1} flexShrink={0} minWidth={0}>
+      <Text size="footnote" color={tone ? k.t.tones[tone].fg : ink(k, 'muted')} wrap="truncate-end">
+        {raw || STATUS_BLANK}
+      </Text>
     </Box>
   )
 }
@@ -1208,8 +1305,9 @@ export function StatusGlyph(k: Kit, status: Status): RenderElement {
 }
 
 /**
- * Two-step destructive button: first press turns it into "Really …?" + Cancel. `danger`: a ⚠ in front of both labels
- * (the terminal draws them red).
+ * Two-step destructive button: the first press turns it, in place, into "Really …?" + Cancel; with a `confirmLabel`
+ * (a whole question) into the action label + ✕, the question standing in the fixed `StatusLine`. Nothing else moves.
+ * `danger`: a ⚠ in front of the labels (the terminal draws them red).
  */
 export function ConfirmButton(
   k: Kit,
@@ -1218,10 +1316,11 @@ export function ConfirmButton(
   const { Box, Button, Text } = k
   const marked = (text: string) => (a.danger ? `${DANGER_GLYPH} ${text}` : text)
   const draw = (text: string) => (a.danger && !k.graphical ? <Text color="red">{text}</Text> : text)
+  const asks = a.confirmLabel !== undefined ? marked(a.confirmLabel) : undefined
   // Graphical: a real (secondary) button like its neighbours, not bare text; the terminal keeps the plain one.
   if (!k.isConfirming(a.key) && k.graphical && !a.danger)
     return (
-      <Button key={a.key} label={a.label} variant="secondary" onPress={() => k.pressConfirm(a.key, a.onConfirm)}>
+      <Button key={a.key} label={a.label} variant="secondary" onPress={() => k.pressConfirm(a.key, a.onConfirm, asks)}>
         {a.label}
       </Button>
     )
@@ -1232,36 +1331,29 @@ export function ConfirmButton(
         label={a.danger ? marked(a.label) : undefined}
         plain={a.danger && k.graphical ? undefined : true}
         variant={a.danger && k.graphical ? 'secondary' : undefined}
-        onPress={() => k.pressConfirm(a.key, a.onConfirm)}
+        onPress={() => k.pressConfirm(a.key, a.onConfirm, asks)}
       >
         {draw(marked(a.label))}
       </Button>
     )
-  // A question longer than a word or two never goes into the button: it stands as its own wrapped line above the
-  // buttons, and the confirming button keeps the short action label ("Aktualisieren"), so it never runs out of a row.
+  // A press moves nothing: a short question ("Wirklich löschen?") is the confirming button itself. A longer one
+  // (`confirmLabel`) never becomes a new line: the button turns, in place, into two short ones of the same height (the
+  // action label, primary, and ✕), and the question goes to the fixed StatusLine (PaneBody has one in every pane).
   const long = a.confirmLabel !== undefined
   const question = marked(long ? a.label : k.s.really(a.label))
-  const buttons = (
-    <Box flexDirection="row" gap={1}>
+  return (
+    <Box key={long ? `${a.key}-ask` : undefined} flexDirection="row" gap={1} flexShrink={0}>
       <Button
         key={a.key}
         label={a.danger ? question : undefined}
         variant="primary"
-        onPress={() => k.pressConfirm(a.key, a.onConfirm)}
+        onPress={() => k.pressConfirm(a.key, a.onConfirm, asks)}
       >
         {draw(question)}
       </Button>
       <Button key={`${a.key}-cancel`} plain onPress={() => k.clearConfirm()}>
-        {k.s.cancel}
+        {long ? '✕' : k.s.cancel}
       </Button>
-    </Box>
-  )
-  if (!long) return buttons
-  const ask = marked(a.confirmLabel ?? '')
-  return (
-    <Box key={`${a.key}-ask`} flexDirection="column">
-      {a.danger && !k.graphical ? <Text color="red">{wrapText(ask, k.cols).join('\n')}</Text> : Sentence(k, ask)}
-      {buttons}
     </Box>
   )
 }
@@ -1686,6 +1778,11 @@ export function LogBox(
   )
 }
 
+/** Desktop tab width in body columns: per character, the button's padding, and the reserve the last tab may take. */
+const TAB_CHAR = 0.9
+const TAB_PAD = 1.5
+const TAB_RESERVE = 1
+
 export type TabItem<T extends string> = {
   id: T
   label: string
@@ -1739,10 +1836,11 @@ export function Tabs<T extends string>(
   // The strip pages like the band over the prompt: everything that fits stays in one row; otherwise the row shows one
   // page of tabs, "+N" at its end goes to the next page (N tabs further on) and "‹" at its start goes back. The page
   // holding the active tab is shown until the person pages; choosing a tab drops the paging again.
-  // Width estimate in body columns: a desktop button is the label + 2 (proportional text, small padding), the terminal
-  // draws "[ label ]" (+4); 1 gap. `maxVisible` caps a page.
-  const pad = k.graphical ? 2 : 4
-  const width = (label: string) => [...label].length + pad
+  // Width estimate in body columns (`k.cols` is the measured width of the pane body). Terminal: exact, "[ label ]" is
+  // the label + 4 cells. Desktop: proportional text is narrower than a cell (about 0.9 of one per character) and a
+  // plain button pads about 1.5 cells; measured on the Hub strip, where "label + 2" hid a tab that had room. 1 gap.
+  // `maxVisible` caps a page.
+  const width = (label: string) => (k.graphical ? [...label].length * TAB_CHAR + TAB_PAD : [...label].length + 4)
   const max = Math.max(1, Math.min(t.maxVisible ?? t.tabs.length, t.tabs.length))
   const total = t.tabs.reduce((w, tab) => w + width(text(tab)) + 1, -1)
   const pages: TabItem<T>[][] = []
@@ -1758,7 +1856,10 @@ export function Tabs<T extends string>(
         const w = width(text(tab)) + (n ? 1 : 0)
         const left = t.tabs.length - i - 1
         const fwd = left ? width(`+${left}`) + 1 : 0
-        if (n >= max || (n > 0 && used + w + fwd > k.cols)) break
+        // Never "+1" for a last tab that fits, or misses by no more than the small reserve: it stands there itself
+        // (the room of the "+1" button was kept free for it). The strip wraps rather than clips if the estimate is off.
+        const lastFits = left === 0 && used + w <= k.cols + (k.graphical ? TAB_RESERVE : 0)
+        if (n >= max || (n > 0 && used + w + fwd > k.cols && !lastFits)) break
         used += w
         n++
       }

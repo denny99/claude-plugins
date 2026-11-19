@@ -1136,7 +1136,7 @@ export async function reviewTab(
   const parts: (RenderElement | null)[] = []
   if (s.report) parts.push(await reportCard($, e, k, options, s))
   if (s.view) parts.push(await viewerCard($, e, k, options, s.view))
-  if (s.notice) parts.push(Sentence(k, s.notice, { faint: true }))
+  // `s.notice` (what the last press said) stands in the pane's fixed status line, see renderPane
   if (!s.report)
     parts.push(
       ActionButton(k, {

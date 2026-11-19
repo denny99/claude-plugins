@@ -4,7 +4,17 @@ import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 import type { UnityModel, UnityTab } from '../types'
 import { HOUNDSRIDGE_LOGO, LOGO_HEIGHT, LOGO_WIDTH } from '../lib/brand'
 import { countResults } from '../lib/unity'
-import { ErrorState, kit, LoadingState, EmptyState, PaneHeader, Tabs, type Kit, type PillProps } from '../lib/ui'
+import {
+  kit,
+  LoadingState,
+  EmptyState,
+  PaneHeader,
+  StatusLine,
+  Tabs,
+  type Kit,
+  type PillProps,
+  type StatusInfo,
+} from '../lib/ui'
 import { loadSounds, reviewBadge, reviewTab } from './review/tab'
 import { readReview } from './review/store'
 import {
@@ -124,18 +134,19 @@ export async function renderPane($: EngineInterface, e: RenderInput<'Pane'>, opt
     moreLabel: 'Mehr',
   })
   const body = await tabBody($, e, k, x, m, options, tab)
+  // The fixed status line under the tabs: the question of a pending two-step button, else what the last press said
+  // (an error of any tab, the Review tab's result). Always one row, so a press moves nothing below it.
+  const notice = tab === 'review' ? (await readReview($)).notice : undefined
+  const status: StatusInfo | undefined = m.error
+    ? { text: `Das hat nicht geklappt: ${m.error}`, tone: 'bad' }
+    : notice
+      ? { text: notice }
+      : undefined
   return (
     <Box flexDirection="column" gap={1}>
       {header}
       {tabs}
-      {m.error
-        ? ErrorState(k, {
-            key: 'pane-error',
-            title: 'Das hat nicht geklappt',
-            message: m.error,
-            onRetry: () => void patchModel($, { error: undefined }),
-          })
-        : null}
+      {StatusLine(k, { key: 'pane-status', status })}
       {body}
     </Box>
   )
