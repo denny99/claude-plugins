@@ -133,7 +133,7 @@ export async function renderTestsUse(
   if (!card) return next(e)
   const { Box } = await kit($, e as never, { lang: 'de' })
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" gap={1}>
       {await next(e)}
       {card}
     </Box>

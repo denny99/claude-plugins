@@ -96,6 +96,8 @@ test('desktop ToolUse: the app row stays, the run card under it; terminal and a 
   const desk = await $.ui.mount({ ...useRow('mcp__unity__unity_run_tests', 'toolu_use1'), surface: 'desktop' })
   const tree = (await desk.drawn()) as { type: string; children: { type: string; props?: { key?: string } }[] }
   expect(tree.type).toBe('Box')
+  // the app's row and the card stand apart
+  expect((tree as { props?: { gap?: number } }).props?.gap).toBe(1)
   expect(tree.children[0]).toMatchObject({ type: 'engine' })
   expect(tree.children[1]?.props?.key).toBe('tcard-olu_use1')
   expect(await findShown(desk as never, 'Testlauf')).toBeDefined()
