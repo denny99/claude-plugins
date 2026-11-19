@@ -53,11 +53,17 @@ package (the **bridge**, in `bridge/com.denny99.claude-bridge`).
   - Without a bridge: the setup steps (package in `manifest.json`, open the editor), batch tests without an editor, and
     the package URL to copy (_Adresse kopieren_, _↗ Anleitung_).
 - **Opens by itself** at session start in a Unity project (`ProjectSettings/ProjectVersion.txt` at the root or under
-  `unity/`), unless a higher-ranked mod claims the folder (a deltastone ticket branch → `/ct`). Option `autoOpen`.
+  `unity/`), unless a higher-ranked mod claims the folder (a deltastone ticket branch → `/ct`). The ranking does not check whether
+  that mod is installed: on a ticket branch without `ds-ct` no panel opens by itself; open it with `/unity`. Option
+  `autoOpen`.
 - **Batchmode** (tests, compile check, build, custom jobs marked `batch`) runs as a Claude Code background shell, only
   when **no editor holds the project** (`Temp/UnityLockfile` held, checked with `lsof` on macOS and an exclusive open in
   PowerShell on Windows). A watchdog stops jobs after `watchdogMinutes`. `-runTests` exit codes: 0 ok, 2 tests failed,
   3 run broke; results come from the NUnit XML.
+- **Unity-run guard** (option `unityRunGuard`): a Bash command that starts Unity by hand (the editor binary,
+  `-batchmode`, or a project wrapper such as `node tools/unity.mjs …`) in the main checkout is refused while an editor
+  holds the project; the refusal points to the `unity_*` tools and to `unity_worktree` (run it inside the worktree
+  instead). Runs inside `worktreeDir` or another checkout pass.
 - **Tools for Claude**: `unity_status`, `unity_console`, `unity_refresh`, `unity_run_tests {mode, filter?, waitSeconds?}`,
   `unity_affected_tests {mode?, run?, waitSeconds?}`, `unity_worktree {name}`, `unity_test_results`, `unity_play`, `unity_stop`, `unity_screenshot` (returns the PNG as an image plus its path).
 - **Commands**: `/unity`, `/unity-test [play] [filter|area]`, `/unity-affected [play]`, `/unity-worktree <name>`,

@@ -55,6 +55,7 @@ import {
   readTable,
   setClash,
   setTab,
+  configureProtectedProfiles,
 } from "../lib/state";
 import { isLive } from "../lib/model";
 import {
@@ -267,6 +268,7 @@ async function openTable(
 
 export const register: Register = (on, options) => {
   configureAutoOpen(options.autoOpen);
+  configureProtectedProfiles(options.protectedProfiles);
   registerTable(on);
   registerBuild(on);
   registerProgress(on);

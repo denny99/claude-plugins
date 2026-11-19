@@ -8,12 +8,18 @@ description: 'Baut in D&D Studio (MCP-Server dnd-studio) eine spielfertige Pen-a
 Ziel ist nicht ein schöner Text, sondern ein **Abend, der läuft**: Eine KI-Spielleitung (Skill `pnp-spielleiter`) oder
 ein Mensch soll die Kampagne ohne Nachfragen leiten können, mit Bild, Stimme und Würfeln, und die Spieler hören sie,
 statt mitzulesen. Jede Entscheidung unten dient diesem Abend. Die Regeln mit Datum und Zitat sind Lehren aus echten
-Spielabenden mit Denny; das Zitat sagt, warum die Regel gilt.
+Spielabenden mit Denny; das Zitat sagt, warum die Regel gilt. Zitate sind Anlässe, nicht Vorlieben einer Person: Die
+Regeln gelten für jeden Tisch, sofern der Leitfaden der Kampagne nichts anderes sagt. „Der Mensch“ ist, wer an diesem
+Rechner mit dir im Chat schreibt.
 
 Schreibweise: `campaign set`, `map new`, `party sheet`, `results get` meinen das Werkzeug (`campaign`, `map` …) mit
 `action: "set"` usw.; die Werkzeuge des MCP-Servers heißen in Claude Code `mcp__plugin_dnd-studio_dnd-studio__<werkzeug>`.
 
 ## 0. Klären, bevor gebaut wird
+
+**Eigene Tisch-Regeln:** Liegt im Arbeitsordner dieser Sitzung eine Datei `pnp-regeln.md` (Lehren aus früheren
+Nachbesprechungen und Bauten an diesem Rechner), lies sie zu Beginn; sie ergänzt diesen Skill und geht ihm bei Widerspruch vor.
+
 
 Kurz fragen, was fehlt (nicht alles auf einmal, sinnvolle Vorgaben vorschlagen):
 - Spielsystem (`The One Ring`, `d20`, `other`) und Sprache (Deutsch/Englisch).
@@ -27,33 +33,39 @@ Kurz fragen, was fehlt (nicht alles auf einmal, sinnvolle Vorgaben vorschlagen):
   für die ganze Kampagne; die Spielleitung fragt sie am Abend nicht mehr (Denny 2026-11-13: „das Setting gibt das
   vor“). Fehlt etwas davon bei einer bestehenden Kampagne im Leitfaden, beim Ausbau fragen.
 
+- Gibt es einen Obsidian-Vault mit Welt-Notizen zur Kampagne (Pfad des Kampagnen-Ordners, darin öffentlicher Welt-Ordner
+  und Spoiler-Ordner, Regeln des Vaults)? Das ist optional: Ohne Vault entfallen `dnd-studio:pnp-lore` und die
+  Vault-Notizen im Auftrag an Architekt und Texter; die Welt steht dann allein im Studio (`campaign`, Kanon).
+
 `studio_status` zeigt das offene Profil; alles entsteht dort. Wo eine Kampagne schon existiert: `campaign` lesen und
 ausbauen statt neu anlegen.
 
 **Wer was baut** (Denny 2026-11-13: feste Agents statt allgemeiner; Modell, Werkzeuge und Regeln stehen in ihrer
 Agent-Datei, der Auftrag nennt nur Kampagne, Dateien und Protokoll-Pfad). Der Erbauer koordiniert und schreibt
-selbst wenig; die Arbeit machen Agents (Agent-Tool mit diesem `subagent_type`):
+selbst wenig; die Arbeit machen die Agents des Plugins (Agent-Tool mit diesem `subagent_type`, immer mit dem Präfix
+`dnd-studio:`):
 
 | Schritt | Agent | Modell |
 |---|---|---|
-| Vault-Welt auf Stand (nur Geändertes) | `pnp-lore` | Sonnet |
-| Bauplan | `pnp-architekt` | Opus |
-| Szenen, Texte, NPCs, Orte, Leitfaden | `pnp-texter` | Opus |
-| Bilder und Karten | `pnp-maler` | Sonnet |
-| Klänge suchen, prüfen, binden | `pnp-klang` | Sonnet |
-| Stimmen vorab (`prepare_table`) | `pnp-tischbereit` | Haiku |
-| Review | `pnp-review-technik`, `-konsistenz`, `-spielbarkeit` | Sonnet |
-| Mängel beheben | `pnp-nachbesserer` | Sonnet |
+| Vault-Welt auf Stand (nur Geändertes, nur mit Vault) | `dnd-studio:pnp-lore` | Sonnet |
+| Bauplan | `dnd-studio:pnp-architekt` | Opus |
+| Szenen, Texte, NPCs, Orte, Leitfaden | `dnd-studio:pnp-texter` | Opus |
+| Bilder und Karten | `dnd-studio:pnp-maler` | Sonnet |
+| Klänge suchen, prüfen, binden | `dnd-studio:pnp-klang` | Sonnet |
+| Stimmen vorab (`prepare_table`) | `dnd-studio:pnp-tischbereit` | Haiku |
+| Review | `dnd-studio:pnp-review-technik`, `-konsistenz`, `-spielbarkeit` | Sonnet |
+| Mängel beheben | `dnd-studio:pnp-nachbesserer` | Sonnet |
 
 Was die GPU braucht (Maler, Tischbereit, Bild-Edits des Nachbesserers), läuft nacheinander, nicht gleichzeitig: sonst
-laufen Stimmen in Timeouts. Fehlen die Agents (ältere App), bekommt ein allgemeiner Agent die Aufgabe, mit `model`
-wie in der Tabelle und den Regeln der Agent-Datei im Auftrag.
+laufen Stimmen in Timeouts. Fehlt ein Agent (das Plugin ist nicht oder zu alt installiert), sagst du das dem Menschen
+(Plugin `dnd-studio` aktualisieren). Beim Bau, nie am Tisch, darf dann ein allgemeiner Agent die Aufgabe bekommen, mit
+`model` wie in der Tabelle und den Regeln der Agent-Datei im Auftrag.
 
 ## 1. Gerüst (Text zuerst, Bilder später)
 
-Vor dem Bauen entwirft der Agent `pnp-architekt` aus den Antworten von Abschnitt 0, der Gruppe und (bei einer
+Vor dem Bauen entwirft der Agent `dnd-studio:pnp-architekt` aus den Antworten von Abschnitt 0, der Gruppe und (bei einer
 Fortsetzung) dem Kanon einen Bauplan: Szenen mit den Wegen der Helden, Orte und Karten mit den Plätzen der Marker,
-NPCs, Zeitplan (Agent-Tool mit `subagent_type: "pnp-architekt"`; der Auftrag nennt die Antworten aus 0, ob der Mensch
+NPCs, Zeitplan (Agent-Tool mit `subagent_type: "dnd-studio:pnp-architekt"`; der Auftrag nennt die Antworten aus 0, ob der Mensch
 mitspielt, und den Pfad der Plan-Datei im Scratchpad). Der Mensch segnet ihn ab (spielt er mit, nur Zahlen und
 Rahmen), dann wird nach dem Plan gebaut.
 
@@ -274,7 +286,7 @@ Gehe den Abend im Kopf einmal als Spielleitung durch und prüfe:
 - Jeder Hinweis, ohne den es nicht weitergeht, ist auf drei Wegen zu finden; jeder Gegner hat Werte und Moral.
 - Begrüßung, bei neuer Kampagne Prolog, bei vorgefertigten Helden ihre Vorstellung, Kapitelanfang und -ende und
   Leitfaden (mit Rahmen, Plan des Gegners und Vorrat) sind da; `brokenReferences` ist leer.
-- `prepare_table` über `pnp-tischbereit`, damit am Abend alles sofort klingt (nach den Bildern, nicht gleichzeitig).
+- `prepare_table` über `dnd-studio:pnp-tischbereit`, damit am Abend alles sofort klingt (nach den Bildern, nicht gleichzeitig).
 
 ## 5. Review: drei Prüfer, bis es sitzt
 
@@ -282,16 +294,16 @@ Wer gebaut hat, übersieht die eigenen Lücken. Deshalb prüfen nach der Abnahme
 (eigene Agenten, gleichzeitig), jeder mit einem Fachbereich, und die Kampagne geht erst zum Menschen, wenn alle drei
 nichts mehr finden (der Nutzer, 2026-10-30). Jeder Reviewer liest die Kampagne selbst (`campaign`, `results get`,
 `map list`, die Stimmbeschreibungen), nicht die Meinung des Erbauers, und prüft am Studio, nicht am Text allein. Die drei sind
-Agents von Claude Code, die die App mit diesem Skill nach `~/.claude/agents` installiert, jeder mit seiner Prüfliste und
-nur lesenden Werkzeugen: `pnp-review-technik`, `pnp-review-konsistenz`, `pnp-review-spielbarkeit` (Agent-Tool mit
+Agents des Plugins (`dnd-studio:…`), jeder mit seiner Prüfliste und
+nur lesenden Werkzeugen: `dnd-studio:pnp-review-technik`, `dnd-studio:pnp-review-konsistenz`, `dnd-studio:pnp-review-spielbarkeit` (Agent-Tool mit
 diesem `subagent_type`). Ihre Agent-Dateien tragen die vollständige Prüfliste; hier steht die Kurzfassung. Der Auftrag
 nennt die Kampagne, ob der Mensch mitspielt, die gewünschte Länge, den Pfad der Mängel-Datei und, für die Technik, die
 letzte Antwort von `prepare_table` (`done`, `made`, `total`, `failed`): Die Reviewer können nur lesen und rufen es
 nicht selbst auf. Stimmen hören können sie nicht: Die Probe nach `set_voice` hört der Erbauer oder der Mensch, die
-Reviewer prüfen die Beschreibung. Klänge hört die Technik mit `check_sound` selbst nach. Fehlen die Agents (ältere
-App, kein Claude Code), bekommt ein allgemeiner Agent die Prüfliste seines Bereichs und nur lesende Werkzeuge:
+Reviewer prüfen die Beschreibung. Klänge hört die Technik mit `check_sound` selbst nach. Fehlen die Agents (Plugin nicht oder
+zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüfliste seines Bereichs und nur lesende Werkzeuge:
 
-1. **Vollständigkeit und Technik** (`pnp-review-technik`) – ist alles da und läuft es? Jedes Bild gemalt (Szenen,
+1. **Vollständigkeit und Technik** (`dnd-studio:pnp-review-technik`) – ist alles da und läuft es? Jedes Bild gemalt (Szenen,
    Orte, sprechende NPCs, Helden), Karten ganz gemalt, ohne Nähte, alle Orte mit Marker, und jeder Marker sitzt auf
    dem, was die Karte an der Stelle zeigt (Karte ansehen, nicht nur zählen); jede Szene auf einer Karte hat
    Startfelder für Helden und NPCs, die auf begehbaren Feldern liegen; jede sprechende Figur mit eigener Stimmprobe,
@@ -299,7 +311,7 @@ App, kein Claude Code), bekommt ein allgemeiner Agent die Prüfliste seines Bere
    mit `make_sound` gemacht (echte Aufnahmen nur, wo das nicht reichte), mit `check_sound` gegen ihren Namen gehört, Schleifen und Lautstärken
    richtig; Handouts, Begrüßung, Leitfaden da, ein Handout mit Geheimnis zum Flüstern; bei einem Kapitel `threads`
    und `party_at` gesetzt; `brokenReferences` leer.
-2. **Konsistenz und Korrektheit** (`pnp-review-konsistenz`) – stimmt es? Jeder Wurf nennt eine Fertigkeit, die die
+2. **Konsistenz und Korrektheit** (`dnd-studio:pnp-review-konsistenz`) – stimmt es? Jeder Wurf nennt eine Fertigkeit, die die
    Helden haben, mit passender Schwierigkeit; Gegnerwerte an der Party gemessen; ein umgebogenes Regelwerk überall
    gleich umgebogen (auch `dice_faces`); Namen, Orte, Fraktionen und Zeitlinie widersprechen sich nicht, keine Reste
    aus einem anderen Setting; Bilder passen zu `looks` (je Bild ansehen: falsche Person, kaputte Hände, falscher
@@ -307,7 +319,7 @@ App, kein Claude Code), bekommt ein allgemeiner Agent die Prüfliste seines Bere
    niedrigem `how`, Rufname vorn; Szenentexte reine Erzählerstimme ohne wörtliche Rede und ohne vorausgesetzten Stand;
    keine unabsichtlichen Spoiler in Texten, Bildern und Namen; was nur einen Helden angeht, steht im Handout zum
    Flüstern statt in einem Text für alle.
-3. **Umfang und Spielbarkeit** (`pnp-review-spielbarkeit`) – trägt der Abend? Genug Stoff für die gewünschte Länge
+3. **Umfang und Spielbarkeit** (`dnd-studio:pnp-review-spielbarkeit`) – trägt der Abend? Genug Stoff für die gewünschte Länge
    im Tempo dieser Gruppe (Abschnitt 1, „Mehr Strecke statt mehr Verzweigungen“), dazu der Situations-Vorrat;
    eine Ausweichszene für die naheliegende Abzweigung, kein Überbau aus Kann-Schwellen und Fassungen; drei Wege zu
    jedem Hinweis; jeder Held mit Haken und großem Moment, ein Geheimnis lässt sich enthüllen oder bewusst behalten (beides belohnt); Plan des Gegners und Vorrat zum
@@ -329,11 +341,15 @@ App, kein Claude Code), bekommt ein allgemeiner Agent die Prüfliste seines Bere
   ids`. Ein Feld neben der Liste gilt für jeden Eintrag; ein Fehler hält den Rest nicht auf (`failed`, je Eintrag
   `error`). Job-Werkzeuge geben alle `job_ids` zurück: die in einem `jobs wait` abwarten.
 - Karten-Plan lesen ohne Bilder: `map list` mit `map` und `pictures: false`.
+- **Lange Agenten geben ab:** Die Bau-Agenten (Texter, Maler, Klang, Nachbesserer) hören nach etwa 60
+  Werkzeugaufrufen oder bei großem Kontext auf, schreiben ihr Protokoll vollständig (fertig, offen, welche Einträge)
+  und melden die Zahlen. Den Rest bekommt ein frischer Agent mit dem Protokoll im Auftrag, nicht derselbe zurück
+  (sein ganzer Kontext würde bei jedem Schritt neu gelesen).
 - Mechanische Arbeit (aufräumen, zählen) auf einem kleinen Modell. Prüfen nur, was sich geändert hat; ab Runde 2 nur
   die offenen Punkte.
 
 Der Ablauf: Jeder Reviewer schreibt seine Mängel (was, wo, warum, wie zu beheben) in eine eigene Datei und meldet
-nur ihre Anzahl. `pnp-nachbesserer` behebt sie aus den Dateien. Ziel ist ein möglichst fehlerfreier Abend (Denny,
+nur ihre Anzahl. `dnd-studio:pnp-nachbesserer` behebt sie aus den Dateien. Ziel ist ein möglichst fehlerfreier Abend (Denny,
 2026-11-01: „es soll schon möglichst fehlerfrei sein“), darum prüfen die Reviewer danach erneut, die etwas gefunden
 hatten, **höchstens drei Runden**. Was gilt als erledigt: Text, Regeln, Logik, Kanon, Spoiler, Hinweise, Stimmen,
 Klänge und fehlende Bilder müssen stimmen. **Kosmetisches an Bildern** (ein Licht zu viel, ein Detail der Karte

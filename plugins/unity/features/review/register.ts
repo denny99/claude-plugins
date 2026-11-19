@@ -1,5 +1,5 @@
 /**
- * Review wiring: the two tools (show pictures to Denny, read his marked answer back) and the paint overlay's posts.
+ * Review wiring: the two tools (show pictures to the developer, read their marked answer back) and the paint overlay's posts.
  * `features/register.tsx` registers REVIEW_TOOLS in its one session.start hook and calls registerReview(on, options).
  */
 import type { EngineInterface, On } from 'claude-code'
@@ -12,16 +12,16 @@ export const REVIEW_TOOLS: { name: string; description: string; inputSchema?: Re
   {
     name: 'unity_review_show',
     description:
-      "Shows Denny pictures in the Unity pane's Review tab and asks him a question about them: one picture, a frame " +
+      "Shows the developer pictures in the Unity pane's Review tab and asks them a question about them: one picture, a frame " +
       'sequence (animation), several directions or 3D views (one group each, e.g. N/NE/E… or Vorne/Seite/Oben, or ' +
-      'Vorher/Nachher). He can step/play frames, paint marks on them and answer; the answer arrives as a new message, ' +
-      'the picture with his marks through unity_review_feedback. Render the files first (PNG). Keep each frame small ' +
+      'Vorher/Nachher). The developer can step/play frames, paint marks on them and answer; the answer arrives as a new message, ' +
+      'the picture with their marks through unity_review_feedback. Render the files first (PNG). Keep each frame small ' +
       '(about 256–384 px wide, under 90 KB) so the pane can draw it inline; larger files are shown by path only.',
     inputSchema: {
       type: 'object',
       properties: {
         title: { type: 'string', description: 'Short name, e.g. "Fuchs · Laufen".' },
-        question: { type: 'string', description: 'What Denny should judge.' },
+        question: { type: 'string', description: 'What the developer should judge.' },
         groups: {
           type: 'array',
           description: 'One entry per direction/view; frames in playback order.',
@@ -45,8 +45,8 @@ export const REVIEW_TOOLS: { name: string; description: string; inputSchema?: Re
   {
     name: 'unity_review_feedback',
     description:
-      'Denny\'s last answer from the Unity Review tab (viewer or "Problem melden"): the text, the picture he looked at ' +
-      'and where his marks are (the marks are also saved as an SVG over the picture).',
+      'The developer\'s last answer from the Unity Review tab (viewer or "Problem melden"): the text, the picture they looked at ' +
+      'and where their marks are (the marks are also saved as an SVG over the picture).',
   },
 ]
 
@@ -79,7 +79,7 @@ async function onShow($: EngineInterface, input: ShowInput): Promise<string> {
   await patchReview($, { view: newView('claude', `show-${Date.now()}`, title, question, groups), notice: undefined })
   void $.ui.toast(`Unity-Review: ${title} wartet auf dich`)
   const frames = groups.reduce((n, g) => n + g.frames.length, 0)
-  return `Shown in the Unity pane (Review tab): ${groups.length} view(s), ${frames} frame(s). Denny's answer arrives as a message; then call unity_review_feedback for the marked picture.`
+  return `Shown in the Unity pane (Review tab): ${groups.length} view(s), ${frames} frame(s). The developer's answer arrives as a message; then call unity_review_feedback for the marked picture.`
 }
 
 async function onFeedback($: EngineInterface): Promise<unknown> {

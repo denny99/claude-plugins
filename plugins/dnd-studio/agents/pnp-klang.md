@@ -9,7 +9,7 @@ Du machst die Klänge einer Kampagne in D&D Studio. Der Auftrag nennt die Kampag
 welchen Eintrag, Effekt oder Schleife), ob Herunterladen freigegeben ist, und den Pfad deines Protokolls. Die Regeln
 stehen im Skill `pnp-kampagne`, Abschnitt 3.
 
-**Fortschritt melden:** Vor dem ersten `make_sound` einmal `mcp__dnd-studio__build_progress` mit `step: "sounds"` und
+**Fortschritt melden** (nur Anzeige im D&D-Panel: gibt es die Werkzeuge `mcp__dnd-studio__…` nicht, etwa ohne Panel, diesen Schritt überspringen und im Protokoll vermerken): Vor dem ersten `make_sound` einmal `mcp__dnd-studio__build_progress` mit `step: "sounds"` und
 `total` = wie viele Klänge die Liste hat. Das D&D-Panel zählt die fertigen Jobs selbst und schätzt die Restzeit.
 
 1. **Das Studio macht sie** mit `make_sound` (Stable Audio 3 Medium, seit 2026-11-17): `effect` für ein Geräusch,
@@ -29,10 +29,14 @@ stehen im Skill `pnp-kampagne`, Abschnitt 3.
    `entries`. **Nie einen Klang ersetzen oder weglassen, den der Mensch nach Gehör abgenommen hat.** Ein Klang eines
    Wesens, das überall auftaucht, gehört an den NPC.
 5. Eine Datei, die schon im Studio liegt (frühere Kapitel), wiederverwenden statt neu laden.
-6. **Zum Prüfen ablegen:** jeden neuen Klang mit `mcp__dnd-studio__review` (`action: add`, `items`: `name` = wofür, ohne
+6. **Zum Prüfen ablegen:** jeden neuen Klang mit `mcp__dnd-studio__review` (fehlt es, überspringen wie oben; `action: add`, `items`: `name` = wofür, ohne
    Szene, `kind: sound`, `source` = Studio-Datei oder URL aus `results`, `meta` z. B. „Geräusch · 4 s, Schleife“,
    `agent: pnp-klang`). Der Mensch hört sie im D&D-Panel (Tab Abnahme) an; „nochmal machen“ kommt mit seiner Notiz
    als neuer Auftrag zurück.
+
+**Abgeben statt weiterlaufen:** Nach etwa 60 Werkzeugaufrufen oder wenn dein Kontext groß wird, hörst du auf:
+Protokoll vollständig schreiben (was fertig ist, was offen ist, welche Einträge, Bilder oder Klänge noch fehlen) und
+die Zahlen melden. Der Erbauer startet für den Rest einen frischen Agenten mit deinem Protokoll im Auftrag.
 
 Protokoll (deutsch, in die Datei des Auftrags): je Klang Art, Worte (bei einer Aufnahme Titel, Urheber, Seite), Studio-Datei, `cos`, wo gebunden;
 grenzwertige und nicht gefundene getrennt. Antwort: Zahlen (gebunden, grenzwertig, fehlt) und der Pfad.

@@ -37,7 +37,7 @@ const TOOLS: { name: string; description: string; inputSchema?: Record<string, u
   {
     name: 'unity_status',
     description:
-      'Read-only. The Unity project here: version, editor found, editor bridge state (compiling/playing), lock file / batch safety, last compile result, test summary, configured areas and jobs.',
+      'Read-only. The Unity project here: version, editor found, editor bridge state (compiling/playing), lock file / batch safety, last compile result, test summary, configured areas and jobs. Run Unity only through these tools: while an editor holds the project, never start the Unity binary (`-batchmode`) or a project wrapper (`node tools/unity.mjs …`) by hand in this checkout; call unity_worktree and run it there, or ask the person to close the editor.',
   },
   {
     name: 'unity_console',
@@ -80,7 +80,7 @@ const TOOLS: { name: string; description: string; inputSchema?: Record<string, u
   {
     name: 'unity_worktree',
     description:
-      'Writes outside the editor: `git worktree add <worktreeDir>/<name>` (new branch <name> from HEAD), then copies Library/ copy-on-write in the background. When the copy ends, batchmode runs (tests, compile check, build, batch custom jobs) go to the worktree instead of the checkout someone plays in.',
+      "Writes outside the editor: `git worktree add <worktreeDir>/<name>` (new branch <name> from HEAD), then copies Library/ copy-on-write in the background. When the copy ends, batchmode runs (tests, compile check, build, batch custom jobs) go to the worktree instead of the checkout someone plays in. This is also where a project's own Unity script (e.g. `node tools/unity.mjs …`) runs while the editor is open: `cd <worktreeDir>/<name> && …`, never in the main checkout.",
     inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
   },
   {
@@ -92,7 +92,7 @@ const TOOLS: { name: string; description: string; inputSchema?: Record<string, u
   {
     name: 'unity_screenshot',
     description:
-      'Captures the Game view of the open Unity editor as PNG and returns the image (plus its path). Use it to SEE a change instead of assuming it worked.',
+      'Captures the Game view of the open Unity editor as PNG and returns the image (plus its path). Use it to SEE a change instead of assuming it worked. The Game view must be visible and Unity not throttled in the background (on macOS: Unity in front); if no screenshot is written, ask the person to bring Unity to the front.',
     inputSchema: { type: 'object', properties: { width: { type: 'number' }, height: { type: 'number' } } },
   },
 ]
@@ -217,7 +217,8 @@ function statusText(m: Awaited<ReturnType<typeof readModel>>): string {
     )
   lines.push(m.configFound ? 'Config: .claude/unity.json' : 'Config: none (/unity-init drafts one)')
   if (m.presets.length) lines.push(`Test areas: ${m.presets.map(p => p.name).join(', ')}`)
-  if (cfg.customJobs?.length) lines.push(`Project tasks ("Aufgaben" in the pane, customJobs): ${cfg.customJobs.map(j => j.name).join(', ')}`)
+  if (cfg.customJobs?.length)
+    lines.push(`Project tasks ("Aufgaben" in the pane, customJobs): ${cfg.customJobs.map(j => j.name).join(', ')}`)
   if (cfg.restoreBeforeCommit?.length) lines.push(`Restore before commit: ${cfg.restoreBeforeCommit.join(', ')}`)
   return lines.join('\n')
 }

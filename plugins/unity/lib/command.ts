@@ -482,6 +482,44 @@ export function metaReason(line: string, findings: MetaFinding[]): string | unde
       : []),
     'Run this instead:',
     `  ${fixed}`,
-    'Safest ways: `git mv` for the file and its .meta (git keeps the history), or move/delete it in the Unity editor\'s Project window, which takes the .meta along. Already moved without the .meta? Move the leftover .meta next to the file the same way (`git mv old.meta new.meta`).',
+    "Safest ways: `git mv` for the file and its .meta (git keeps the history), or move/delete it in the Unity editor's Project window, which takes the .meta along. Already moved without the .meta? Move the leftover .meta next to the file the same way (`git mv old.meta new.meta`).",
   ].join('\n')
+}
+
+/** A Unity run started by hand in a Bash line: the editor binary or a project wrapper script (`node tools/unity.mjs`). */
+export interface UnityRun {
+  /** The words as written, for the refusal. */
+  text: string
+  /** `-projectPath <dir>`, else an earlier `cd <dir>` in the same line. */
+  dir?: string
+}
+
+const isUnityBinary = (w: string | undefined) => !!w && /(^|[\\/])Unity(\.exe)?$/.test(w)
+const isNode = (w: string | undefined) => !!w && /(^|[\\/])node(\.exe)?$/i.test(w)
+const isUnityWrapper = (w: string | undefined) => !!w && /(^|[\\/])unity\.[cm]?js$/i.test(w)
+
+/** Every segment of the line that starts Unity itself (binary, or `node …/unity.mjs`), with the directory it targets. */
+export function unityRuns(line: string): UnityRun[] {
+  const out: UnityRun[] = []
+  for (const s of splitCommand(line)) {
+    let w = commandWords(s.words)
+    if (w[0] === 'env') w = commandWords(w.slice(1))
+    const binary = isUnityBinary(w[0])
+    const wrapper = isNode(w[0]) && isUnityWrapper(w.slice(1).find(a => !a.startsWith('-')))
+    if (!binary && !wrapper) continue
+    const p = w.findIndex(a => /^-projectPath$/i.test(a))
+    const dir = (p >= 0 ? w[p + 1] : undefined) ?? s.cd
+    out.push({ text: w.join(' '), ...(dir ? { dir } : {}) })
+  }
+  return out
+}
+
+/** The refusal for a hand-started Unity run in the main checkout while an editor holds the project. */
+export function unityRunReason(runs: UnityRun[]): string | undefined {
+  if (!runs.length) return undefined
+  return [
+    `Unity is open on this project (its editor holds Temp/UnityLockfile), so \`${runs[0]?.text}\` must not run in the main checkout beside it: a second Unity process on the same project fails on the lock or corrupts Library/.`,
+    'Use the unity tools instead: unity_run_tests, unity_refresh and unity_console work through the open editor; for a batch run (compile, tests, a project script) call unity_worktree first and run the command inside that worktree (`cd <worktreeDir>/<name> && …`).',
+    'Or ask the person to close the Unity editor, then run it here.',
+  ].join(' ')
 }

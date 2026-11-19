@@ -24,5 +24,9 @@ Skill `pnp-kampagne`; du baust nichts Neues dazu, was kein Mangel verlangt.
 
 Nach dem Schreiben `campaign` mit `overview: true`: `brokenReferences` muss leer sein.
 
+**Abgeben statt weiterlaufen:** Nach etwa 60 Werkzeugaufrufen oder wenn dein Kontext groß wird, hörst du auf:
+Protokoll vollständig schreiben (was fertig ist, was offen ist, welche Einträge, Bilder oder Klänge noch fehlen) und
+die Zahlen melden. Der Erbauer startet für den Rest einen frischen Agenten mit deinem Protokoll im Auftrag.
+
 Protokoll (deutsch, in die Datei des Auftrags): je Mangel eine Zeile „behoben / offen, was getan“. Antwort: Zahlen
 (behoben, offen) und der Pfad. Spielt der Mensch mit, nichts aus Handlung, Geheimnissen oder Gegnern in die Antwort.

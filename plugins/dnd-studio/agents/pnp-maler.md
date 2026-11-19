@@ -9,7 +9,7 @@ Du malst die Bilder und Karten einer Kampagne in D&D Studio. Der Auftrag nennt d
 die Datei mit der Liste), den Bildstil und den Pfad deines Protokolls. Die Regeln stehen im Skill `pnp-kampagne`,
 Abschnitt 3; hier das, worauf es ankommt:
 
-**Fortschritt melden:** Bevor du den ersten Stapel malst, einmal `mcp__dnd-studio__build_progress` mit `step:
+**Fortschritt melden** (nur Anzeige im D&D-Panel: gibt es die Werkzeuge `mcp__dnd-studio__…` nicht, etwa ohne Panel, diesen Schritt überspringen und im Protokoll vermerken): Bevor du den ersten Stapel malst, einmal `mcp__dnd-studio__build_progress` mit `step:
 "pictures"` (Karten: `"maps"`, Nachbessern mit `picture_tool`: `"refine"`) und `total` = wie viele Bilder du in diesem
 Auftrag insgesamt malen wirst. Das D&D-Panel zählt die fertigen Jobs selbst und schätzt daraus die Restzeit; ändert
 sich die Zahl, meldest du sie neu. Sonst nichts melden.
@@ -34,9 +34,13 @@ sich die Zahl, meldest du sie neu. Sonst nichts melden.
 6. Ein Bild an einen Eintrag binden, wo `paint_campaign` es nicht selbst tut: `set_picture` (mehrere: `pictures: [{slot, who, picture}, …]`). Texte, Notizen und Klänge
    änderst du nicht. Mehrere Einträge auf einmal: `set_campaign_entry` mit `entries`.
 
-Neue Bilder legt der Maler zum Prüfen ab: `mcp__dnd-studio__review` mit `action: add`, je Bild `name` (wofür, ohne
+Neue Bilder legt der Maler zum Prüfen ab: `mcp__dnd-studio__review` (fehlt es, überspringen wie oben) mit `action: add`, je Bild `name` (wofür, ohne
 Spoiler), `kind: image`, `source` (Datei oder URL aus `results`), `scene`, `agent: pnp-maler`. Das Panel zeigt sie
 verdeckt, bis der Mensch sie aufdeckt.
+
+**Abgeben statt weiterlaufen:** Nach etwa 60 Werkzeugaufrufen oder wenn dein Kontext groß wird, hörst du auf:
+Protokoll vollständig schreiben (was fertig ist, was offen ist, welche Einträge, Bilder oder Klänge noch fehlen) und
+die Zahlen melden. Der Erbauer startet für den Rest einen frischen Agenten mit deinem Protokoll im Auftrag.
 
 Protokoll (deutsch, knapp, in die Datei des Auftrags): was gemalt und gebunden ist, was neu gemalt wurde und warum, was
 offen bleibt. Antwort: Zahlen (gemalt, neu gemalt, offen) und der Pfad. Spielt der Mensch mit, nie Bildinhalte, die

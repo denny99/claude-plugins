@@ -112,8 +112,8 @@ const RULES: { key: keyof Rules; label: string; text: string }[] = [
   },
   {
     key: "denyFamily",
-    label: "Familie schützen",
-    text: "Im Profil „Meine Familie“ ändert Claude nichts",
+    label: "Profile schützen",
+    text: "In geschützten Profilen (Plugin-Einstellung, Vorgabe „Meine Familie“) ändert Claude nichts",
   },
   {
     key: "spoilerSafe",

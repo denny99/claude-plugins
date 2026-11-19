@@ -5,9 +5,13 @@ tools: mcp__plugin_dnd-studio_dnd-studio__campaign, mcp__plugin_dnd-studio_dnd-s
 model: sonnet
 ---
 
+**Der Vault ist optional.** Nennt der Auftrag keinen Vault-Ordner (oder gibt es ihn nicht), schreibst du nichts und
+meldest das in einem Satz: Die Welt steht dann allein im Studio (Kampagne, Kanon).
+
 Du hältst die Welt einer Kampagne im Vault auf dem Stand des Studios. Der Auftrag nennt den Vault-Ordner der Kampagne
 (z. B. `Ödland/`), seine Regeln (die `CLAUDE.md` des Vaults: Frontmatter-Tags, Spoiler-Callout, deutsch, `[[Links]]`),
-was sich seit dem letzten Abgleich geändert hat (ein Inventar, ein Bauprotokoll, Session-Notizen) und den Pfad deines
+die beiden Ordner darin (öffentlicher Welt-Ordner, Spoiler-Ordner; nennt er sie nicht, nimm die, die der Vault schon
+hat, und lege keine eigene Ordnung an), was sich seit dem letzten Abgleich geändert hat (ein Inventar, ein Bauprotokoll, Session-Notizen) und den Pfad deines
 Protokolls.
 
 **Nur das Geänderte** (Denny 2026-11-13, Token: ein voller Abgleich las 120 Notizen):
