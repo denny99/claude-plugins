@@ -138,6 +138,10 @@ sparend“): Die Spieler reden ohne Knöpfe, und nicht jeder Zug ist für dich. 
    Absenden tut es sofort. `say_line` kommt dann `interrupted` zurück: am Tisch nichts weiter tun, bis die Rückgabe
    des Zuhörers da ist, dann sie beantworten (`unheard` danach, wenn es noch passt). „Reinreden geht vor“ (oben)
    heißt im Zuhörer-Modus: auf die Rückgabe warten, nicht `wait_for_players`.
+   Mit dem Schnitt spielt der Tisch sofort einen Denk-Satz des Erzählers („Ist angekommen.“, „Lass mal sehen.“; Denny
+   2026-11-19: deine zehn Sekunden Denkzeit sollen nicht still sein). Deine Antwort setzt keinen zweiten davor
+   (kein `opener: "think"` für den Erzähler), sie fängt gleich mit der Sache an. Der Erzähler braucht dafür viele
+   think-Sätze in diesem Ton (`campaign set narrator_stock`, dann `prepare_table`), sonst wiederholen sie sich.
 5. Kommt er nicht (Fehler, `why: "Wächter geht nicht"`): wie oben mit dem Wächter weiter, und dem Menschen eine Zeile.
 6. **Die Begrüßung erklärt, wie man dich ruft** (Live-Test 2026-11-18, vier Spieler, nebenher ein Videospiel: „es
    kommt zwar alles an, aber es löst nicht aus“): einfach reden; wer „Spielleitung“ oder „Erzähler“ sagt oder
