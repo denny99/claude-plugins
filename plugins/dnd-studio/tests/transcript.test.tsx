@@ -5,7 +5,7 @@ import { test } from "./limits";
 
 import { outputText, rollsOfAnswer } from "../features/transcript";
 import { kitRuleLines } from "./kit-rules";
-import { findShown } from "./shown";
+import { findShown, shownTexts } from "./shown";
 import { toolResult, world } from "./world";
 
 const start = { cwd: "/", surface: "desktop", isInteractive: true } as const;
@@ -158,6 +158,8 @@ test("desktop ToolUse: roll_dice keeps the app row with the card under it; termi
   expect(tree.type).toBe("Box");
   expect(tree.children?.[0]).toMatchObject({ type: "engine" });
   expect(tree.children).toHaveLength(2);
+  // the app's row and the card stand apart
+  expect((tree as { props?: { gap?: number } }).props?.gap).toBe(1);
   expect(await findShown(desk, "Wurf")).toBeDefined();
   expect(await findShown(desk, /17/)).toBeDefined();
   expect(kitRuleLines(await desk.drawn())).toEqual([]);
@@ -230,4 +232,36 @@ test("desktop ToolUse: results get keeps the app row with „Passt“ / „Nochm
   });
   expect(await term.drawn()).toMatchObject({ type: "engine" });
   await term.unmount();
+});
+
+test("roll_dice: one roll shows its total once (in its row, no title pill); several rolls keep the count", async ($, on) => {
+  world(on);
+  await $.session.start(start);
+  const one = text(
+    JSON.stringify({ result: { who: "Spielleitung", label: "2W6", total: 5, verdict: "" }, held: false }),
+  );
+  for (const [component, mk] of [
+    ["ToolResult", () => row(ROLL, "toolu_once1", one)],
+    ["ToolUse", () => useRow(ROLL, "toolu_once1", one)],
+  ] as const) {
+    const ui = await $.ui.mount({ ...mk(), surface: "desktop" });
+    const fives = (await shownTexts(ui)).filter((t) => /(^|\D)5(\D|$)/.test(t));
+    expect({ component, fives }).toEqual({ component, fives: [fives[0]] });
+    expect(fives[0]).toMatch(/^5$|5 ·|· 5/);
+    expect((await ui.findAll({ type: "Svg" })).map((x) => x.props.alt)).not.toContain("5");
+    await ui.unmount();
+  }
+  const many = text(
+    JSON.stringify({
+      rolls: [
+        { who: "A", label: "Athletik", total: 3 },
+        { who: "B", label: "Akrobatik", total: 12 },
+      ],
+    }),
+  );
+  const ui = await $.ui.mount({ ...row(ROLL, "toolu_many1", many), surface: "desktop" });
+  expect(await findShown(ui, "Würfe")).toBeDefined();
+  expect(await findShown(ui, /A · Athletik/)).toBeDefined();
+  expect(await findShown(ui, /^12\b|· 12/)).toBeDefined();
+  await ui.unmount();
 });

@@ -22,7 +22,6 @@ import {
   Sentence,
   type Action,
   type Kit,
-  type PillProps,
 } from "../lib/ui";
 import type { ReviewItem } from "../types";
 
@@ -117,19 +116,13 @@ export function rollCard(
   tag: string,
 ): RenderElement {
   const covered = (r: RollLine): boolean => r.hidden && spoilerSafe;
-  const one = rolls.length === 1 ? rolls[0] : undefined;
-  const pill: PillProps | undefined =
-    one && !covered(one)
-      ? { text: one.verdict || one.total, tone: "neutral" }
-      : undefined;
+  // one roll: its row already shows the total (and verdict), so the title carries no pill of its own
   return Card(k, {
     key: `roll-card-${tag}`,
     title: {
       icon: "dice",
       title: rolls.length > 1 ? "Würfe" : "Wurf",
-      ...(pill
-        ? { pill }
-        : { count: rolls.length > 1 ? rolls.length : undefined }),
+      count: rolls.length > 1 ? rolls.length : undefined,
     },
     children: rolls.map((r, i) =>
       ListRow(k, {
@@ -329,7 +322,7 @@ export function registerTranscript(on: On): void {
         lang: "de",
       });
       return (
-        <Box flexDirection="column">
+        <Box flexDirection="column" gap={1}>
           {await next(e)}
           {card}
         </Box>
