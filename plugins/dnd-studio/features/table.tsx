@@ -1089,7 +1089,8 @@ export function renderTable(
                 <Box flexGrow={1} flexShrink={1} minWidth={0}>
                   {hp ? (
                     <Progress
-                      label={sanitize(n)}
+                      // the name stands left already; the bar names the value (seen: the name twice per row)
+                      label="Ausdauer"
                       value={hp.hp}
                       max={hp.max}
                       valueText={`${hp.hp}/${hp.max}`}
