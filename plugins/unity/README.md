@@ -30,20 +30,28 @@ package (the **bridge**, in `bridge/com.denny99.claude-bridge`).
   else folder names matching the area) and runs only those. A green full run records HEAD; after `fullSuiteEvery`
   commits (default 5) the pane and the tool remind to run the full suite.
 - **Pane `/unity`** (German, neutral look with the Houndsridge logo; shared UI kit v2 in `lib/ui.tsx`): a header with
-  project, one status pill (verbindet / Editor bereit / Play-Modus / kompiliert / nicht verbunden) and _Aktualisieren_ /
+  project, one status pill (verbindet / Editor bereit / Play-Modus / kompiliert / nicht verbunden) and _Neu laden_ /
   _Ziel_ knobs, then tabs **Übersicht · Tests · Review · Leistung** (+ **Konsole** and **Ziel** behind _Mehr_):
-  - _Übersicht_: compile state with _Claude reparieren lassen_ per error, _Play_ / _Stopp_ / _Pause_, _Problem melden_,
-    _10 s messen_, _Screenshot_; the last test run (red first, _Rote erneut ausführen_); console at a glance; batch and
-    custom jobs with the log collapsed (a failed job shows the last 60 lines of its `-logFile`); where batch runs go.
-  - _Tests_: area preset and own filter, _EditMode_ / _PlayMode_ / _Betroffene_, newly red and still red apart.
-  - _Review_: review list, animation / model viewer, sounds and mix, report a problem (`features/review/`).
+  - _Übersicht_: editor card with one primary (_▶ Starten_ / _Stoppen_) and at most two secondary actions
+    (_Pause_, _Problem melden_, _Screenshot_; measuring lives only in _Leistung_); compile state with _Reparieren_ per
+    error; the last test run (red first, _Rote erneut ausführen_); console at a glance (_Zur Konsole_); batch and
+    custom jobs as list rows with _▶ Starten_ and the log collapsed (a failed job shows the last 60 lines of its
+    `-logFile` in a log box); where batch runs go.
+  - _Tests_: area preset and own filter, _EditMode_ / _PlayMode_ / _Betroffene prüfen_ (always shown, equal), newly red
+    and still red apart; result card _Letzter Lauf_ with a pill, one action row and the assertion text behind _Details_.
+  - _Review_: cards _Offen_, _Gemeldet_, _Erledigt_ and _Review_ (_Problem melden_ and the screenshot switch once
+    here). A question card shows _Passt_ / _Passt nicht_ or _Antwort schicken_ as the one primary; decision options are
+    rows with _Wählen_, the comment is a field with _Merken_. _Klänge_: _Abspielen_ and _Passt_ per row, redo
+    (_Nochmal machen_) with its note behind _Details_, playback mode as a segment. The animation / model viewer has views,
+    tool and colour as segments and one action row (`features/review/`).
   - _Leistung_: records frame times in the running game (`perf_record`), shows median / p95 / worst, the series as a
-    line against the 16.6 ms budget (block characters in the terminal), the costs inside the hitches, _Claude
-    analysieren lassen_ and _Hinspringen_ to the recorded spot; the last five recordings stay.
-  - _Konsole_: errors / warnings / all, _An Claude geben_, _Leeren_.
+    line against the 16.6 ms budget (block characters in the terminal), the costs inside the hitches, _Analysieren_
+    and _Hinspringen_ to the recorded spot; _10 s messen_ is here only; the last five recordings stay.
+  - _Konsole_: filter (errors / warnings / all), _An Claude_ per row, _Fehler an Claude_, _⚠ Leeren_ (asks first); the
+    row's _Details_ hold the full message, origin and stack.
   - _Ziel_: main checkout or worktree, project config (draft through `/unity-init`), the guards.
   - Without a bridge: the setup steps (package in `manifest.json`, open the editor), batch tests without an editor, and
-    the package URL to copy.
+    the package URL to copy (_Adresse kopieren_, _↗ Anleitung_).
 - **Opens by itself** at session start in a Unity project (`ProjectSettings/ProjectVersion.txt` at the root or under
   `unity/`), unless a higher-ranked mod claims the folder (a deltastone ticket branch → `/ct`). Option `autoOpen`.
 - **Batchmode** (tests, compile check, build, custom jobs marked `batch`) runs as a Claude Code background shell, only

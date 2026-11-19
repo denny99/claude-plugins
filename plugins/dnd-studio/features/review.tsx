@@ -31,7 +31,7 @@ type Obj = Record<string, unknown>;
 export const REVIEW_TOOL = "review";
 
 export const REVIEW_TOOL_DESCRIPTION =
-  "The review queue of the D&D pane (tab Prüfen): a person listens to new sounds and looks at new pictures/videos there and says ok or redo (with a note). action add + items puts new things in (each: name = what it is for, spoiler-free, e.g. 'Torknarren'; kind sound|image|video; source = local file path, http(s) URL, or a Studio result's file as the Studio names it (e.g. 'dnd-dland/x.mp3', with or without ' [output]') or its result id: fetched to this computer with results save; refused as not reviewable when no result has the file (uploads, downloaded sounds: give their local path or URL) or it was not made through the Studio's tools; meta = short facts like 'Geräusch · 4 s, Schleife'; agent = who redoes it, pnp-klang for sounds, pnp-maler for pictures; scene = optional, never shown before the person uncovers it). list (default) shows the queue with verdicts; clear empties it. The person's result arrives later as a prompt naming what passed and what to redo with which note.";
+  "The review queue of the D&D pane (tab Abnahme): a person listens to new sounds and looks at new pictures/videos there and says ok or redo (with a note). action add + items puts new things in (each: name = what it is for, spoiler-free, e.g. 'Torknarren'; kind sound|image|video; source = local file path, http(s) URL, or a Studio result's file as the Studio names it (e.g. 'dnd-dland/x.mp3', with or without ' [output]') or its result id: fetched to this computer with results save; refused as not reviewable when no result has the file (uploads, downloaded sounds: give their local path or URL) or it was not made through the Studio's tools; meta = short facts like 'Geräusch · 4 s, Schleife'; agent = who redoes it, pnp-klang for sounds, pnp-maler for pictures; scene = optional, never shown before the person uncovers it). list (default) shows the queue with verdicts; clear empties it. The person's result arrives later as a prompt naming what passed and what to redo with which note.";
 
 function str(v: unknown): string {
   return typeof v === "string"
@@ -112,7 +112,7 @@ export async function reviewTool(
       ],
     }));
     await autoOpen($, "build", "review");
-    return `${items.length} added; ${r.items.filter((i) => !i.verdict).length} waiting for the person in the D&D pane (tab Prüfen).${why}`;
+    return `${items.length} added; ${r.items.filter((i) => !i.verdict).length} waiting for the person in the D&D pane (tab Abnahme).${why}`;
   }
   const r = await readReview($);
   return r.items.length
@@ -530,7 +530,7 @@ async function patchItem(
 export function resultPrompt(items: ReviewItem[]): string {
   const ok = items.filter((i) => i.verdict === "ok");
   const redo = items.filter((i) => i.verdict === "redo");
-  const parts = ["Prüfergebnis aus dem D&D-Panel (Tab Prüfen):"];
+  const parts = ["Prüfergebnis aus dem D&D-Panel (Tab Abnahme):"];
   if (ok.length)
     parts.push(
       `Passt: ${ok.map((i) => `${i.name} (${i.source})`).join("; ")}.`,

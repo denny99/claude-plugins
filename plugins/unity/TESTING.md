@@ -17,10 +17,10 @@ anlegen.
 ## 1. Übersicht
 
 1. Kopf: Houndsridge-Logo, Projekt, **eine** Status-Pill (Editor bereit / Play-Modus / kompiliert / nicht verbunden),
-   **Aktualisieren** und **Ziel**.
+   **Neu laden** und **Ziel**.
 2. Kompilier-Zustand: grün. Denny sagt „bau absichtlich einen Tippfehler in eine .cs-Datei und mach ihn dann rückgängig“
-   → Fehler im Ergebnis des Edits und im Panel mit **Claude reparieren lassen**; nach Rückgängig wieder grün.
-3. **Play** → Status-Pill „Play-Modus“; **Stopp** beendet.
+   → Fehler im Ergebnis des Edits und im Panel mit **Reparieren**; nach Rückgängig wieder grün.
+3. **▶ Starten** → Status-Pill „Play-Modus“; **Stoppen** beendet. Messen gibt es hier nicht (nur im Tab Leistung).
 4. **Screenshot** → Bild an Claude, Claude beschreibt es.
 5. Letzter Testlauf (rote zuerst), Konsole auf einen Blick, Jobs mit eingeklapptem Log.
 
@@ -28,23 +28,23 @@ anlegen.
 
 1. Tab **Tests**: Bereich wählen, **EditMode**-Tests eines kleinen Bereichs laufen lassen → Ergebnis, neu rot / weiter rot
    getrennt.
-2. **Betroffene** bei sauberem Baum: ruhiger Hinweis, nichts läuft.
-3. **Rote erneut ausführen** (falls rote da).
+2. **Betroffene prüfen** bei sauberem Baum: ruhiger Hinweis, nichts läuft.
+3. **Rote erneut ausführen** (falls rote da). Karte **Letzter Lauf**: Assertion-Text erst hinter **Details**.
 
 ## 3. Review
 
-1. Tab **Review**: Leer-Zustand verständlich, oder Liste mit **passt** / **passt nicht** (Entscheidungen: Optionen A, B, …). Kommentar mit dem Knopf **Antworten** am Feld; **☑/☐ Screenshot mitschicken** schaltet um.
-2. **Sounds**: **Abspielen** / **Anspielen** spielt im Editor; Mix nur ansehen.
-3. **Problem melden** nur ansehen.
+1. Tab **Review**: Leer-Zustand verständlich, oder Karten **Offen** / **Gemeldet** / **Erledigt** mit **Passt** / **Passt nicht** (Entscheidungen: Optionen als Zeilen, **Wählen** markiert; **Antwort schicken** sendet). Kommentar im Feld, **Merken** hält ihn fest; der Screenshot-Schalter steht einmal in der Karte **Review**.
+2. **Klänge**: **Abspielen** spielt im Editor, **Passt** hakt ab; „Nochmal machen“ samt Notiz erst hinter **Details**; Mix nur ansehen.
+3. **Problem melden** (Karte **Review**) nur ansehen.
 
 ## 4. Leistung
 
 1. Im Play-Modus **10 s messen** → Median / p95 / schlechtester Wert, Linie gegen 16,6 ms.
-2. **Hinspringen** setzt das Spiel an die Stelle; **Claude analysieren lassen** schickt einen Prompt.
+2. **Hinspringen** setzt das Spiel an die Stelle; **Analysieren** schickt einen Prompt.
 
 ## 5. Mehr: Konsole, Ziel
 
-1. **Konsole**: Fehler / Warnungen / Alle, **An Claude geben**, **Leeren** (darf gedrückt werden).
+1. **Konsole**: Filter Fehler / Warnungen / Alle, **An Claude** je Zeile, **Fehler an Claude**; **Details** zeigen volle Meldung und Stack; **⚠ Leeren** fragt vorher nach (darf bestätigt werden).
 2. **Ziel**: Hauptprojekt oder Worktree, Projekt-Config, Schalter für Guards. **Worktree anlegen** nur ansehen.
 
 ## 6. Guards
