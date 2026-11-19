@@ -3,7 +3,7 @@ import type { EngineInterface, RenderElement } from 'claude-code'
 
 import type { UnityModel } from '../../types'
 import { batchAllowed } from '../../lib/unity'
-import { Actions, Card, CardTitle, CopyButton, Sentence, Stepper, type Kit } from '../../lib/ui'
+import { Card, KeyValue, openAction, Sentence, Stepper, type Kit } from '../../lib/ui'
 import { batchTarget, bridgeOutdated, bridgeOutdatedTitle, editorBusyWithTests, type Options } from '../state'
 import { BRIDGE_GIT_URL_TAGGED, BRIDGE_README, bridgeUpdateCard, selectTab, type Extra } from './common'
 import { jobsCard, testsCard } from './overview'
@@ -42,27 +42,27 @@ export async function setupView(
         ? Card(k, {
             key: 'setup-elsewhere-editor',
             tone: 'info',
+            title: { icon: 'info', title: 'Editor in anderem Checkout', tone: 'info' },
             children: [
-              CardTitle(k, {
-                icon: 'info',
-                title: `Editor läuft für ${away.name}${away.main ? ' (Haupt-Checkout)' : ''} — diese Session ist ${away.hereMain ? 'im Haupt-Checkout' : 'im Worktree'} ${away.here}`,
-                tone: 'info',
-              }),
               Sentence(
                 k,
-                'Claude sieht nur den Editor dieses Checkouts. Öffne diesen Ordner in Unity, oder arbeite im Checkout, den der Editor offen hat. Tests ohne Editor laufen hier trotzdem im Hintergrund.',
-                { faint: true },
+                `Der Editor läuft für ${away.name}${away.main ? ' (Haupt-Checkout)' : ''}, diese Session ist ${away.hereMain ? 'im Haupt-Checkout' : 'im Worktree'} ${away.here}.`,
               ),
-              Sentence(k, away.project, { faint: true }),
+              KeyValue(k, {
+                key: 'setup-elsewhere-kv',
+                bare: true,
+                rows: [{ label: 'Projekt', value: away.project, copy: true }],
+              }),
             ],
+            hint: 'Claude sieht nur den Editor dieses Checkouts. Öffne diesen Ordner in Unity, oder arbeite im Checkout, den der Editor offen hat. Tests ohne Editor laufen hier trotzdem im Hintergrund.',
           })
         : null}
       {old ? bridgeUpdateCard($, k, m, options) : null}
       {Card(k, {
         key: 'setup',
         tone: 'warn',
+        title: { icon: 'plug', title: 'Claude sieht den Unity-Editor nicht', tone: 'warn' },
         children: [
-          CardTitle(k, { icon: 'plug', title: 'Claude sieht den Unity-Editor nicht', tone: 'warn' }),
           Sentence(
             k,
             busy
@@ -83,7 +83,7 @@ export async function setupView(
                   ? 'Bridge aktualisieren (Karte oben)'
                   : installed
                     ? 'steht in Packages/manifest.json'
-                    : 'Package Manager → + → Add package from git URL',
+                    : 'fehlt noch in Packages/manifest.json',
                 state: old ? 'failed' : installed ? 'done' : 'active',
               },
               {
@@ -97,8 +97,8 @@ export async function setupView(
       })}
       {Card(k, {
         key: 'setup-batch',
+        title: { icon: 'info', title: 'Geht auch ohne Editor', tone: 'info' },
         children: [
-          CardTitle(k, { icon: 'info', title: 'Geht auch ohne Editor', tone: 'info' }),
           Sentence(
             k,
             batchOk
@@ -106,23 +106,11 @@ export async function setupView(
               : 'Gerade nicht: ein Editor hat das Projekt offen. Schließ ihn oder nimm einen Worktree.',
             { faint: true },
           ),
-          batchOk
-            ? Sentence(k, 'Wähl im Tab Tests einen Bereich: die ganze Suite kann ohne Library 30–60 min dauern.', {
-                faint: true,
-              })
-            : null,
-          batchOk
-            ? Actions(k, 'setup-batch-acts', [
-                {
-                  key: 'setup-choose-tests',
-                  label: 'Tests wählen',
-                  icon: 'flask',
-                  variant: 'secondary',
-                  onPress: selectTab($, 'tests'),
-                },
-              ])
-            : null,
         ],
+        hint: batchOk ? 'Die ganze Suite kann ohne Library 30–60 min dauern, ein Bereich geht schneller.' : undefined,
+        actions: batchOk
+          ? [{ key: 'setup-choose-tests', label: 'Zu Tests', variant: 'link', onPress: selectTab($, 'tests') }]
+          : [],
       })}
       {m.tests ? testsCard($, k, m, options, now) : null}
       {jobsCard($, k, m, options)}
@@ -131,21 +119,18 @@ export async function setupView(
         ? null
         : Card(k, {
             key: 'setup-elsewhere',
-            children: [
-              CardTitle(k, { icon: 'download', title: 'Bridge in einem anderen Projekt einrichten' }),
-              Sentence(
-                k,
-                'Package Manager → + → Add package from git URL. Die Adresse liegt in der Zwischenablage, wenn du kopierst.',
-                { faint: true },
-              ),
-              <Box key="setup-links" flexDirection="row" gap={1} flexWrap="wrap">
-                {CopyButton(k, {
-                  key: 'copy-bridge-url',
-                  text: BRIDGE_GIT_URL_TAGGED,
-                  label: 'Paket-Adresse kopieren',
-                })}
-                <x.Link href={BRIDGE_README} label="Anleitung" />
-              </Box>,
+            title: { icon: 'download', title: 'Bridge in einem anderen Projekt einrichten' },
+            // Unity's own menu names stay English: that is what the editor shows.
+            hint: 'In Unity fügst du die Adresse im Package Manager unter „Add package from git URL“ ein.',
+            actions: [
+              {
+                key: 'copy-bridge-url',
+                label: 'Adresse kopieren',
+                variant: 'link',
+                // the press event names the surface the clipboard belongs to
+                onPress: ((e?: { surface?: string }) => k.copy(BRIDGE_GIT_URL_TAGGED, e?.surface)) as () => void,
+              },
+              openAction(k, { key: 'bridge-readme', href: BRIDGE_README, label: 'Anleitung' }),
             ],
           })}
     </Box>

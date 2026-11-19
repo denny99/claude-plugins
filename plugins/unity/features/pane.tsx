@@ -9,6 +9,7 @@ import {
   LoadingState,
   EmptyState,
   PaneHeader,
+  reloadAction,
   StatusLine,
   Tabs,
   type Kit,
@@ -77,7 +78,7 @@ export async function renderPane($: EngineInterface, e: RenderInput<'Pane'>, opt
   if (m.project) ensureLive($, options)
   const refresh = run($, 'refresh', async () => {
     await refreshModel($, options)
-    // The sound board is loaded on demand; once loaded, Aktualisieren fetches it again (also out of an error).
+    // The sound board is loaded on demand; once loaded, „Neu laden“ fetches it again (also out of an error).
     if ((await readReview($)).sounds) await loadSounds($, options)
   })
   const header = PaneHeader(k, {
@@ -90,7 +91,7 @@ export async function renderPane($: EngineInterface, e: RenderInput<'Pane'>, opt
     pill: statusPill(m),
     actions: [
       // "Ziel" is a main tab only (no header knob): in a narrow pane the tab sits behind "Mehr", still one press away.
-      { key: 'refresh', icon: 'refresh', label: 'Aktualisieren', onPress: refresh },
+      { key: 'refresh', icon: 'refresh', label: k.s.reload, onPress: refresh },
     ],
   })
   if (m.phase === 'unknown')
@@ -111,7 +112,7 @@ export async function renderPane($: EngineInterface, e: RenderInput<'Pane'>, opt
           icon: 'folder',
           title: 'Kein Unity-Projekt hier',
           text: 'Weder im Ordner noch eine Ebene tiefer liegt eine ProjectSettings/ProjectVersion.txt.',
-          action: { key: 'refresh-empty', label: 'Erneut suchen', icon: 'refresh', onPress: refresh },
+          action: reloadAction(k, { key: 'refresh-empty', onPress: refresh }),
         })}
       </Box>
     )

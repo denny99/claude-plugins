@@ -3,7 +3,7 @@ import type { EngineInterface, RenderElement } from 'claude-code'
 
 import type { UnityModel } from '../../types'
 import { batchAllowed } from '../../lib/unity'
-import { Actions, askAction, Card, CardTitle, KeyValue, ListRow, ProblemCard, Sentence, type Action, type Kit } from '../../lib/ui'
+import { askAction, Card, KeyValue, ListRow, ProblemCard, type Action, type Kit } from '../../lib/ui'
 import { batchTarget, configOf, createWorktree, useCheckout, useMainTarget, type Options } from '../state'
 import { localStamp, run } from './common'
 
@@ -54,12 +54,12 @@ export function targetTab($: EngineInterface, k: Kit, m: UnityModel, options: Op
             tone: 'warn',
             title: `Unity ${m.project?.version ?? ''} nicht gefunden`,
             cause:
-              'Im Unity-Hub-Ordner liegt diese Version nicht. Hintergrund-Läufe brauchen sie; trag den Pfad in den Plugin-Einstellungen ein (Unity editor path).',
+              'Im Unity-Hub-Ordner liegt diese Version nicht. Hintergrund-Läufe brauchen sie; trag den Pfad zum Unity-Editor in den Plugin-Einstellungen ein.',
           })}
       {Card(k, {
         key: 'target',
+        title: { icon: 'folder', title: 'Worauf Claude arbeitet' },
         children: [
-          CardTitle(k, { icon: 'folder', title: 'Worauf Claude arbeitet' }),
           ListRow(k, {
             key: 'target-main',
             status: target.worktree ? 'idle' : allowed.ok || m.bridge.up ? 'ok' : 'warning',
@@ -101,24 +101,26 @@ export function targetTab($: EngineInterface, k: Kit, m: UnityModel, options: Op
                 ],
               }),
             ),
-          !allowed.ok && allowed.reason ? Sentence(k, allowed.reason, { faint: true }) : null,
           KeyValue(k, {
             key: 'target-kv',
+            bare: true,
             rows: [
               { label: 'Pfad', value: target.root, copy: true },
               ...(cfg.worktreeDir ? [{ label: 'Worktrees', value: `${cfg.worktreeDir}/` }] : []),
             ],
           }),
-          acts.length ? Actions(k, 'target-acts', acts) : null,
         ],
+        hint: !allowed.ok && allowed.reason ? allowed.reason : undefined,
+        actions: acts,
       })}
       {m.configFound
         ? Card(k, {
             key: 'config',
+            title: { icon: 'sliders', title: 'Projekt-Einstellungen', pill: { text: 'vorhanden', tone: 'ok' } },
             children: [
-              CardTitle(k, { icon: 'sliders', title: 'Projekt-Einstellungen', pill: { text: 'da', tone: 'ok' } }),
               KeyValue(k, {
                 key: 'config-kv',
+                bare: true,
                 rows: [
                   { label: 'Test-Bereiche', value: String(m.presets.length) },
                   { label: 'Aufgaben', value: String(cfg.customJobs?.length ?? 0) },
@@ -131,28 +133,22 @@ export function targetTab($: EngineInterface, k: Kit, m: UnityModel, options: Op
           })
         : Card(k, {
             key: 'config',
-            children: [
-              CardTitle(k, { icon: 'sliders', title: 'Projekt-Einstellungen', pill: { text: 'fehlt', tone: 'warn' } }),
-              Sentence(
-                k,
-                'Mit einer .claude/unity.json kennt das Panel eure Test-Bereiche und Aufgaben. Claude schreibt einen Entwurf aus der Code-Karte; du entscheidest, ob er gespeichert wird.',
-                { faint: true },
-              ),
-              Actions(k, 'config-acts', [
-                askAction($, k, {
-                  key: 'config-draft',
-                  label: 'Entwurf erstellen',
-                  icon: 'wand',
-                  variant: 'primary',
-                  text: 'Führe /unity-init aus, zeig mir den Entwurf der .claude/unity.json und schreib ihn erst, wenn ich zustimme.',
-                }),
-              ]),
+            title: { icon: 'sliders', title: 'Projekt-Einstellungen', pill: { text: 'fehlt', tone: 'warn' } },
+            hint: 'Mit einer .claude/unity.json kennt das Panel eure Test-Bereiche und Aufgaben. Claude schreibt einen Entwurf aus der Code-Karte; du entscheidest, ob er gespeichert wird.',
+            actions: [
+              askAction($, k, {
+                key: 'config-draft',
+                label: 'Entwurf erstellen',
+                icon: 'wand',
+                variant: 'primary',
+                text: 'Führe /unity-init aus, zeig mir den Entwurf der .claude/unity.json und schreib ihn erst, wenn ich zustimme.',
+              }),
             ],
           })}
       {Card(k, {
         key: 'guards',
+        title: { icon: 'heart', title: 'Schutz' },
         children: [
-          CardTitle(k, { icon: 'heart', title: 'Schutz' }),
           ListRow(k, {
             key: 'guard-compile',
             icon: 'hammer',
@@ -174,12 +170,9 @@ export function targetTab($: EngineInterface, k: Kit, m: UnityModel, options: Op
             meta: 'z. B. Dateien, die Unity selbst ändert',
             pill: onOff(options.commitGuard),
           }),
-          Sentence(
-            k,
-            'Umschalten: /plugin → unity → Einstellungen („Compile gate“, „.meta guard“, „Restore-before-commit guard“).',
-            { faint: true },
-          ),
         ],
+        // Plugin options (userConfig): shown here, changed in the plugin's own settings.
+        hint: 'Das sind Plugin-Einstellungen von unity; geändert werden sie unter /plugin.',
       })}
     </Box>
   )
