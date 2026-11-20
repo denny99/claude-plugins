@@ -129,7 +129,10 @@ Rahmen), dann wird nach dem Plan gebaut.
    - **Haken der Helden:** Jeder Held bekommt irgendwo einen Haken aus seinem Hintergrund (eine Bekannte, ein altes
      Versprechen, sein Volk), nicht nur einen Wurf, der zu seinen Fertigkeiten passt.
 5. **Vorlesetexte** (`kind text`, auch die Szenentexte): zwei, drei konkrete Sinnesdetails (Geruch, Geräusch, ein
-   Ding mit Geschichte) statt Stimmungswörtern, kurz wie in einem guten Roman, im Ton der Kampagne. Anfang und Ende
+   Ding mit Geschichte) statt Stimmungswörtern, kurz wie in einem guten Roman, im Ton der Kampagne. **Geschrieben
+   zum Sprechen** (`references/sprechen.md`, gm_guide `sprechen`): kurze Sätze statt Kommaketten, etwa eine Betonung
+   je Satz mit `[emphasis]` vor dem Wort, `…` vor dem, was wirken soll; die Spieler sehen die Marken nicht. Jeder
+   erfundene Name kommt mit seiner Aussprache in `campaign set pronunciations`, nie als Umschreibung in den Text. Anfang und Ende
    sind Szenen, kein Pflichtprogramm (Denny 2026-11-13: „Intros und Outros bissel flach“), darum gehören hinein:
    - **Begrüßung** („Willkommen (zu Beginn)“): kurz, nur Organisatorisches.
    - **Prolog** bei einer neuen Kampagne oder einer Welt, die die Spieler nicht kennen („bei neuen Kampagnen fehlt
@@ -218,6 +221,10 @@ Fäden, mit denen es beginnt, und den Ort, an dem der Abend anfängt.
   `tempo` nur sanft (0.9–1.1, mehr klingt robotisch). Längere Pausen gibt es nicht: nachträglich eingefügte Stille
   klingt wie ein Schnitt. Nur, wenn die Kampagne es will; nach einer Änderung `prepare_table`, es legt den
   Effekt über denselben Take. Im Studio: das Schild „Effekte“ auf der Stimmkarte, dort auch „Effekte bearbeiten“.
+- **Aussprache** (`campaign set pronunciations`): die eigenen Namen und Wörter der Kampagne, wie die Stimme sie sagen
+  soll (`{"Korath": "[emphasis] Ko-rat", "Gasriese*": "[emphasis] Gas-Riese"}`); die Texte behalten ihre Schreibweise.
+  Einen Satz mit dem Wort in Varianten sprechen lassen und den Menschen wählen lassen. Einzelheiten:
+  `references/sprechen.md`.
 - **Standardsätze** (`set_campaign_entry stock`, Erzähler: `campaign set narrator_stock`): NPCs `greet`, `bye`,
   `think`, `yes`, `no`, `gesture`, der Erzähler dieselben mit `approach` statt `gesture`. Sie machen den Abend schnell,
   weil sie vorab erzeugt werden und am Tisch sofort kommen. Wie viele, in welcher Art und über welche Stimmungen:
@@ -325,7 +332,9 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
    Stil); Stimmbeschreibungen passen (Alter, Geschlecht, „German“, Jugendliche nicht kindlich); Standardsätze mit
    niedrigem `how`, Rufname vorn; Szenentexte reine Erzählerstimme ohne wörtliche Rede und ohne vorausgesetzten Stand;
    keine unabsichtlichen Spoiler in Texten, Bildern und Namen; was nur einen Helden angeht, steht im Handout zum
-   Flüstern statt in einem Text für alle.
+   Flüstern statt in einem Text für alle; was gesprochen wird, ist zum Sprechen geschrieben (`references/sprechen.md`:
+   kurze Sätze, `[emphasis]` sparsam vor dem tragenden Wort, `…` vor der Pointe, keine Großbuchstaben und keine
+   Umschreibung eines Namens im Text) und jeder erfundene Name steht in `pronunciations`.
 3. **Umfang und Spielbarkeit** (`dnd-studio:pnp-review-spielbarkeit`) – trägt der Abend? Genug Stoff für die gewünschte Länge
    im Tempo dieser Gruppe (Abschnitt 1, „Mehr Strecke statt mehr Verzweigungen“), dazu der Situations-Vorrat;
    eine Ausweichszene für die naheliegende Abzweigung, kein Überbau aus Kann-Schwellen und Fassungen; drei Wege zu

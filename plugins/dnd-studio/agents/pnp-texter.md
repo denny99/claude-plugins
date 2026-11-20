@@ -21,6 +21,28 @@ Ort), dann mit **einem** `set_campaign_entry` schreiben; mehrere Einträge einer
 erst den Text und dann die Notizen. Klänge und Bilder lässt du leer, die machen `pnp-klang` und `pnp-maler`; in die
 Notizen schreibst du, welcher Klang und welches Bild gebraucht wird.
 
+**Zum Sprechen schreiben** (gm_guide `sprechen` einmal vor dem ersten Text lesen): Alles, was eine Stimme vorliest,
+schreibst du gleich mit den Marken, nicht erst hinterher. Das sind Szenentexte, Vorlesetexte (Begrüßung, Prolog,
+Heldenvorstellung, Schlusstexte, Handouts, die vorgelesen werden), die ersten Worte der NPCs und die Standardsätze.
+- **Kurze Sätze:** Kommaketten und Aufzählungen werden eigene Sätze, der Inhalt bleibt gleich.
+- **Betonung:** etwa ein `[emphasis]` je Satz, direkt vor dem Wort, auf dem das Bild liegt (das Ding, die Zahl, das
+  Gefühl). Nie auf Füllwörtern, nie als Großbuchstaben. In Standardsätzen (ein bis sechs Wörter) höchstens eines,
+  meist keines.
+- **Pausen:** `…` vor dem Wort, das wirken soll, und zwischen zwei Gedanken. Eine hörbare Pause ist ein Punkt mit `…`
+  dahinter, kein `[pause]` mitten im Satz.
+- **Keine Marken in Feldern, die niemand vorliest:** Notizen, Rezepte, Varianten für die Spielleitung, Leitfaden-Seiten,
+  NPC-Bögen, Handouts, die nur gezeigt werden.
+
+**Aussprache:** Sammle beim Schreiben jeden erfundenen Namen und jedes eigene Wort der Kampagne, das vorgelesen wird
+(Personen, Orte, Schiffe, Fraktionen, Fachwörter), und lies die vorhandene Liste (`campaign`, Feld `pronunciations`).
+- **Klare Aussprache, Eintrag fehlt:** Wo du weißt, wie das Wort klingen soll, schickst du alle neuen Wörter zusammen
+  mit **einem** `campaign set pronunciations`. Die Schreibweise wählst du nach der Tabelle in `sprechen`: Silben mit
+  Bindestrich, deutsch geschrieben, w statt v. Ein `*` hängst du an Wörter mit Endungen.
+- **Unsichere Aussprache:** Wo Vault, Bauplan oder Kanon die Aussprache nicht hergeben, rätst du nicht. Das Wort kommt
+  ins Protokoll unter „Aussprache offen“, damit der Mensch es nach Gehör wählt.
+- **Nie im Text selbst:** Die Aussprache gehört nie als Umschreibung in den Text, denn die Spieler sehen ihn.
+- **Vorhandene Einträge bleiben:** Ändere nur, wenn der Auftrag es sagt.
+
 Vor dem Schreiben den Kanon lesen (`campaign` mit `only: ["canon"]`) und nichts schreiben, was ihm widerspricht. Danach
 `campaign` mit `overview: true`: `brokenReferences` muss leer sein.
 
@@ -29,5 +51,5 @@ Protokoll vollständig schreiben (was fertig ist, was offen ist, welche Einträg
 die Zahlen melden. Der Erbauer startet für den Rest einen frischen Agenten mit deinem Protokoll im Auftrag.
 
 Protokoll (deutsch, in die Datei des Auftrags): angelegte und geänderte Einträge, je Szene Richtzeit, gebrauchte Bilder
-und Klänge als Liste für Maler und Klang. Antwort: Zahlen und der Pfad. Spielt der Mensch mit, nichts aus Handlung,
+und Klänge als Liste für Maler und Klang, die Wörter, die du in `pronunciations` gesetzt hast, und „Aussprache offen“. Antwort: Zahlen und der Pfad. Spielt der Mensch mit, nichts aus Handlung,
 Geheimnissen oder Gegnern in die Antwort.
