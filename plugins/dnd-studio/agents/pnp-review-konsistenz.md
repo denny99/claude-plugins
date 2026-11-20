@@ -26,7 +26,7 @@ Prüfe:
 - **Zum Sprechen geschrieben** (gm_guide `sprechen`), nur bei dem, was vorgelesen wird (Szenen- und Vorlesetexte,
   erste Worte, Standardsätze):
   - Die Art des Textes passt zur Schreibweise: Beschreibungen und stille Momente nicht zerhackt (Kommas bleiben,
-    etwa ein `[emphasis]` je drei, vier Sätze, kein `…`); Spannung in kurzen Sätzen; NPC-Worte ohne `[emphasis]`.
+    etwa ein `[emphasis]` je drei, vier Sätze, kein `…`); Spannung in kurzen Sätzen; NPC-Worte höchstens mit einem `[emphasis]` auf einem Wort, das die Figur selbst einschärft.
   - Kein `[emphasis]` auf Füllwörtern, nie zwei in einem Satz; zu viele Marken sind ein Mangel wie zu wenige.
   - Kein `[pause]`; kein `…` direkt nach einem Komma.
   - Keine Großbuchstaben als Betonung.

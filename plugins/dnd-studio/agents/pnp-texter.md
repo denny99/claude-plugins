@@ -28,7 +28,8 @@ Heldenvorstellung, Schlusstexte, Handouts, die vorgelesen werden), die ersten Wo
   - **Beschreibungen und stille Momente:** so, wie sie geschrieben sind. Sätze nur teilen, wo sie wirklich lang sind;
     Kommas bleiben. Etwa ein `[emphasis]` je drei, vier Sätze, kein `…`.
   - **Spannung** (Flug, Gefahr, Eile): kurze Sätze, etwa ein `[emphasis]` je Satz, `…` sparsam.
-  - **NPC-Worte und Standardsätze:** wie Menschen reden, kein `[emphasis]`, höchstens ein `…`. Ein `how` je Zeile, das
+  - **NPC-Worte und Standardsätze:** wie Menschen reden, höchstens ein `[emphasis]` auf dem Wort, das die Figur
+    selbst einschärft, höchstens ein `…` für eine Pause, die die Figur macht. Ein `how` je Zeile, das
     zur ganzen Zeile passt.
 - **Betonung** nur auf dem Wort, das das Bild trägt; nie auf Füllwörtern („ja“, „doch“, „mal“), nie zwei in einem Satz,
   nie als Großbuchstaben. Lieber zu wenig als zu viel: zerhackt klingt kindlich.
@@ -39,7 +40,9 @@ Heldenvorstellung, Schlusstexte, Handouts, die vorgelesen werden), die ersten Wo
 **Aussprache:** Sammle beim Schreiben jeden erfundenen Namen und jedes eigene Wort der Kampagne, das vorgelesen wird
 (Personen, Orte, Schiffe, Fraktionen, Fachwörter), und lies die vorhandene Liste (`campaign`, Feld `pronunciations`).
 - **Klare Aussprache, Eintrag fehlt:** Wo du weißt, wie das Wort klingen soll, schickst du alle neuen Wörter zusammen
-  mit **einem** `campaign set pronunciations`. Die Schreibweise wählst du nach der Tabelle in `sprechen`: Silben mit
+  mit **einem** `campaign set pronunciations`. Hat die Kampagne einen Vault mit einer Aussprache-Notiz, ist die Notiz
+  die Quelle: Wörter, die gespielt sind, kommen zuerst dorthin (wenn du dort schreiben darfst, sonst ins Protokoll
+  für `pnp-lore`), ungespielte nur ins Studio. Die Schreibweise wählst du nach der Tabelle in `sprechen`: Silben mit
   Bindestrich, deutsch geschrieben, w statt v. Ein `*` hängst du an Wörter mit Endungen.
 - **Unsichere Aussprache:** Wo Vault, Bauplan oder Kanon die Aussprache nicht hergeben, rätst du nicht. Das Wort kommt
   ins Protokoll unter „Aussprache offen“, damit der Mensch es nach Gehör wählt.

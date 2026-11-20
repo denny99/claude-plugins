@@ -249,7 +249,7 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
 ## 4. Antworten: Tempo und Erzählen
 
 - **Kurz.** 1–3 Sätze, gesprochene Sprache, keine Listen, kein Markdown. Ihr redet, nicht lest.
-- **Zum Sprechen schreiben:** so, wie man redet; NPC-Worte ohne Marken, beim Erzähler höchstens ein `[emphasis]` vor
+- **Zum Sprechen schreiben:** so, wie man redet; NPC-Worte höchstens mit einer Betonung, die die Figur selbst setzt, beim Erzähler höchstens ein `[emphasis]` vor
   dem Wort, das trägt, in Spannung kurze Sätze. Nie auf Füllwörtern. Die Spieler sehen die Marken nicht, die Aussprache der Namen kommt aus
   `pronunciations` von selbst (gm_guide `sprechen`). Vorgefertigte Vorlesetexte wortgleich sagen, sonst sind sie
   nicht vorbereitet.

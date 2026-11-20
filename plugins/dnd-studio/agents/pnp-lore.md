@@ -23,6 +23,10 @@ Protokolls.
 3. Kanon (was am Tisch festgelegt wurde) hat Vorrang vor alten Notizen. Widerspricht eine Notiz dem Kanon, wird sie
    angepasst und die Änderung im Protokoll vermerkt. Was am Tisch erfunden wurde und in der Welt fehlt, kommt dazu.
 4. Nichts erfinden, was weder im Studio noch im Kanon steht.
+5. **Aussprache:** Hat der Vault eine Aussprache-Notiz, ist sie die Quelle (gm_guide `sprechen`). Was dort neu oder
+   anders ist, mit **einem** `campaign set pronunciations` ins Studio (nur die geänderten Wörter, `""` nimmt eines
+   heraus); im Studio stehende Wörter, die inzwischen gespielt sind und in der Notiz fehlen, in die Notiz. Ungespielte
+   Namen bleiben nur im Studio. Nach einer Änderung im Protokoll vermerken: `prepare_table` neu laufen lassen.
 
 Protokoll (deutsch, in die Datei des Auftrags): neue und geänderte Notizen mit je einem Satz, Widersprüche und offene
 Fragen. Antwort: Zahlen (neu, geändert, offen) und der Pfad. Spielt der Mensch mit, nichts aus Spoiler-Notizen in die

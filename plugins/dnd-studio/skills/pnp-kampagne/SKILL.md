@@ -132,7 +132,7 @@ Rahmen), dann wird nach dem Plan gebaut.
    Ding mit Geschichte) statt Stimmungswörtern, kurz wie in einem guten Roman, im Ton der Kampagne. **Geschrieben
    zum Sprechen** (`references/sprechen.md`, gm_guide `sprechen`): die Art des Textes entscheidet. Beschreibungen und
    stille Momente bleiben, wie sie geschrieben sind, mit einem `[emphasis]` je drei, vier Sätze und ohne `…`; Spannung
-   in kurzen Sätzen; NPC-Worte ohne Marken. Die Spieler sehen die Marken nicht. Jeder
+   in kurzen Sätzen; NPC-Worte höchstens mit einer Betonung, die die Figur selbst setzt. Die Spieler sehen die Marken nicht. Jeder
    erfundene Name kommt mit seiner Aussprache in `campaign set pronunciations`, nie als Umschreibung in den Text. Anfang und Ende
    sind Szenen, kein Pflichtprogramm (Denny 2026-11-13: „Intros und Outros bissel flach“), darum gehören hinein:
    - **Begrüßung** („Willkommen (zu Beginn)“): kurz, nur Organisatorisches.
