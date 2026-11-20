@@ -18,10 +18,11 @@ Stimme des Autors).
 | `#sigh`, `#laughs` | ein Laut (wie bisher) | wie bisher |
 | ein Wort aus `pronunciations` | spricht es, wie dort steht | das Wort, wie es im Text steht |
 
-Eine Marke ist alles in eckigen Klammern, das mit einem Buchstaben beginnt (höchstens 40 Zeichen). `[1]` oder
-`[12:00]` sind keine Marken und bleiben stehen. Die Marken entfernt der Spieltisch (`table_core.py shown`), bevor
-etwas ins Spielerfenster, an den Discord-Bot oder ins Protokoll geht; in der Kampagne selbst und in `campaign get`
-stehen sie, damit man sie bearbeiten kann.
+Eine Marke ist ein Wort oder ein paar Wörter in eckigen Klammern: ein Buchstabe vorn, danach nur Buchstaben,
+Leerzeichen, `'` und `-`, höchstens 39 Zeichen. `[1]`, `[12:00]` oder `[Kapitel 1]` sind keine Marken und bleiben
+stehen, auch für die Spieler. Die Marken fallen erst dort weg, wo die Spieler etwas sehen: im Spielerfenster und beim
+Discord-Bot (`speech_markup.js`), im Sitzungsprotokoll (`table_core.py shown`). In der Kampagne selbst und in
+`campaign get` stehen sie, damit man sie bearbeiten kann.
 
 ## Regeln für einen Vorlesetext
 
@@ -40,7 +41,7 @@ stehen sie, damit man sie bearbeiten kann.
 5. **Eine Pause, die man hören muss** (nach einer Aufzählung, vor der Pointe): den Satz mit einem Punkt beenden und
    `…` dahinter. `[pause]` mitten im Satz hat S2-Pro im Test überhört, und ein in Stücke geteilter Satz mit eingefügter
    Stille klang schlechter:
-   - „… blitzt etwas [emphasis] Gerades, [pause] [emphasis] Metallisches. … [emphasis] Viel zu gerade … für einen Felsen.“
+   - „… blitzt etwas [emphasis] Gerades. … [emphasis] Metallisches. … [emphasis] Viel zu gerade … für einen Felsen.“
 6. **Nichts am Inhalt ändern.** Die Marken und die Satzteilung sind für die Stimme; was gesagt wird, bleibt.
 
 Ein ganzer Text nach diesen Regeln (der Autor: „das ist perfekt“):
