@@ -324,7 +324,6 @@ export async function reportCard(
             placeholder: 'z. B. Baum schwebt',
             // the draft while typing (a redraw between two flushes keeps what was typed)
             value: noteDraft && noteDraft.report === (r.stamp ?? '') ? noteDraft.text : r.note,
-            submitLabel: 'Merken',
             onInput: (t: string) => typeNote($, r.stamp ?? '', t),
             onSubmit: (t: string) => {
               noteDraft = { report: r.stamp ?? '', text: t, seq: (noteDraft?.seq ?? 0) + 1 }

@@ -2827,8 +2827,11 @@ export type FieldProps = {
   value?: string
   /** An example that fits the field (a real value), not an instruction on which key to press. */
   placeholder?: string
-  /** The deed, one verb: the engine draws it as the field's own button. */
-  submitLabel: string
+  /**
+   * The deed, one verb: the engine draws it as the field's own button. Only where the button does something typing
+   * alone does not (create, commit, save, send). A field that only holds a form's value leaves it out: no button.
+   */
+  submitLabel?: string
   /** Lines of the field; from 2 it holds several lines. */
   rows?: number
   onSubmit: (value: string) => void
@@ -2868,7 +2871,7 @@ export function Field(k: Kit, f: FieldProps): RenderElement | null {
         key={f.key}
         placeholder={f.placeholder}
         value={draft.value}
-        submitLabel={f.submitLabel}
+        {...(f.submitLabel ? { submitLabel: f.submitLabel } : {})}
         rows={rows}
         autoFocus={f.autoFocus}
         onInput={draft.onInput}
@@ -2969,8 +2972,9 @@ export function Form(
 }
 
 /**
- * A search field (R4): no label, the placeholder an example value, the button `k.s.search`. It filters on submit
- * and, unless `live: false`, while typing. Put it in the `filter` place of the card whose list it filters.
+ * A search field (R4): no label, the placeholder an example value. It filters while typing and then has no button (a
+ * button there would do nothing typing does not); with `live: false` it filters on submit only and carries the button
+ * `k.s.search`. Put it in the `filter` place of the card whose list it filters.
  */
 export function SearchField(
   k: Kit,
@@ -2991,7 +2995,7 @@ export function SearchField(
         key={s.key}
         placeholder={s.placeholder}
         value={draft.value}
-        submitLabel={k.s.search}
+        {...(s.live === false ? { submitLabel: k.s.search } : {})}
         onInput={draft.onInput}
         onSubmit={draft.onSubmit}
       />

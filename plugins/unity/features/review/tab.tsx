@@ -402,8 +402,8 @@ function questionCard(
         label: 'Kommentar',
         placeholder: 'z. B. lieber wärmer',
         value: stored,
-        // with options the field only keeps the comment (the main action sends); without, it is the comment's answer
-        submitLabel: pair ? 'Antworten' : 'Merken',
+        // with options the field only keeps the comment (the main action sends): no button; without, it is the comment's answer
+        ...(pair ? { submitLabel: 'Antworten' } : {}),
         onInput: v => void patchReview($, x => ({ drafts: { ...x.drafts, [q.id]: v } })),
         onSubmit: v =>
           pair
@@ -1122,7 +1122,6 @@ export async function viewerCard(
         label: 'Notiz',
         placeholder: 'z. B. Schatten zu hart',
         value: v.note,
-        submitLabel: 'Merken',
         onInput: t => void patchView($, () => ({ note: t })),
         onSubmit: t => void patchView($, () => ({ note: t })),
       }),
