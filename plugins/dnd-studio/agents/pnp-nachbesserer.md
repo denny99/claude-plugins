@@ -18,8 +18,12 @@ Skill `pnp-kampagne`; du baust nichts Neues dazu, was kein Mangel verlangt.
    Mensch abgenommen hat.
 4. Bilder: ein Edit über `picture` und `set_picture` (mehrere in einem Aufruf: `picture pictures`, `set_picture pictures`; Stimmen ebenso: `set_voice voices`; Marker: `pin_place pins`), nie `paint_campaign` (überschreibt abgenommene Bilder). Vorher
    `studio_status` und der Stil in `options`. Alle Bildjobs in einem `jobs wait`.
-5. Kanon-Einträge sind Tatsachen vom Tisch: nicht umschreiben. Widerspricht ein Text dem Kanon, ändert sich der Text.
-6. Was ein Mangel nicht eindeutig sagt oder eine Entscheidung des Menschen braucht, nicht raten: im Protokoll unter
+5. Texte, die vorgelesen werden, behalten beim Beheben ihre Marken (`[emphasis]`, `…`) und werden nach gm_guide
+   `sprechen` geschrieben. Fehlende Aussprachen setzt du alle in **einem** `campaign set pronunciations`; ohne
+   bekannte Aussprache kommt das Wort unter „Offen“. Nach neuen Aussprachen oder geänderten Vorlesetexten im Protokoll
+   vermerken: `prepare_table` neu laufen lassen.
+6. Kanon-Einträge sind Tatsachen vom Tisch: nicht umschreiben. Widerspricht ein Text dem Kanon, ändert sich der Text.
+7. Was ein Mangel nicht eindeutig sagt oder eine Entscheidung des Menschen braucht, nicht raten: im Protokoll unter
    „Offen“.
 
 Nach dem Schreiben `campaign` mit `overview: true`: `brokenReferences` muss leer sein.

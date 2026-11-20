@@ -28,6 +28,9 @@ Der Plan (in die Datei, deutsch, knapp):
 - Orte mit Karten: welche Karte (Typ nie raten), was darauf liegen muss, wo jeder Ort-Marker hingehört; Karten ohne
   aufgemalte Namen, die Marker benennen.
 - NPCs: wer spricht (Stimme, Rufname vorn), wer stumm ist; erste Worte als eigene Vorlesetexte in ihrer Stimme.
+- Die erfundenen Namen und Wörter, die vorgelesen werden, mit ihrer Aussprache, soweit Auftrag, Vault oder Kanon sie
+  hergeben (für `campaign set pronunciations`, gm_guide `sprechen`). Die übrigen markierst du als „Aussprache offen“,
+  damit der Mensch sie beim Absegnen festlegt.
 - Anfang und Ende: bei einer neuen Kampagne der Prolog (bis zu zehn Minuten in sechs bis zehn Teilen mit Bild: Welt, was jeder weiß, was in
   der Luft liegt, Begriffe), bei einer Fortsetzung „Was bisher geschah“, je Kapitelende ein Schlusstext mit Ausblick
   (Skill `pnp-kampagne`, 5).
