@@ -213,7 +213,7 @@ Fäden, mit denen es beginnt, und den Ort, an dem der Abend anfängt.
   fremde Stimme, Spieltest 2026-10-28), und ihre Füller fehlen am Tisch.
 - **Effekte je Stimme**: Effekte sind eigene, benannte Ketten aus Bausteinen im Profil (`voice_effect` list/new/set/
   remove; Bausteine tempo, band, drive, hiss, crackle, dry, gain). Eine Stimme bekommt einen per Name
-  (`set_voice effect`, der Erzähler auch `campaign set narrator_effect`); sie liegen nach VoxCPM2 über jeder Zeile,
+  (`set_voice effect`, der Erzähler auch `campaign set narrator_effect`); sie liegen nach S2-Pro über jeder Zeile,
   vorab erzeugt wie live gestreamt. Vorlagen: Röhrenradio leicht/mittel/voll (voll war am Tisch zu viel: mittel zuerst).
   `tempo` nur sanft (0.9–1.1, mehr klingt robotisch). Längere Pausen gibt es nicht: nachträglich eingefügte Stille
   klingt wie ein Schnitt. Nur, wenn die Kampagne es will; nach einer Änderung `prepare_table`, es legt den
