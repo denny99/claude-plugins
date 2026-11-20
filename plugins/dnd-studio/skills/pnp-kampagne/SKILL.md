@@ -212,11 +212,11 @@ Fäden, mit denen es beginnt, und den Ort, an dem der Abend anfängt.
   Stimmprobe keine Standardsätze:** Für eine Figur ohne `set_voice` werden keine erzeugt (die Engine erfände sonst eine
   fremde Stimme, Spieltest 2026-10-28), und ihre Füller fehlen am Tisch.
 - **Effekte je Stimme**: Effekte sind eigene, benannte Ketten aus Bausteinen im Profil (`voice_effect` list/new/set/
-  remove; Bausteine tempo, pause, band, drive, hiss, crackle, dry, gain). Eine Stimme bekommt einen per Name
+  remove; Bausteine tempo, band, drive, hiss, crackle, dry, gain). Eine Stimme bekommt einen per Name
   (`set_voice effect`, der Erzähler auch `campaign set narrator_effect`); sie liegen nach VoxCPM2 über jeder Zeile,
-  vorab erzeugt wie live gestreamt. Vorlagen: Röhrenradio leicht/mittel/voll (voll war am Tisch zu viel: mittel zuerst)
-  und Längere Pausen. `tempo` nur sanft (0.9–1.1, mehr klingt robotisch); `pause` verlängert nur echte Stillen und tut
-  nichts, wo VoxCPM2 durchspricht. Nur, wenn die Kampagne es will; nach einer Änderung `prepare_table`, es legt den
+  vorab erzeugt wie live gestreamt. Vorlagen: Röhrenradio leicht/mittel/voll (voll war am Tisch zu viel: mittel zuerst).
+  `tempo` nur sanft (0.9–1.1, mehr klingt robotisch). Längere Pausen gibt es nicht: nachträglich eingefügte Stille
+  klingt wie ein Schnitt. Nur, wenn die Kampagne es will; nach einer Änderung `prepare_table`, es legt den
   Effekt über denselben Take. Im Studio: das Schild „Effekte“ auf der Stimmkarte, dort auch „Effekte bearbeiten“.
 - **Standardsätze** (`set_campaign_entry stock`, Erzähler: `campaign set narrator_stock`): NPCs `greet`, `bye`,
   `think`, `yes`, `no`, `gesture`, der Erzähler dieselben mit `approach` statt `gesture`. Sie machen den Abend schnell,
