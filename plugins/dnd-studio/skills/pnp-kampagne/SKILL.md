@@ -211,6 +211,12 @@ Fäden, mit denen es beginnt, und den Ort, an dem der Abend anfängt.
   Minute je Stimme), `ready` nimmt eine fertige, `creature` legt einen Klang darüber (Drache, Geist …). **Ohne eigene
   Stimmprobe keine Standardsätze:** Für eine Figur ohne `set_voice` werden keine erzeugt (die Engine erfände sonst eine
   fremde Stimme, Spieltest 2026-10-28), und ihre Füller fehlen am Tisch.
+- **Effekte je Stimme** (`set_voice` mit `tempo`, `pause`, `radio`; der Erzähler auch über `campaign set
+  narrator_effects`): Sie liegen nach VoxCPM2 über jeder Zeile, vorab erzeugt wie live gestreamt. `tempo` 0.6–1.4 bei
+  gleicher Tonhöhe (0.85 = 15 % langsamer, so passte der TOR-Erzähler), `pause` Sekunden mehr in jeder Pause ab 0,12 s
+  (VoxCPM2 läuft über Satzgrenzen; 0.35 als Anfang), `radio` `light`/`medium`/`full` ein Röhrenradio-Sprecher der
+  50er (voll war am Tisch zu viel: `medium` zuerst). Nur, wenn die Kampagne es will; nach einer Änderung `prepare_table`,
+  es legt die Effekte über denselben Take, statt neu zu sprechen. Im Studio: das Schild „Effekte“ auf der Stimmkarte.
 - **Standardsätze** (`set_campaign_entry stock`, Erzähler: `campaign set narrator_stock`): NPCs `greet`, `bye`,
   `think`, `yes`, `no`, `gesture`, der Erzähler dieselben mit `approach` statt `gesture`. Sie machen den Abend schnell,
   weil sie vorab erzeugt werden und am Tisch sofort kommen. Wie viele, in welcher Art und über welche Stimmungen:
