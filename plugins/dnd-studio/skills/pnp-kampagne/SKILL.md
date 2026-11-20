@@ -130,8 +130,9 @@ Rahmen), dann wird nach dem Plan gebaut.
      Versprechen, sein Volk), nicht nur einen Wurf, der zu seinen Fertigkeiten passt.
 5. **Vorlesetexte** (`kind text`, auch die Szenentexte): zwei, drei konkrete Sinnesdetails (Geruch, Geräusch, ein
    Ding mit Geschichte) statt Stimmungswörtern, kurz wie in einem guten Roman, im Ton der Kampagne. **Geschrieben
-   zum Sprechen** (`references/sprechen.md`, gm_guide `sprechen`): kurze Sätze statt Kommaketten, etwa eine Betonung
-   je Satz mit `[emphasis]` vor dem Wort, `…` vor dem, was wirken soll; die Spieler sehen die Marken nicht. Jeder
+   zum Sprechen** (`references/sprechen.md`, gm_guide `sprechen`): die Art des Textes entscheidet. Beschreibungen und
+   stille Momente bleiben, wie sie geschrieben sind, mit einem `[emphasis]` je drei, vier Sätze und ohne `…`; Spannung
+   in kurzen Sätzen; NPC-Worte ohne Marken. Die Spieler sehen die Marken nicht. Jeder
    erfundene Name kommt mit seiner Aussprache in `campaign set pronunciations`, nie als Umschreibung in den Text. Anfang und Ende
    sind Szenen, kein Pflichtprogramm (Denny 2026-11-13: „Intros und Outros bissel flach“), darum gehören hinein:
    - **Begrüßung** („Willkommen (zu Beginn)“): kurz, nur Organisatorisches.
@@ -333,7 +334,7 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
    niedrigem `how`, Rufname vorn; Szenentexte reine Erzählerstimme ohne wörtliche Rede und ohne vorausgesetzten Stand;
    keine unabsichtlichen Spoiler in Texten, Bildern und Namen; was nur einen Helden angeht, steht im Handout zum
    Flüstern statt in einem Text für alle; was gesprochen wird, ist zum Sprechen geschrieben (`references/sprechen.md`:
-   kurze Sätze, `[emphasis]` sparsam vor dem tragenden Wort, `…` vor der Pointe, keine Großbuchstaben und keine
+   die Art des Textes entscheidet, `[emphasis]` sparsam und nie auf Füllwörtern, kein zerhackter Text, keine Großbuchstaben und keine
    Umschreibung eines Namens im Text) und jeder erfundene Name steht in `pronunciations`.
 3. **Umfang und Spielbarkeit** (`dnd-studio:pnp-review-spielbarkeit`) – trägt der Abend? Genug Stoff für die gewünschte Länge
    im Tempo dieser Gruppe (Abschnitt 1, „Mehr Strecke statt mehr Verzweigungen“), dazu der Situations-Vorrat;

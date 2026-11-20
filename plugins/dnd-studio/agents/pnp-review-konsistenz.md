@@ -25,9 +25,10 @@ Prüfe:
 - Szenentexte reine Erzählerstimme ohne wörtliche Rede und ohne vorausgesetzten Stand.
 - **Zum Sprechen geschrieben** (gm_guide `sprechen`), nur bei dem, was vorgelesen wird (Szenen- und Vorlesetexte,
   erste Worte, Standardsätze):
-  - Kurze Sätze statt Kommaketten.
-  - Etwa ein `[emphasis]` je Satz, vor dem tragenden Wort; nicht keins in einem langen Text, nicht drei in einem Satz.
-  - `…` vor der Pointe; kein `[pause]` mitten im Satz.
+  - Die Art des Textes passt zur Schreibweise: Beschreibungen und stille Momente nicht zerhackt (Kommas bleiben,
+    etwa ein `[emphasis]` je drei, vier Sätze, kein `…`); Spannung in kurzen Sätzen; NPC-Worte ohne `[emphasis]`.
+  - Kein `[emphasis]` auf Füllwörtern, nie zwei in einem Satz; zu viele Marken sind ein Mangel wie zu wenige.
+  - Kein `[pause]`; kein `…` direkt nach einem Komma.
   - Keine Großbuchstaben als Betonung.
   - Keine Marke außerhalb eckiger Klammern, keine Tippfehler in Marken (`[emphsis]` würde die Stimme vorlesen).
   - Keine Marken in Feldern, die niemand vorliest.

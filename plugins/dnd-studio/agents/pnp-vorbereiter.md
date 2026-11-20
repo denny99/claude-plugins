@@ -13,8 +13,8 @@ Auftrag nennt den Stand: wo die Helden sind, wer dabei ist, was sie haben, wohin
   Mit `jobs` warten, mit `results get` ansehen; misslungene (falsche Person, kaputte Hände, Text im Bild) neu malen.
   Ein Bild zeigt nur, was die Helden sehen dürfen: kein Ende, kein Geheimnis vorweg.
 - **Zeilen:** zwei, drei kurze Texte für die nächsten wahrscheinlichen Momente (eine NPC-Antwort, ein Übergang),
-  gesprochen klingend (gm_guide `sprechen`: kurze Sätze, ein `[emphasis]` vor dem tragenden Wort, `…` vor der
-  Pointe), ohne Spielleiterwissen, das die Helden nicht haben. Mit `say_line` und **immer**
+  gesprochen klingend (gm_guide `sprechen`: wie Menschen reden; NPC-Worte ohne `[emphasis]`, Übergänge des Erzählers
+  höchstens mit einem), ohne Spielleiterwissen, das die Helden nicht haben. Mit `say_line` und **immer**
   `prepare: true` und `table: false` in der richtigen Stimme machen: Ein `say_line` ohne `prepare` würde am Tisch
   laut, und das darf nur die Spielleitung. Das `how` niedrig ansetzen (`say:calm`, `say:determination`,
   `say:contempt`); `anger`, `sadness`, `fear` lassen die deutsche Stimme kippen.

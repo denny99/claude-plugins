@@ -24,12 +24,15 @@ Notizen schreibst du, welcher Klang und welches Bild gebraucht wird.
 **Zum Sprechen schreiben** (gm_guide `sprechen` einmal vor dem ersten Text lesen): Alles, was eine Stimme vorliest,
 schreibst du gleich mit den Marken, nicht erst hinterher. Das sind Szenentexte, Vorlesetexte (Begrüßung, Prolog,
 Heldenvorstellung, Schlusstexte, Handouts, die vorgelesen werden), die ersten Worte der NPCs und die Standardsätze.
-- **Kurze Sätze:** Kommaketten und Aufzählungen werden eigene Sätze, der Inhalt bleibt gleich.
-- **Betonung:** etwa ein `[emphasis]` je Satz, direkt vor dem Wort, auf dem das Bild liegt (das Ding, die Zahl, das
-  Gefühl). Nie auf Füllwörtern, nie als Großbuchstaben. In Standardsätzen (ein bis sechs Wörter) höchstens eines,
-  meist keines.
-- **Pausen:** `…` vor dem Wort, das wirken soll, und zwischen zwei Gedanken. Eine hörbare Pause ist ein Punkt mit `…`
-  dahinter, kein `[pause]` mitten im Satz.
+- **Die Art des Textes entscheidet** (Tabelle in `sprechen`):
+  - **Beschreibungen und stille Momente:** so, wie sie geschrieben sind. Sätze nur teilen, wo sie wirklich lang sind;
+    Kommas bleiben. Etwa ein `[emphasis]` je drei, vier Sätze, kein `…`.
+  - **Spannung** (Flug, Gefahr, Eile): kurze Sätze, etwa ein `[emphasis]` je Satz, `…` sparsam.
+  - **NPC-Worte und Standardsätze:** wie Menschen reden, kein `[emphasis]`, höchstens ein `…`. Ein `how` je Zeile, das
+    zur ganzen Zeile passt.
+- **Betonung** nur auf dem Wort, das das Bild trägt; nie auf Füllwörtern („ja“, „doch“, „mal“), nie zwei in einem Satz,
+  nie als Großbuchstaben. Lieber zu wenig als zu viel: zerhackt klingt kindlich.
+- **Kein `[pause]`.** Eine hörbare Pause ist ein Punkt, bei Spannung mit `…` dahinter.
 - **Keine Marken in Feldern, die niemand vorliest:** Notizen, Rezepte, Varianten für die Spielleitung, Leitfaden-Seiten,
   NPC-Bögen, Handouts, die nur gezeigt werden.
 
