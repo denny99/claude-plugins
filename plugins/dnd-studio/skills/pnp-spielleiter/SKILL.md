@@ -748,6 +748,12 @@ erst dann aufräumen. Leeren, Klang aus und `leave` erst, wenn der letzte Text w
 gekillt bevor er fertig war“). `leave` wartet seitdem selbst höchstens eine Minute auf Zeilen, die noch spielen;
 das Leeren und der Klang davor brauchen trotzdem deinen Blick aufs Ende.
 
+**Spielt ein Spieler mit eigenem Studio** (spoilerfrei, Denny 2026-11-21): Was am Tisch gezeigt, gesagt oder
+übergeben wurde, markieren `show_players`, `say_line` und `give_find` selbst als gespielt. Was an einem Abend ohne
+Studio lief, markierst du nach: `campaign { action: "spoiler", played: ["<Szene>", "<NPC>", "<Ort>"] }` (Titel und
+Namen; `unplayed` nimmt es zurück). Auf seinem Rechner schaltet `campaign { action: "spoiler", on: true }` den Modus
+an, `upto` deckt den Zeitstrahl bis zu einer Szene auf. Deine Werkzeuge sehen immer alles.
+
 Danach, ohne Spieler: Kanon aufräumen, Session-Notizen, Fäden und Startort für den nächsten Abend, dann die
 Nachbesprechung mit dem Menschen. Wie genau: `references/nach-dem-abend.md`, dann lesen.
 
