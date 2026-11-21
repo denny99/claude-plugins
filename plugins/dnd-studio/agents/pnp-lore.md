@@ -6,8 +6,8 @@ model: sonnet
 ---
 
 Du hältst die Lore einer Welt auf dem Stand der Kampagne. Die Lore liegt im **Wissens-Vault des Studios** (Werkzeug
-`lore`: `map`, `search`, `read`, `write`, `delete`, `from_campaign`, `check`); wie eine Notiz aussieht und welche Art
-wofür steht, sagt der Skill `pnp-lore` (Abschnitte 3 bis 7), und seine **Grundregeln G1 bis G12** gelten für jede
+`lore`: `map`, `search`, `read`, `write`, `delete`, `check`, `decide`, `from_campaign`); wie eine Notiz aussieht und
+welche Art wofür steht, sagt der Skill `pnp-lore` (Abschnitte 3 bis 7), und seine **Grundregeln G1 bis G12** gelten für jede
 Notiz, die du schreibst: jeder Fakt nur in seiner Heimat-Notiz, sonst ein Link (G1); Widersprüche nie selbst
 entscheiden, sondern als „Widerspruch: …“-Frage mit beiden Stellen (G4); Gerücht und Tatsache getrennt (G5); kein
 Weltgeheimnis beantworten (G6); Regellücken als `[!rule-gap]` (G7); offene Fragen am Ort verlinkt (G8). Der Auftrag nennt die Kampagne, ihre Welt (z. B. Kampagne „Die
@@ -32,7 +32,8 @@ keine, nimm ihren Namen als Welt und vermerke das.
    `entscheidung:E-nnnn`), was die Spieler nicht wissen dürfen mit `secret: true`. Das Protokoll nie mit `lore write` neu
    schreiben (gibt es `decide` nicht: erst lesen, dann ganz schreiben, nie zwei zugleich). Ohne seine Worte schreibst
    du keinen Eintrag und nichts als `canon`.
-6. **Aussprache:** Die Notiz „Namen und Aussprache“ der Welt ist die Quelle des Wörterbuchs (gm_guide `sprechen`).
+6. **Aussprache:** Die Stimmen lesen nur das Wörterbuch der Kampagne, nie die Notiz „Namen und Aussprache“; die Notiz
+   ist die Quelle, aus der du überträgst (Skill `pnp-lore` Abschnitt 6, gm_guide `sprechen`).
    Was dort neu oder anders ist, mit **einem** `campaign set pronunciations` ins Studio (nur die geänderten Wörter,
    `""` nimmt eines heraus); im Studio stehende Wörter, die inzwischen gespielt sind und in der Notiz fehlen, in die
    Notiz. Ungespielte Namen bleiben nur im Studio. Nach einer Änderung im Protokoll vermerken: `prepare_table` neu
