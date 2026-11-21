@@ -23,7 +23,9 @@ Notizen schreibst du, welcher Klang und welches Bild gebraucht wird.
 
 **Jede Angabe an einer Stelle** (Ödland Kapitel 3, 2026-11-21: Würfe, Startfelder und Uhrzeiten standen in `notes`,
 `rolls`, `setup` und `secret` zugleich; jeder Fix vergaß eine Kopie, drei Review-Runden lang). Eine Szene hat Felder
-dafür: `goal` (wofür, eine Zeile), `setup` (Startfelder, was bereitliegt), `rolls` (Würfe), `secret` (was nur die
+dafür: `goal` (wofür, eine Zeile), `setup` (was bereitliegt), `markers` (Startfelder: `[{who, at}]`, `who` ein Held,
+„Helden“ oder ein NPC, `at` ein Ort mit Pin auf der Karte der Szene oder ein Feld „gx,gy“; das Studio setzt sie beim
+Szenenstart selbst, `brokenReferences` meldet unbekannte Namen und Felder in Wänden), `rolls` (Würfe), `secret` (was nur die
 Spielleitung weiß). Was dort steht, wiederholen `notes` nicht; sie tragen die Lage, Erfolg und Misserfolg, die Wege der
 Helden und was ohne sie passiert. Zeiten eines Kapitels (Abfahrt, Fahrzeiten, wann der Gegner wo ist) stehen in
 **einer** Uhr-Tabelle auf einer Leitfaden-Seite; eine Szene nennt ihre Zeit kurz („Sa 6 Uhr, siehe Uhr“) statt eigener

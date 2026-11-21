@@ -556,8 +556,9 @@ sagen die Orts-Pins (`pin_place`, beim Bau gesetzt) und die Marker der Helden.
   am selben Ort stehen nebeneinander. Unterwegs: `{who, at: "Kesselheim", toward: "Talsperre Graufels", part: 0.5}`
   (0 am Aufbruchsort, 1 am Ziel). Welche Orte auf der Karte liegen und welche bekannt sind, steht in `map list` mit
   `map` unter `places`. Nur innerhalb eines Ortes ohne Pins (Raum im Dungeon, Stelle auf der Lichtung) gibst du ein
-  Feld `at: "gx,gy"` aus dem Plan der Karte (`map list` mit `map`: `plan` beginnt bei `at`; die Startfelder stehen in
-  den Szenen-Notizen). Bewegen sie sich, nur `map` und `markers` neu schicken: Bild und Titel bleiben, die Marker
+  Feld `at: "gx,gy"` aus dem Plan der Karte (`map list` mit `map`: `plan` beginnt bei `at`). Die Startfelder einer Szene
+  (`markers` der Szene) setzt das Studio selbst, wenn die Szene am Tisch beginnt (Weiter, ein Ausgang,
+  `table_state scene`); du schickst `markers` nur, wenn sich jemand bewegt. Bewegen sie sich, nur `map` und `markers` neu schicken: Bild und Titel bleiben, die Marker
   gleiten weiter. `map: ""` nimmt die Karte weg. Die Marker bleiben an der Karte gespeichert: ohne `markers` gelten
   die letzten, `markers: []` räumt sie ab.
 - **Nie eine Karte ohne Marker.** Auf jeder gezeigten Karte stehen die Helden dort, wo sie gerade sind, auch auf der

@@ -52,8 +52,10 @@ Der Erbauer gibt `an Maler` und `an Klang` gesammelt weiter, bevor die nächste 
   Bilder), und nur, wenn der Auftrag es erlaubt (läuft gleichzeitig ein Maler, keine GPU-Jobs: dann `an Maler`). Vorher
   `studio_status` und der Stil in `options`. Warten: `jobs watch` mit `background: false` (alle IDs auf einmal), den
   Befehl mit Bash im Vordergrund laufen lassen.
-- Marker von Helden und NPCs auf einer Karte sind Zustand am Tisch (`show_players markers`), kein Inhalt: Gebaut wird nur,
-  dass die Szene ihre Startfelder in `setup` nennt. Ortsmarker setzt `pin_place`.
+- Startfelder einer Szene stehen im Feld `markers` (`[{who, at}]`, siehe `set_campaign_entry`), nicht als Freitext in
+  `setup` oder `notes`: Stehen sie dort noch, ziehst du sie nach `markers` um und streichst den Freitext. Das Studio
+  setzt sie beim Szenenstart auf die Karte; vor dem Abend stehen auf der Karte keine Figuren, das ist richtig.
+  Ortsmarker setzt `pin_place`.
 - Texte, die vorgelesen werden, behalten ihre Marken (`[emphasis]`, `…`) und werden nach gm_guide `sprechen`
   geschrieben. Fehlende Aussprachen alle in **einem** `campaign set pronunciations`. Nach neuen Aussprachen oder
   geänderten Vorlesetexten im Protokoll vermerken: `prepare_table` neu laufen lassen.

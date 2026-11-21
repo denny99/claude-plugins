@@ -39,10 +39,11 @@ Prüfe:
 - Jedes Bild gemalt: Szenen, Orte, sprechende NPCs, Helden. Jede Karte ganz gemalt (gemalte = geplante Kacheln), ohne
   sichtbare Nähte.
 - Jeder Ort hat seinen Marker (`pin_place`), und der Marker sitzt auf dem, was die Karte an dieser Stelle zeigt: die
-  Karte mit `map` ansehen, nicht nur zählen. Jede Szene auf einer Karte nennt in `setup` Startfelder für Helden und NPCs
-  auf begehbaren Feldern (Ödland-Abend 2026-10-30: eine Regionalkarte ohne Marker, „i did not understand what what
-  was“). Die Marker der Helden und NPCs selbst setzt die Spielleitung am Tisch aus diesen Startfeldern
-  (`show_players markers`); dass sie vor dem Abend nicht auf der Karte stehen, ist kein Mangel.
+  Karte mit `map` ansehen, nicht nur zählen. Jede Szene auf einer Karte hat ihre Startfelder im Feld `markers` (nicht als
+  Freitext), und `brokenReferences` meldet für `markers` nichts (unbekannter Name, Ort ohne Pin, Feld in Wand oder
+  außerhalb der Karte); prüf auf der Karte, ob die Felder auch passen (Helden nicht mitten im Gegner) (Ödland-Abend 2026-10-30: eine Regionalkarte ohne Marker, „i did not understand what what
+  was“). Die Marker selbst setzt das Studio beim Szenenstart; dass vor dem Abend keine Figuren auf der
+  Karte stehen, ist kein Mangel.
 - Jede sprechende Figur hat eine eigene Stimmprobe und Standardsätze; `prepare_table` ist gelaufen, ohne Lücken
   (gekippte Stimmen stehen dort als `failed`). Du rufst es nicht selbst auf (es erzeugt); seine letzte Antwort nennt
   der Auftrag. Fehlt sie, melde das als offenen Punkt.

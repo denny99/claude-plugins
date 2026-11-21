@@ -95,11 +95,11 @@ Rahmen), dann wird nach dem Plan gebaut.
    endet mit einem Haken: einer Frage, einem Geräusch, einer Person, die etwas will). `notes` = **das Rezept für die
    Spielleitung**: Ziel der Szene, welche Würfe (Fertigkeit + ZW der Eigenschaft bzw. DC), was Erfolg und Misserfolg
    bedeuten (so hart, wie der Rahmen sagt), wer hier welchen Weg hat. `variants` für Enden, die vom Spielverlauf
-   abhängen. Spielt die Szene auf einer Karte, gehören die **Startfelder** in die Notizen: wo die
-   Helden ankommen und wo die NPCs stehen, als Feld `gx,gy` des Kartenplans („Helden am Pfad 4,14; Bartel am Meiler
-   12,8“); auf einer Karte mit Orts-Markern genügt der Ortsname („Helden in Kesselheim“, `at: "Kesselheim"`). Damit
-   setzt die Spielleitung die Marker im Spielerfenster sofort (`show_players map markers`), statt am
-   Abend im Plan zu suchen.
+   abhängen. Spielt die Szene auf einer Karte, gehören die **Startfelder** ins Feld `markers`
+   der Szene (`[{who, at}]`): wo die Helden ankommen (`who: "Helden"`) und wo die NPCs stehen, als Feld `gx,gy` des
+   Kartenplans oder, auf einer Karte mit Orts-Markern, als Ortsname (`at: "Kesselheim"`). Das Studio setzt sie beim
+   Szenenstart selbst auf die Karte, und `brokenReferences` meldet, was nicht passt (Name, Ort ohne Pin, Feld in einer
+   Wand). Nicht als Freitext in die Notizen.
    - **Der Szenentext ist Erzählerstimme, nichts anderes.** Wörtliche Rede eines NPCs mit Stimme gehört nicht hinein:
      der Text endet vor ihr („… kommt eine heisere, kleine Stimme.“), und die Worte stehen als eigener Vorlesetext in
      der Stimme des NPCs bereit (Punkt 5). Sonst liest der Erzähler Miras Satz mit seiner tiefen Stimme vor (Spieltest
@@ -317,7 +317,7 @@ Gehe den Abend im Kopf einmal als Spielleitung durch und prüfe:
 - Die Kampagne hat Musik je Stimmung (`campaign` zeigt `moodMusic`: mindestens `explore` und `fight`), und die
   wichtigen Szenen haben ihre Schleife (`animate loop`, in den Notizen der Szene).
 - Bei einem Kapitel einer Kampagne: `threads` und `party_at` gesetzt (`campaign` zeigt `threads` und `partyAt`).
-- Jede Szene auf einer Karte nennt in den Notizen die Startfelder von Helden und NPCs.
+- Jede Szene auf einer Karte hat ihre Startfelder in `markers`, und `brokenReferences` ist leer.
 - Jeder Held hat einen Weg, der zu seinem Bogen passt, und jeder Wurf nennt die Fertigkeit, die er auch hat.
 - Jeder Hinweis, ohne den es nicht weitergeht, ist auf drei Wegen zu finden; jeder Gegner hat Werte und Moral.
 - Begrüßung, bei neuer Kampagne Prolog, bei vorgefertigten Helden ihre Vorstellung, Kapitelanfang und -ende und
@@ -342,7 +342,7 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
 1. **Vollständigkeit und Technik** (`dnd-studio:pnp-review-technik`) – ist alles da und läuft es? Jedes Bild gemalt (Szenen,
    Orte, sprechende NPCs, Helden), Karten ganz gemalt, ohne Nähte, alle Orte mit Marker, und jeder Marker sitzt auf
    dem, was die Karte an der Stelle zeigt (Karte ansehen, nicht nur zählen); jede Szene auf einer Karte hat
-   Startfelder für Helden und NPCs, die auf begehbaren Feldern liegen; jede sprechende Figur mit eigener Stimmprobe,
+   Startfelder für Helden und NPCs in `markers`, die auf begehbaren Feldern liegen; jede sprechende Figur mit eigener Stimmprobe,
    Standardsätze erzeugt (`prepare_table` gelaufen, ohne Lücken und ohne `failed`); Klänge gebunden, ihre Dateien da,
    mit `make_sound` gemacht (echte Aufnahmen nur, wo das nicht reichte), mit `check_sound` gegen ihren Namen gehört, Schleifen und Lautstärken
    richtig; Handouts, Begrüßung, Leitfaden da, ein Handout mit Geheimnis zum Flüstern; bei einem Kapitel `threads`
