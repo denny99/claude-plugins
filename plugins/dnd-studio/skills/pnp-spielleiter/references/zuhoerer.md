@@ -33,6 +33,14 @@ Agent, das ist irgendwie scheiße“): Jedes Ende eines Zuhörers ließ den Tisc
 
 ## Was seine Nachricht bringt
 
+- **`prepare: true`** (Denny 2026-11-21, „vorrechnen, während jemand noch redet“): Der Zug läuft noch, jemand redet
+  weiter (`partial.talking`). **Nicht sprechen, nichts zeigen, nicht würfeln**: am Tisch geschieht nichts. Nur
+  vorbereiten, was dann sofort kommen soll: die Antwort durchdenken, die Zeilen mit `say_line` `prepare: true`
+  machen (dieselben Worte spielen später sofort), Bilder anstoßen. Dann ihm die Lage schicken („vorbereitet: Antwort an
+  Jule und Tobi, warte auf Yannick“) und den Zug beenden. Die echte Weckung kommt, sobald alle still sind: dann die
+  vorbereiteten Zeilen sagen, angepasst an das, was der Rest noch sagte. `woke: false` mit `why: "doch nicht"`: das
+  Vorbereitete nicht sagen.
+
 - `turn` beantworten wie einen Zug aus `wait_for_players` (`secret: true` wie dort: flüstern). `turn: null` mit `why`
   Pause: vorbereiten.
 - `why: "geheim"` (oder `secret_waiting`): Der Zuhörer holt kein Geheimnis, das tust du: `wait_for_players` mit
@@ -48,13 +56,16 @@ Agent, das ist irgendwie scheiße“): Jedes Ende eines Zuhörers ließ den Tisc
 
 ## Geschnittene Zeilen und Brücken
 
+- Ein Zug endet erst, wenn alle still sind; wer einen langen Plan erzählt, wird durch Zwischenrufe nicht abgeschnitten,
+  auch nicht durch ein „Erzähler“ dazwischen (das zählt erst am Zugende, wie Absenden). Nur Dauergerede ohne Pause
+  wird nach 60 s gekappt (`capped`): dazu weckt dich der Zuhörer nur zum Vorbereiten.
 - Die Stimme schneidet deine Zeile nicht mehr von selbst; der Zuhörer tut es, wenn ein Zug wichtig ist (`cut_line`),
   und Absenden tut es sofort. `say_line` kommt dann `interrupted` zurück: am Tisch nichts weiter tun, bis die
   Nachricht oder Rückgabe des Zuhörers da ist, dann sie beantworten (`unheard` danach, wenn es noch passt). „Reinreden
   geht vor“ heißt im Zuhörer-Modus: auf ihn warten, nicht `wait_for_players`.
 - Mit dem Schnitt spielt der Tisch sofort eine Brücke, damit deine Denkzeit nicht still ist (Denny 2026-11-19).
   **Meist schreibt der Zuhörer sie selbst** (`cut_line` mit `bridge_text`): ein Satz, der genau zu diesem Zug passt,
-  live in der Stimme des Erzählers. Fängt die Stimme nicht binnen anderthalb Sekunden an (gerade belegt oder geparkt),
+  live in der Stimme des Erzählers, allein (kein Denksatz davor). Fängt die Stimme nicht binnen zweieinhalb Sekunden an (gerade belegt oder geparkt),
   kommt stattdessen ein vorbereiteter Satz des Erzählers: `approach` („Tobi geht zu Bartel hinüber.“), wenn sich ein
   Held an einen NPC wendet, `look` oder `act` für Züge ohne NPC, sonst ein `think` („Ist angekommen.“, „Lass mal
   sehen.“). Diese Ersatz-Brücken bleiben also nötig; wie man sie schreibt: `../pnp-kampagne/references/standardsaetze.md`.

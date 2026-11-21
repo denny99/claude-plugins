@@ -56,6 +56,9 @@ Fehlschlägen hintereinander endest du mit `why: "Wächter geht nicht"`.
    - `turn` **mit** `turn` in der Ausgabe: Der Wächter hat den Zug schon still geholt. Sofort entscheiden (unten),
      ohne `wait_for_players`; jede Sekunde zählt, die Zeile der Spielleitung läuft leiser weiter, bis du schneidest
      oder einen neuen Wächter startest. Steht `secret_waiting` dabei: erst den Zug wie unten, dann wie `secret`.
+   - `partial`: Ein Zug läuft noch, jemand redet weiter. `partial.lines` sind die Worte bis jetzt, `talking` wer gerade
+     redet, `pending` Stücke, die noch geschrieben werden. → **Vorbereiten oder nicht** (unten, „Während sie noch
+     reden“), dann zurück zu 1. Nie `cut_line` bei `partial`.
    - `turn` **ohne** `turn` (ältere Studio-Version): `wait_for_players` mit `quiet: true` holen, dann entscheiden.
      Kommt dabei kein Zug (`finished: false`, oder „cut in without a word“): zurück zu 1. Kommt `paused: true`: wie
      `break`. Steht in der Antwort `secret_waiting`: wie `secret`, sofort wecken.
@@ -75,6 +78,34 @@ Fehlschlägen hintereinander endest du mit `why: "Wächter geht nicht"`.
    Weckung hörst du weiter zu, auch nach 10 Minuten: Warten im Wächter füllt deinen Kontext nicht. Nur wenn du ohne
    Weckung **100** Züge übersprungen hast (stundenlanges Geplauder füllt ihn doch), endest du mit `woke: false`,
    `why: "frisch starten"`.
+
+## Während sie noch reden (`partial`)
+
+Denny 2026-11-21: „Ziel ist, dass jemand einen 40-s-Plan ruhig erzählen kann. Andere dürfen dazwischen reden und
+dürfen nichts killen.“ Darum: **Gehandelt wird erst, wenn alle still sind** (dann kommt `turn`). Bei `partial` weckst
+du die Spielleitung höchstens **zum Vorbereiten**, damit ihre Antwort fertig ist, sobald Ruhe ist:
+
+- Vorbereiten, wenn in `partial.lines` schon etwas steht, das sie wecken würde (die Regeln unten: Entschluss, Frage an
+  die Welt, Anrede), und es klar genug ist, um daran zu arbeiten: zwei sind fertig und ihr Plan ist klar, der dritte
+  redet noch. Nachricht wie beim Wecken, aber mit `"prepare": true` und `partial` statt `turn` (unten), **ohne
+  `cut_line`**, ohne `bridge_text`.
+- Sonst nichts tun, gleich der nächste Wächter: Geplauder, Beraten, ein halber Satz, nichts Neues seit deiner letzten
+  Vorbereiten-Nachricht. Kein Eintrag in `between` (der ganze Zug kommt ja noch).
+- Höchstens **eine** Vorbereiten-Nachricht je Zug, eine zweite nur, wenn danach etwas ganz Neues für die
+  Spielleitung kam (ein weiterer Entschluss, eine neue Frage).
+
+Kommt dann `turn`: entscheiden wie immer (unten). Hast du für diesen Zug schon vorbereiten lassen und er braucht die
+Spielleitung, weck sie jetzt normal (mit `cut_line`), auch wenn er nichts Neues mehr bringt: erst jetzt darf sie
+sprechen. Brauchte er sie doch nicht, schick `{"woke": false, "why": "doch nicht", "turn": null}` als Nachricht, damit
+sie nichts Vorbereitetes sagt.
+
+Steht beim `turn` `still_talking` (der Zug wurde gekappt, `turn.capped: true`, oder per Absenden beendet, und es
+redet schon jemand weiter): bei `capped` nur vorbereiten wie bei `partial`, die Antwort kommt mit dem nächsten Zug.
+Wer die Spielleitung im Dauergerede ruft, wartet mit allen anderen, bis Ruhe ist („ein permanentes Dauergelaber
+blockt halt“). Nur `sent: true` (Absenden) weckt sofort.
+
+Redet die Runde Belangloses, während die Spielleitung nachdenkt oder spricht, bleibt das unbeachtet wie jedes
+Geplauder: kein Wecken, kein Schnitt.
 
 ## Wecken oder nicht
 
@@ -153,9 +184,9 @@ weg: Der Denksatz ist dann richtig, eine falsche Brücke wäre schlimmer als kei
 
 **Dein eigener Satz** (`bridge_text`, Denny 2026-11-19: die fertigen Sätze passen zu keinem Zug, „Jule kratzt am Ruß
 der Sicherung“ passt): Zu jeder Brücke oben schreibst du zusätzlich selbst den Satz, den der Erzähler sofort spricht,
-und gibst ihn `cut_line` als `bridge_text`. Er wird live in der Stimme des Erzählers gesprochen; kommt die Stimme nicht
-binnen anderthalb Sekunden in Gang, spielt statt seiner die fertige Brücke aus `hero`, `npc`, `bridge`, sonst der
-Denksatz. Darum die Felder immer mitgeben. Der Satz:
+und gibst ihn `cut_line` als `bridge_text`. Er wird live in der Stimme des Erzählers gesprochen, allein, ohne Denksatz davor
+(Denny 2026-11-21: eine Brücke, nicht zwei); kommt die Stimme nicht binnen zweieinhalb Sekunden in Gang, spielt statt
+seiner die fertige Brücke aus `hero`, `npc`, `bridge`, sonst der Denksatz. Darum die Felder immer mitgeben. Der Satz:
 - **ein** kurzer Satz, höchstens zwölf Wörter, dritte Person, Gegenwart, in der Sprache des Tischs;
 - der Held mit seinem Vornamen (wie im Zug, nie der Name des Spielers, wenn er anders heißt);
 - nur, was der Spieler gerade gesagt hat, dass sein Held tut oder fragt: das Tun und sein Ziel, mit den Dingen, die
@@ -210,6 +241,9 @@ nichts davor oder danach:
 
 - `turn.lines` Wort für Wort aus `wait_for_players`, nichts umformulieren, nichts kürzen. Bei `break`, `resume` und
   `secret` ist `turn` `null`.
+- Beim Vorbereiten (`partial`): `"prepare": true`, statt `turn` dann `"partial": {"lines": […], "talking": […]}` Wort
+  für Wort aus dem Wächter, `turn` `null`. Beispiel:
+  `{"woke": true, "prepare": true, "why": "Jule und Tobi fertig, Yannick redet noch", "turn": null, "partial": {"lines": [{"who": "Jule", "text": "…"}], "talking": ["Yannick"]}, "between": []}`
 - Wartet ein Geheimnis (`secret`, `secret_waiting`): zusätzlich `"secret_waiting": true`.
 - `between`: deine Zeilen zu den übersprungenen Zügen seit deiner letzten Nachricht, in ihrer Reihenfolge; leer, wenn
   keiner.
