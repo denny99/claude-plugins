@@ -21,12 +21,12 @@ eine Radio-Kultur wie in den 1950ern.
 | --------------- | ------------------------------------------------------------------------------------------------------ |
 | `map`           | Ohne `world`: alle Welten mit Anzahl je Art und ihren Kampagnen. Mit `world`: die Titel je Art, die offenen Fragen, zuletzt Geändertes. |
 | `search`        | `query`, optional `world`, `kind`, `tag`, `limit`: Treffer mit Ausschnitt. Der erste Griff bei jeder Frage.        |
-| `read`          | `title`, `world`: eine Notiz ganz, mit Links, Rückverweisen und Quellen.                               |
-| `write`         | `notes: [{title, world, kind, tags?, status?, body, sources?}]`: mehrere Notizen je Aufruf, neu oder geändert. `body` ersetzt den Text, `tags` und `sources` kommen dazu (`"-tag"` nimmt einen Tag weg). |
-| `delete`        | `title`, `world`: nimmt eine Notiz heraus (nur Überholtes, nie Kanon).                                 |
-| `check`         | `world`: prüft die Welt, ohne etwas zu ändern (Abschnitt G12): Quellen, Links ins Leere, doppelte Fakten, unverlinkte Fragen, Geheimes, das über Links oder das Entscheidungsprotokoll durchsickert, fehlende Heimat-Notizen. |
+| `read`          | `title` (oder `titles` für mehrere), `world`: Notizen ganz, mit Links, Rückverweisen und Quellen.      |
+| `write`         | `notes: [{title, world, kind, tags?, status?, body, sources?}]`: mehrere Notizen je Aufruf, neu oder geändert. `body` ersetzt den Text, `tags` und `sources` kommen dazu (`"-tag"` nimmt einen Tag weg). Antwort: `written` und `unlinked` (Links ins Leere). |
+| `delete`        | `title`, `world`: legt eine Notiz in den Papierkorb-Ordner (nur Überholtes, nie Kanon).               |
+| `check`         | `world`: prüft die Welt, ohne etwas zu ändern (G12) → `{ok, errors, hints, counts}`.                   |
 | `decide`        | `world`, `what`, `words`, optional `secret`: hängt **eine** Zeile an das Protokoll „Entscheidungen“ an (legt es an, wenn es fehlt), vergibt die nächste Nummer selbst und gibt sie zurück (`id`, z. B. `E-0012`); `secret: true` schreibt sie unter `## Geheim (Spielleitung)` (G3). |
-| `from_campaign` | `campaign`, `world`: legt die Lore einer Welt aus einer bestehenden Kampagne an (siehe unten).         |
+| `from_campaign` | `campaign`, `world`, optional `replace`: legt die Lore einer Welt aus einer bestehenden Kampagne an (Abschnitt 2). |
 
 **Arten** (`kind`), eine je Notiz:
 
@@ -50,8 +50,11 @@ eine Radio-Kultur wie in den 1950ern.
 | `decision`   | Das Entscheidungsprotokoll der Welt (G3). Eine je Welt.          | „Entscheidungen“                            |
 | `note`       | Was in keine Art passt (sparsam)                                 |                                             |
 
-`status`: `draft` (Entwurf, noch nicht abgesegnet), `canon` (gilt), `retired` (überholt, bleibt als Verweis). Ohne
-Angabe `draft`. `canon` nur mit einer Quelle, die die Entscheidung belegt (`entscheidung:E-0007`, `kanon:<Abend>` oder `mensch`, G3). Tags klein und wenige: `spoiler` für Spielleiterwissen, eine Region (`rostmark`), ein Kapitel (`kap-2`).
+`status`: `draft` (Entwurf, noch nicht abgesegnet), `canon` (gilt), `retired` (überholt, bleibt als Verweis); eine
+`question` ist offen, bis sie `decided` oder `retired` ist. Gib `status` bei jeder neuen Notiz an: ohne Angabe bleibt
+er leer, nicht `draft`. `canon` nur mit einer Quelle, die die Entscheidung belegt (`entscheidung:E-0007`,
+`kanon:<Abend>` oder `mensch`, G3). Tags klein und wenige: `spoiler` für Spielleiterwissen, eine Region (`rostmark`),
+ein Kapitel (`kap-2`).
 
 ## Die sechs Schritte und der Stand im Panel
 
@@ -166,19 +169,24 @@ Architekt, Texter). Das gehört in die `world`-Notiz (`Autor spielt mit: ja`), d
 Agent dabei entscheiden lässt oder festhält, geht mit `lore decide` und `secret: true` ins Protokoll, nie in dessen
 öffentlichen Teil.
 
-**G12. Prüfen.** Nach jedem größeren Schreiben und am Ende jedes Schritts `lore check` mit der Welt. Fehler werden
-behoben oder (bei Widersprüchen) nach G4 zur Frage; Hinweise prüfst du mit Augenmaß. Gibt es `lore check` im Studio noch
-nicht, prüfst du dieselbe Liste von Hand mit `lore map`, `lore search` und der Liste `unlinked`, die `lore write`
-zurückgibt:
-- jede Notiz hat Art und Quelle; `canon` nur mit `entscheidung:`-, `kanon:`- oder `mensch`-Quelle;
-- der öffentliche Teil von „Entscheidungen“ zitiert nichts, was nur unter `## Geheim (Spielleitung)` oder in einer
-  `spoiler`-Notiz steht;
-- keine Links ins Leere (`unlinked` leer) und keine Anker auf fehlende Abschnitte;
-- kein Fakt in zwei Notizen (G1);
-- jede offene Frage ist von ihren Notizen aus verlinkt (G8);
-- der öffentliche Teil einer Notiz verlinkt keine reine Spoiler-Notiz (sonst sickert Geheimes über den Titel durch);
-- die Heimat-Notizen aus G1 gibt es;
-- die Sprache ist durchgehend die der `world`-Notiz.
+**G12. Prüfen.** Nach jedem größeren Schreiben und am Ende jedes Schritts `lore check` mit der Welt. `errors` werden
+behoben, bevor du weitermachst; `hints` prüfst du mit Augenmaß:
+
+| Meldung                  | Was                                                                 | Abhilfe                                   |
+| ------------------------ | ------------------------------------------------------------------- | ----------------------------------------- |
+| `no_sources`             | Notiz ohne Quelle (das Protokoll selbst braucht keine)               | Quelle nachtragen oder den Menschen fragen |
+| `dangling_links`         | `[[Link]]` auf keine Notiz                                          | Notiz anlegen, Link umbiegen oder `question` |
+| `broken_anchors`         | `[[Notiz#Abschnitt]]` auf einen fehlenden Abschnitt                 | Anker oder Überschrift richten            |
+| `spoiler_links`          | öffentlicher Teil verlinkt eine `spoiler`-Notiz (Titel verrät sie)  | Link unter `## Geheim (Spielleitung)`     |
+| `secret_in_log`          | öffentliche Protokollzeile zitiert Geheimes                         | dem Menschen melden (spielt er mit, nur dass, nicht was); künftig `secret: true` |
+| `missing_home`           | `world`-Notiz oder eine Heimat-Notiz aus G1 fehlt                   | anlegen                                   |
+| `orphan_questions` (Hinweis) | offene Frage, auf die keine Notiz zeigt (G8)                   | am Ort verlinken                          |
+| `duplicates` (Hinweis)   | derselbe Satz oder dieselbe Zahl mit Einheit in zwei Notizen (G1)    | in die Heimat, sonst Link; widersprechen sie sich: G4 |
+| `canon_without_decision` (Hinweis) | `canon` ohne `entscheidung:`-, `kanon:`- oder `mensch`-Quelle | Quelle nachtragen oder zurück auf `draft` |
+
+Was `check` nicht sieht, prüfst du selbst: Widersprüche mit anderen Worten (G4), Gerüchte, die wie Tatsachen dastehen
+(G5), eine Sprache durchgehend wie in der `world`-Notiz. Kennt das Studio `check` noch nicht, gehst du die Tabelle von
+Hand durch (`lore map`, `lore search`, `unlinked` aus `lore write`).
 
 ## 1. Erst lesen, dann schreiben
 
@@ -198,11 +206,13 @@ als der ganze Bau.
 Hat eine Kampagne schon Inhalt, aber ihre Welt noch keine Notizen (`lore map` zeigt die Welt nicht oder leer), ist der
 **erste Schritt** `lore from_campaign` mit `campaign` (wie `campaign` sie nennt) und `world` (Ödland: `{campaign: "Die
 Rostmark-Chroniken", world: "Ödland"}`). Das Studio legt an: Zusammenfassung und Leitfaden → `world`, Orte → `place`,
-NPCs → `character`, Kanon → in die betroffenen Notizen, Fäden → `question`, Aussprachen → `language`. Danach:
+NPCs → `character`, Kanon → in die betroffenen Notizen, Fäden → `question`, und die Heimat-Notizen aus G1 („Namen und
+Aussprache“ mit den Aussprachen der Kampagne, „Zeitleiste“, „Maße, Preise und Reisezeiten“, „Entscheidungen“).
+Vorhandene Notizen bleiben stehen; `replace: true` schreibt sie neu, Heimat-Notizen aber nie. Danach:
 - `lore map` lesen und dem Menschen in drei Sätzen sagen, was entstand und was fehlt (meist Geschichte, Völker,
   Fraktionen, Religion: was nie eine Szene brauchte).
 - Den Rest nicht erfinden: Lücken werden `question`-Notizen oder ein Auftrag an `pnp-weltenbau`.
-- Mit `set_campaign world: "Ödland"` die Kampagne an ihre Welt binden, falls sie es noch nicht ist.
+- Mit `campaign set` und `world: "Ödland"` die Kampagne an ihre Welt binden, falls sie es noch nicht ist.
 
 ## 3. Wie eine Notiz aussieht
 
@@ -255,8 +265,13 @@ in Jahreszahlen sind eine `question`.
 
 Eine `language`-Notiz „Namen und Aussprache“ je Welt: jeder Name, den eine Stimme vorliest und der nicht eindeutig ist,
 mit Aussprache in einfacher Lautschrift („Kesselheim – KESS-el-heim“), dazu die Regeln, nach denen Namen der Welt
-gebildet werden (Ödland: deutsche Ortsnamen mit Industrieteilen, Rufnamen aus Funkcodes). Das Studio liest Aussprachen
-von dort für die Stimmen; neue NPCs und Orte bekommen ihre Zeile, bevor sie gesprochen werden.
+gebildet werden (Ödland: deutsche Ortsnamen mit Industrieteilen, Rufnamen aus Funkcodes).
+
+Die Stimmen lesen diese Notiz **nicht**: sie sprechen nur, was im Wörterbuch der Kampagne steht (`campaign set` mit
+`pronunciations`, `{"Kesselheim": "[emphasis] Kessel-heim"}`). Die Notiz ist die Quelle, aus der du dorthin
+überträgst: Kommt ein Name neu dazu oder ändert sich eine Aussprache, erst die Notiz, dann mit **einem** `campaign set
+pronunciations` nur die geänderten Wörter (`""` nimmt eines heraus), danach `prepare_table` neu laufen lassen. Neue
+NPCs und Orte bekommen beides, bevor sie gesprochen werden.
 
 ## 7. Kanon und Lore: getrennt und im Gleichschritt
 
@@ -274,7 +289,8 @@ von dort für die Stimmen; neue NPCs und Orte bekommen ihre Zeile, bevor sie ges
 Nach einem Bau (pnp-kampagne) und nach jedem Spielabend wird die Lore nachgezogen, **nur das Geänderte**:
 1. Was neu ist: die neuen Einträge der Kampagne (Bauplan, Bauprotokoll) bzw. der Kanon des Abends und die Session-Notizen.
 2. Je Thema `lore search`, dann ergänzen oder anlegen, alles in **einem** `lore write` mit allen Notizen.
-3. Zeitleiste und „Namen und Aussprache“ nachtragen, beantwortete Fragen herausnehmen, neue Fragen anlegen; was der
+3. Zeitleiste und „Namen und Aussprache“ nachtragen (neue Aussprachen auch ins Wörterbuch der Kampagne, Abschnitt 6),
+   beantwortete Fragen herausnehmen, neue Fragen anlegen; was der
    Mensch dabei entschieden hat, je Entscheidung ein `lore decide` (Geheimes mit `secret: true`, G3).
 4. `lore check` (G12) und das Gefundene beheben.
 5. Dem Menschen in zwei Sätzen sagen, was neu ist und welche Fragen offen sind (ohne Spoiler, wenn er mitspielt).

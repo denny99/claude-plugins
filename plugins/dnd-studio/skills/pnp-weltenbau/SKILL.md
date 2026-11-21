@@ -11,7 +11,7 @@ gleich festgehalten, Lücken als Fragen statt als schnelle Erfindungen. Das Ziel
 Welt, in der **morgen ein Abend spielen kann**: ein klarer Ton, ein paar starke Orte, Mächte, die etwas wollen, und
 Fragen, die Abenteuer werden.
 
-Schreibweise: `lore write`, `map new`, `set_campaign` meinen das Werkzeug mit dieser Aktion; in Claude Code heißen sie
+Schreibweise: `lore write`, `map new`, `campaign set` meinen das Werkzeug mit dieser Aktion; in Claude Code heißen sie
 `mcp__plugin_dnd-studio_dnd-studio__<werkzeug>`. Wie eine Notiz aussieht, welche Arten es gibt und wie Kanon und Lore
 zusammengehen, steht im Skill `pnp-lore`: lies ihn, bevor du die erste Notiz schreibst, vor allem seine **Grundregeln
 G1 bis G12** (jeder Fakt nur einmal, Rangfolge, Entscheidungsprotokoll, Widersprüche, Tatsache und Gerücht,
@@ -62,8 +62,10 @@ schätzt das Panel den Stand aus den Notizen je Art.
 Die Reihenfolge trägt: Idee und Kern entscheiden alles Weitere. Springt der Mensch, folge ihm und hole Fehlendes
 später.
 
-1. **Idee/Kern** → Notiz `world` (das Fundament), ein bis drei `theme`-Notizen und die leeren Heimat-Notizen
-   „Entscheidungen“ (`decision`), „Zeitleiste“, „Namen und Aussprache“, „Maße, Preise und Reisezeiten“ (`pnp-lore` G1).
+1. **Idee/Kern** → Notiz `world` (das Fundament), ein bis drei `theme`-Notizen und die noch fast leeren
+   Heimat-Notizen „Zeitleiste“ (`history`), „Namen und Aussprache“ (`language`), „Maße, Preise und Reisezeiten“
+   (`rule`), je mit Quelle `weltenbau:Schritt 1` (`pnp-lore` G1; ohne Quelle meldet `lore check` sie). Das Protokoll
+   „Entscheidungen“ legt das erste `lore decide` selbst an, nie `lore write`.
    Wie fühlt sich die Welt an (düster, hoffnungsvoll, seltsam, heiter)? Drei Säulen: was es hier immer gibt und was
    die Welt von jeder anderen unterscheidet. Was kommt nie vor (Grenzen des Tisches)? In die `world`-Notiz gehören
    außerdem die Antworten aus Abschnitt 0 (Autor spielt mit, führende Quelle, Sprache) und die Rangfolge (`pnp-lore` G2).
@@ -103,12 +105,10 @@ später.
 8. **Konflikte & Aufhänger** → `theme`-Notiz „Was Helden hier tun“ und `question`-Notizen für Aufhänger.
    Wer sind typische Helden, was treibt sie an, warum gehen sie los? Wo stoßen die Mächte aus Schritt 4 aufeinander?
    Drei mögliche Abenteuer in je einem Satz, einer davon wird der erste Aufhänger (Abschnitt 3).
-9. **Lore in den Vault** → `lore map` lesen und `lore check` laufen lassen (`pnp-lore` G12, die Prüfliste gilt auch
-   ohne das Werkzeug): jede Notiz hat Art, Quelle und Links, keine Links ins Leere, kein Fakt in zwei Notizen, jede
-   offene Frage ist von ihren Notizen aus verlinkt, der öffentliche Teil verlinkt keine Spoiler-Notiz, Zeitleiste,
-   „Namen und Aussprache“, „Maße, Preise und Reisezeiten“ und „Entscheidungen“ sind nachgezogen, Spielleiterwissen ist
-   mit `spoiler` markiert. Was der Mensch bestätigt hat, bekommt `status: canon` mit seiner `entscheidung:`-Quelle (ein
-   `lore write` für alle).
+9. **Lore in den Vault** → `lore map` lesen, `lore check` laufen lassen und alle `errors` beheben (`pnp-lore` G12,
+   dort die Tabelle der Meldungen), dazu prüfen, was `check` nicht sieht: Spielleiterwissen unter `## Geheim
+   (Spielleitung)` mit Tag `spoiler`, die Heimat-Notizen nachgezogen. Was der Mensch bestätigt hat, bekommt
+   `status: canon` mit seiner `entscheidung:`-Quelle (ein `lore write` für alle).
 10. **Review** → frisch lesen (die Notizen, nicht dein Gedächtnis des Gesprächs), am besten durch einen Agenten in
    frischem Kontext: Widersprüche (Jahreszahlen, Entfernungen, wer wen kennt), doppelte Fakten, Gerüchte, die wie
    Tatsachen dastehen, Lücken, die ein Abend sofort trifft, Namen, die sich zu ähnlich sind. Gefundenes dem Menschen in
@@ -141,8 +141,8 @@ steht auf dem Spiel, warum jetzt. Ödland: „Radio Kesselheim verstummt mitten 
 Schutzraum 12 sollen den Sendemast in der Rostmark prüfen.“ Als `question`-Notiz („Warum verstummt Radio
 Kesselheim?“) festhalten.
 
-Dann übergeben an den Skill **`pnp-kampagne`**: eine neue Kampagne in dieser Welt, die Welt mit `set_campaign world:
-"<Welt>"` an sie binden, der Aufhänger als Auftrag, die Lore als Quelle für Architekt und Texter (sie lesen mit `lore
+Dann übergeben an den Skill **`pnp-kampagne`**: eine neue Kampagne in dieser Welt, die Welt mit `campaign set`
+und `world: "<Welt>"` an sie binden, der Aufhänger als Auftrag, die Lore als Quelle für Architekt und Texter (sie lesen mit `lore
 search`, statt neu zu erfinden). Die Orte der Weltkarte werden Orte der Kampagne mit ihren Markern.
 
 ## 4. Was du nicht tust

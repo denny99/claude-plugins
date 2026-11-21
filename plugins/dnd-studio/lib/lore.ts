@@ -195,7 +195,7 @@ type StepDef = {
 
 /** The world design steps (skill pnp-weltenbau §1), as Yannick built Korath. */
 export const WELT_STEPS: StepDef[] = [
-  { title: "Idee/Kern", who: "pnp-weltenbau", kinds: ["world", "theme"], need: 2, ask: "Ton, Säulen, Grenzen, Sprache und führende Quelle der Welt klären und die Heimat-Notizen samt Entscheidungsprotokoll anlegen" },
+  { title: "Idee/Kern", who: "pnp-weltenbau", kinds: ["world", "theme"], need: 2, ask: "Ton, Säulen, Grenzen, Sprache und führende Quelle der Welt klären und die Heimat-Notizen anlegen (das Entscheidungsprotokoll mit dem ersten lore decide)" },
   { title: "Geografie & Karte", who: "pnp-weltenbau · Karte", kinds: ["place"], need: 3, ask: "Land, Großregionen und Orte klären und die Weltkarte malen" },
   { title: "Völker & Kulturen", who: "pnp-weltenbau", kinds: ["people", "religion", "language"], need: 2, ask: "Völker, Kulturen, Glauben und Namen klären" },
   { title: "Fraktionen & Mächte", who: "pnp-weltenbau", kinds: ["faction"], need: 2, ask: "Fraktionen mit Ziel, Mittel, Gegner und Gesicht klären" },

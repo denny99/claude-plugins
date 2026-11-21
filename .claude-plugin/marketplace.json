@@ -9,7 +9,7 @@
       "name": "dnd-studio",
       "source": "./plugins/dnd-studio",
       "description": "D&D Studio: GM screen, table backdrop, build cockpit, world design and lore tabs, the pnp-* skills and agents, and the Studio's MCP server.",
-      "version": "0.11.2"
+      "version": "0.11.3"
     },
     {
       "name": "unity",
