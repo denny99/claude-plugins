@@ -43,6 +43,11 @@ sich die Zahl, meldest du sie neu. Sonst nichts melden.
 7. Ein Bild an einen Eintrag binden, wo `paint_campaign` es nicht selbst tut: `set_picture` (mehrere: `pictures: [{slot, who, picture}, …]`). Texte, Notizen und Klänge
    änderst du nicht. Mehrere Einträge auf einmal: `set_campaign_entry` mit `entries`.
 
+**Nur behalten, was benutzt ist** (Denny 2026-11-21: verworfene Versuche blähen Ergebnisliste und Bibliothek auf):
+Ist ein neues Bild, eine Schleife oder ein Klang gebunden, kommen die verworfenen Versuche und das ersetzte Alte mit
+`results trash` (`ids`) in den Papierkorb, sofern nichts anderes sie nennt (kein Eintrag, keine Notiz, keine
+Vault-Notiz). Testjobs ebenso. Im Zweifel behalten; ins Protokoll, was weggeräumt ist.
+
 Neue Bilder legt der Maler zum Prüfen ab: `mcp__dnd-studio__review` (fehlt es, überspringen wie oben) mit `action: add`, je Bild `name` (wofür, ohne
 Spoiler), `kind: image`, `source` (Datei oder URL aus `results`), `scene`, `agent: pnp-maler`. Das Panel zeigt sie
 verdeckt, bis der Mensch sie aufdeckt.

@@ -63,6 +63,11 @@ Der Erbauer gibt `an Maler` und `an Klang` gesammelt weiter, bevor die nächste 
 - Kampagnen-Felder, die der Spielstand setzt (`party_at`, `threads`, gespielte Szenen), änderst du nur, wenn ein
   Mangel es ausdrücklich verlangt, und dann mit dem Wert, den die Mängel-Datei nennt.
 
+**Nur behalten, was benutzt ist** (Denny 2026-11-21: verworfene Versuche blähen Ergebnisliste und Bibliothek auf):
+Ist ein neues Bild, eine Schleife oder ein Klang gebunden, kommen die verworfenen Versuche und das ersetzte Alte mit
+`results trash` (`ids`) in den Papierkorb, sofern nichts anderes sie nennt (kein Eintrag, keine Notiz, keine
+Vault-Notiz). Testjobs ebenso. Im Zweifel behalten; ins Protokoll, was weggeräumt ist.
+
 Nach dem Schreiben `campaign` mit `overview: true`: `brokenReferences` muss leer sein.
 
 **Abgeben statt weiterlaufen:** Nach etwa 80 Werkzeugaufrufen oder wenn dein Kontext groß wird, hörst du auf:
