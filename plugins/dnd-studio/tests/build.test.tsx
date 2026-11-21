@@ -6,7 +6,7 @@ import { findShown } from './shown'
 import { checkColors } from '../lib/make-colors.js'
 import { LOOKS, phaseLook } from '../lib/looks'
 import type { LookId } from '../lib/looks'
-import { buildPhase, countFindings, findingsPathOf, pnpAgentOf } from '../lib/model'
+import { buildPhase, countFindings, findingsPathOf, planPathOf, pnpAgentOf } from '../lib/model'
 import { augmentedPath, startArgv } from '../lib/host'
 import { buildOpen } from '../features/look'
 
@@ -129,6 +129,10 @@ test('agent names, findings paths and counts', () => {
   expect(pnpAgentOf('pnp-texter')).toBe('pnp-texter')
   expect(pnpAgentOf('Explore')).toBeUndefined()
   expect(findingsPathOf('Protokoll /tmp/a.md, Mängel C:\\k\\maengel.md')).toBe('C:\\k\\maengel.md')
+  // a skill reference named in a brief is never the agent's own file (2026-11-21: sprechen.md showed as the Bauplan)
+  expect(planPathOf('Lies /home/x/.claude/plugins/cache/dnd-studio/skills/pnp-kampagne/references/sprechen.md, Plan nach /tmp/s/oedland-kap3/plan.md')).toBe('/tmp/s/oedland-kap3/plan.md')
+  expect(planPathOf('Regeln: /p/skills/pnp-kampagne/references/sprechen.md, schreib nach /tmp/s/kap3.md')).toBe('/tmp/s/kap3.md')
+  expect(findingsPathOf('siehe /p/references/sprechen.md')).toBeUndefined()
   expect(countFindings('Keine Mängel gefunden.')).toBe(0)
   expect(countFindings('## Szene 1\ntext\n## Szene 2\n')).toBe(2)
   expect(countFindings('- a\n  - detail\n- b\n- c')).toBe(3)

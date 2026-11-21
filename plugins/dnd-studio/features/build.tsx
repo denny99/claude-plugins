@@ -20,6 +20,7 @@ import {
   acceptanceOf,
   countFindings,
   findingsPathOf,
+  planPathOf,
   PIPELINE,
   agentLabel,
   pnpAgentOf,
@@ -278,7 +279,7 @@ export async function recordSpawn(
     findingsFile: /review|nachbesserer/.test(agent)
       ? findingsPathOf(prompt)
       : undefined,
-    planFile: agent === "pnp-architekt" ? findingsPathOf(prompt) : undefined,
+    planFile: agent === "pnp-architekt" ? planPathOf(prompt) : undefined,
   };
   await saveRuns($, await patchRuns($, (runs) => [...runs, run]));
   await applyLook($);
@@ -838,8 +839,13 @@ export async function renderBuild(
     }),
   );
   const planRun = latestPlanRun(mine);
-  if (planRun) {
-    const approved = isApproved(planRun, check.plan);
+  // a run kept from before 0.12.2 may name a skill reference as its plan (…/references/sprechen.md): no plan card then
+  if (planRun && !/[\\/](references|skills|agents)[\\/]/i.test(planRun.planFile ?? "")) {
+    // the build went on after the plan (texts, pictures, sounds, reviews): the plan was taken, also without the button
+    const planEnd = planRun.endedAt ?? planRun.startedAt;
+    const approved =
+      isApproved(planRun, check.plan) ||
+      mine.some((r) => r.agent !== "pnp-architekt" && r.startedAt > planEnd);
     const file = planRun.planFile;
     out.push(
       Card(k, {

@@ -312,9 +312,19 @@ export function pnpAgentOf(subagentType: string): string | undefined {
 
 /** The Mängel file (or protocol) a brief names: the first path ending .md/.txt, one with "ngel" preferred. */
 export function findingsPathOf(prompt: string): string | undefined {
-  const paths =
-    prompt.match(/(?:~|\/|[A-Za-z]:\\)[^\s`'"()<>]+\.(?:md|txt)/g) ?? [];
+  // a skill's or plugin's reference named in the brief (…/references/sprechen.md) is never the agent's own file
+  const paths = (
+    prompt.match(/(?:~|\/|[A-Za-z]:\\)[^\s`'"()<>]+\.(?:md|txt)/g) ?? []
+  ).filter((p) => !/[\\/](references|skills|agents)[\\/]/i.test(p));
   return paths.find((p) => /ngel|finding/i.test(p)) ?? paths[0];
+}
+
+/** The plan file an architect writes: the path named like a plan, else the first own path of the brief. */
+export function planPathOf(prompt: string): string | undefined {
+  const paths = (
+    prompt.match(/(?:~|\/|[A-Za-z]:\\)[^\s`'"()<>]+\.(?:md|txt)/g) ?? []
+  ).filter((p) => !/[\\/](references|skills|agents)[\\/]/i.test(p));
+  return paths.find((p) => /plan/i.test(p)) ?? paths[0];
 }
 
 /** Findings in a Mängel file: top-level list items, else `##` headings; "keine Mängel" counts 0. */
