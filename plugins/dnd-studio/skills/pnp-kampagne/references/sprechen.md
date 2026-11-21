@@ -126,8 +126,8 @@ vorn, damit man sie auseinanderhält). Was im Test half:
 - **pnp-tischbereit** ruft danach `prepare_table`, bis alles gemacht ist.
 - **Reviewer** prüfen: Schreibweise passt zur Art des Textes, Betonung sparsam und nie auf Füllwörtern, keine Umschreibungen im Text selbst (die gehören ins Wörterbuch),
   jeder erfundene Name im Wörterbuch.
-- **Mit einem Vault ist der Vault die Quelle des Wörterbuchs** (Korath, 2026-11-20): eine eigene Notiz (Wort, so
-  gesprochen, seit wann), versioniert und beim Neubau einer Studio-Kampagne wieder da. Das Studio hält eine Kopie,
+- **Mit einem Vault ist der Vault die Quelle des Wörterbuchs** (Korath, 2026-11-20): eine eigene Notiz (im
+  Wissens-Vault des Studios die Notiz „Namen und Aussprache“ der Welt, Skill `pnp-lore`; Wort, so gesprochen, seit wann), versioniert und beim Neubau einer Studio-Kampagne wieder da. Das Studio hält eine Kopie,
   denn nur dort wirkt sie; abgeglichen wird in **eine** Richtung, vom Vault ins Studio (`campaign set
   pronunciations`, nur die geänderten Wörter), nie im Studio zuerst ändern. In eine Notiz, die Spieler lesen dürfen,
   kommt ein Name erst, wenn er am Tisch gefallen ist; bis dahin steht seine Aussprache nur im Studio. Ohne Vault

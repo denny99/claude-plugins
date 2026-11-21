@@ -14,7 +14,7 @@ Grundregel: **nichts im Studio ändern**, außer der Schritt sagt es. Profil vor
 ## 1. Zustand
 
 1. Tab **Zustand**: Kopf mit Houndsridge-Logo (nicht abgeschnitten), Studio-Farben (Filz/Messing).
-2. Karte Zustand: Studio-App ✓ mit Version und Port 37641, Verbindung zu Claude ✓ „Token gesetzt“, Plugin `dnd-studio 0.9.0`, Discord-Bot, Alter Studio-Server „keiner im Weg“.
+2. Karte Zustand: Studio-App ✓ mit Version und Port 37641, Verbindung zu Claude ✓ „Token gesetzt“, Plugin `dnd-studio 0.11.1`, Discord-Bot, Alter Studio-Server „keiner im Weg“.
 3. **Neu laden** (Kopf) aktualisiert die Uhrzeit oben rechts.
 4. Es gibt keinen Token-Knopf mehr.
 5. Karten **Hintergründe** und **Regeln am Tisch**: Schalter mit Name + Satz darunter verständlich? Schalten **nicht** nötig.
@@ -40,7 +40,17 @@ Grundregel: **nichts im Studio ändern**, außer der Schritt sagt es. Profil vor
 3. Launcher-Zeile zeigt Tischzustand („… · Runde 1 · X ist dran“), Klick öffnet Tisch.
 4. Tisch-Hintergrund: am laufenden Tisch steht der Pixel-Spieltisch (Kerze flackert, ab und zu rollt ein Würfel), hell und dunkel; nach Ende kommt das normale Theme zurück.
 
-## 5. Optik
+## 5. Welt und Lore
+
+1. Tab **Welt**: Karte mit der Welt (z. B. Ödland, Kampagnen: Die Rostmark-Chroniken), Notizen je Art, offene Fragen;
+   darunter **Welt-Abschnitte** mit 10 nummerierten Schritten und „x von 10“, je Schritt wer daran arbeitet. Knopf
+   **Schritt N angehen** nur ansehen (schickt einen Prompt an Claude).
+2. Ohne Notizen in der Welt und mit offener Kampagne: Hinweis und Knopf **Aus Kampagne übernehmen**.
+3. Tab **Lore**: **Lore-Abschnitte** mit 6 Schritten; Notizen nach Art (Orte, Fraktionen …), Suche (z. B. „Kesselheim“),
+   **Lesen** öffnet eine Notiz mit Links, Rückverweisen und Quellen; **Schließen**.
+4. Kennt das Studio die Lore noch nicht: Statuszeile „Das Studio kennt die Lore noch nicht (HTTP 404) …“.
+
+## 6. Optik
 
 1. Panel schmal ziehen (~320 px): Tabs scrollen, Knöpfe untereinander, nichts abgeschnitten.
 2. Hell/Dunkel der App umschalten: alles lesbar.

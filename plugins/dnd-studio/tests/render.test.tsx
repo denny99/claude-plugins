@@ -4,7 +4,7 @@ import { findShown } from "./shown";
 
 import { band, pane, PREFIX, toolResult, world } from "./world";
 
-const TABS = ["table", "build", "review", "health"] as const;
+const TABS = ["table", "build", "world", "lore", "review", "health"] as const;
 const SURFACES = ["terminal", "desktop", "vscode", "mobile"] as const;
 const SIZES = [
   [40, 15],
