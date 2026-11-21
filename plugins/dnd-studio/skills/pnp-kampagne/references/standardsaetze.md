@@ -15,11 +15,13 @@ Spielleitung sie gezielt aufruft (`say_line opener`), und nur für Figuren mit e
 | `no` | NPC, Erzähler | lehnt ab | „Kommt nicht in Frage.“ |
 | `gesture` | nur NPC, vom Erzähler gesprochen | was die Figur tut (`opener: "gesture"`) | „Bartel kratzt sich am Bart und brummt.“ |
 | `approach` | nur Erzähler | Brücke: ein Held wendet sich einem NPC zu | „{hero} geht zu {npc} hinüber.“ |
+| `look` | nur Erzähler | Brücke: der Spieler fragt, was sein Held sieht, hört oder findet | „{hero} sieht genauer hin.“ |
+| `act` | nur Erzähler | Brücke: der Held tut etwas | „{hero} zögert nicht lange.“ |
 
 - Eine Zeile ist ein String oder `{text, how}`; `how` wie bei `say_line` (`say:`, `whisper:fear`, `say:groan`,
   `shout:anger` …). Ein Kind plappert schnell, ein Wächter spricht knapp, eine Hexe flüstert.
-- **Niedrigschwellig starten.** Die deutsche Higgs-Stimme kippt bei starken Gefühlen in eine fremde Stimme, und die
-  Prüfung lässt die Zeile dann weg (Ödland-Vorbereitung 2026-10-30: 9 von rund 330 Zeilen, alle mit `anger`,
+- **Niedrigschwellig starten.** Die deutsche Stimme (damals Higgs, heute S2-Pro) kippte bei starken Gefühlen in eine
+  fremde Stimme, und die Prüfung lässt die Zeile dann weg (Ödland-Vorbereitung 2026-10-30: 9 von rund 330 Zeilen, alle mit `anger`,
   `sadness`, `fear` oder `groan`; dieselben Worte mit `say:calm:slow`, `say:determination` oder `say:contempt` hielten.
   Denny: „wenn zu emotional ist ändert es sich zu stark. muss man bissl niedrig schwellig starten“). Darum für
   vorbereitete Sätze `say:calm`, `say:determination`, `say:contempt`, `say:relief`, `say:enthusiasm` und das Gefühl
@@ -47,6 +49,20 @@ am Anfang, wirkt wie ein Automat. Darum:
   hinüber.“, „Brór wendet sich an Hanna.“). Namen werden auf den ersten Teil gekürzt („Brór, Sohn des Bram“ → Brór).
   Darum steht der Rufname vorn: „Direktor Albrecht Kühn“ wurde zu „Jule geht zu Direktor hinüber“, „Herr Dornbusch“
   zu „… zu Herr hinüber“ (Ödland, 2026-10-30) – besser „Kühn (Direktor)“ oder „Dornbusch (Stahlbund)“.
+## Brücken des Erzählers bei offenem Mikro
+
+Spielt der Tisch mit dem Zuhörer (`pnp-spielleiter`, `references/zuhoerer.md`), überbrückt der Erzähler die Sekunden,
+in denen die Spielleitung nachdenkt. Meist schreibt der Zuhörer den Satz selbst; fängt die Stimme nicht schnell genug
+an, kommt ein vorbereiteter. Darum braucht der Erzähler dann:
+- **Viele `think`-Sätze** im Ton des Erzählers („Ist angekommen.“, „Lass mal sehen.“), sonst wiederholen sie sich.
+- **`approach`** für einen Helden, der sich an einen NPC wendet; `prepare_table` macht ihn für jedes Paar.
+- **`look` und `act`**, je drei bis fünf, für Züge ohne NPC: so allgemein, dass sie auf jede Frage und jede Handlung
+  passen, ohne etwas vorwegzunehmen (kein Ergebnis, kein Ort, kein Gegenstand), im Ton des Erzählers und verschieden
+  genug, dass sie sich nicht abnutzen.
+Setzen mit `campaign set narrator_stock`, danach `prepare_table`; ohne `look`/`act` kommt der `think`-Satz.
+
+## Setzen und im Studio
+
 - Setzen: `set_campaign_entry kind npc name … stock { greet: [...], gesture: [...] }`; eine angegebene Art ersetzt
   diese Art, die anderen bleiben. Erzähler: `campaign set narrator_stock { … }`.
 - Im Studio stehen sie auf der NPC-Karte bzw. beim Erzähler unter „Standardsätze“ (Reiter je Art, Anhören,
