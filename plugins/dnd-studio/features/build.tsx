@@ -44,7 +44,7 @@ import {
   toggleRule,
   isProtectedProfile,
 } from "../lib/state";
-import { isCampaign, studioCall } from "../lib/studio";
+import { isCampaign, listCount, studioCall } from "../lib/studio";
 import {
   Card,
   askTurnComplete,
@@ -452,6 +452,37 @@ async function readByNames(
 }
 
 /**
+ * The overview's rows of one list. A big campaign's compact overview only counts its biggest lists (`truncated` names
+ * them, the list itself is left out): then the rows come chapter by chapter (`countsByChapter`, each read with
+ * `overview` and `chapter`, which also brings the entries of no chapter, so rows are kept by their n), or, without
+ * chapters, from one overview of that list alone. An older Studio always answers the list.
+ */
+async function overviewRows(
+  $: EngineInterface,
+  base: Record<string, unknown>,
+  list: string,
+): Promise<unknown[]> {
+  if (Array.isArray(base[list])) return base[list] as unknown[];
+  if (!listCount(base, list)) return [];
+  const byChapter = (base.countsByChapter ?? {}) as Record<string, Record<string, unknown>>;
+  const chapters = Object.entries(byChapter)
+    .filter(([ch, c]) => ch !== "-" && Number(c?.[list]) > 0 && Number.isFinite(Number(ch)))
+    .map(([ch]) => Number(ch));
+  const reads = chapters.length
+    ? chapters.map((chapter) => ({ overview: true, only: [list], chapter }))
+    : [{ overview: true, only: [list] }];
+  const rows = new Map<string, unknown>();
+  for (const args of reads) {
+    const got = await studioCall($, "campaign", args).catch(() => ({}) as Record<string, unknown>);
+    for (const e of Array.isArray(got[list]) ? (got[list] as unknown[]) : []) {
+      const r = (e ?? {}) as Record<string, unknown>;
+      rows.set(String(r.n ?? JSON.stringify(r)), e);
+    }
+  }
+  return [...rows.values()];
+}
+
+/**
  * The open campaign for the check, read in parts: one whole `campaign get` of a big campaign is hundreds of KB, which
  * the engine cuts at its MCP output limit, so its JSON never parsed and every count read 0. The overview (names and
  * sizes) gives the name, threads, party_at and references; each checked list is read on its own (`only`), and a list
@@ -472,7 +503,7 @@ async function readWholeCampaign(
     );
   const out: Record<string, unknown> = { ...base };
   for (const [list, key] of CHECK_LISTS) {
-    const listed = Array.isArray(base[list]) ? (base[list] as unknown[]) : [];
+    const listed = await overviewRows($, base, list);
     const chars = listed.reduce<number>((sum, e) => {
       const c = (e as Record<string, unknown> | null)?.chars;
       return sum + (typeof c === "number" ? c : 0);
@@ -490,10 +521,7 @@ async function readWholeCampaign(
     }
     const rows = new Map<string, unknown>();
     let ok = true;
-    for (const want of readGroups(
-      Array.isArray(base[list]) ? base[list] : [],
-      key,
-    ))
+    for (const want of readGroups(listed, key))
       if (!(await readByNames($, list, key, want, rows))) {
         ok = false;
         break;
@@ -501,6 +529,7 @@ async function readWholeCampaign(
     if (ok) out[list] = [...rows.values()];
     else {
       // the overview's rows still count; their details are unknown, so their rows are not checked
+      if (listed.length) out[list] = listed;
       unread.push(list);
       errors.push(
         `Kampagne (${LIST_DE[list] ?? list}): Antwort zu groß oder unlesbar, diese Zeilen sind nicht geprüft`,
@@ -545,9 +574,9 @@ export async function refreshCampaign($: EngineInterface): Promise<void> {
         : typeof campaign.name === "string"
           ? campaign.name
           : "",
-    scenes: count(campaign.scenes),
-    npcs: count(campaign.npcs),
-    places: count(campaign.places),
+    scenes: listCount(campaign, "scenes"),
+    npcs: listCount(campaign, "npcs"),
+    places: listCount(campaign, "places"),
     broken: count(campaign.brokenReferences),
     fetchedAt: now,
   };

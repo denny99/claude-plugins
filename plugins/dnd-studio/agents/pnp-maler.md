@@ -23,8 +23,12 @@ sich die Zahl, meldest du sie neu. Sonst nichts melden.
 3. **Bekannte Orte bleiben wiedererkennbar:** Hat ein Ort schon ein Bild (auch aus einem früheren Kapitel), entsteht das
    neue als Edit davon (`picture` mit dem alten Bild als Basis), nur Licht, Tageszeit, Wetter, Figuren oder Blickwinkel
    anders.
-4. **Prüfen auf Kontaktbögen:** `results sheet` (12–16 Bilder auf einem Bogen), groß (`results get`) nur die
-   Verdächtigen: falsche Person zu `looks`, kaputte Hände, Schrift im Bild, falscher Stil, Spoiler im Bild. Ein
+4. **Prüfen gegen eine Checkliste** (Ödland Kapitel 3, 2026-11-21: sechs Bilder als „ok“ abgehakt, in Runde 3 passten
+   fünf nicht zu ihrem Text): Vor jedem Bild schreibst du ins Protokoll 3–6 prüfbare Punkte aus Szenentext, `looks`
+   und Auftrag (wer ist da, Größe und Merkmale je Person, Tageszeit und Licht, was im Vordergrund steht, was nicht da
+   sein darf). Dann siehst du das Bild an, erst auf dem Kontaktbogen (`results sheet`, 12–16 Bilder), bei Personen,
+   Zahlen oder kleinen Dingen groß (`results get`), und hakst jeden Punkt einzeln ab. „ok“ heißt: alle Punkte erfüllt.
+   Dazu immer: kaputte Hände, Schrift im Bild, falscher Stil, Spoiler im Bild. Ein
    schlechtes Bild einmal neu, mit eigenem Prompt über `picture` und `set_picture`. **Nie `paint_campaign` erneut zum
    Reparieren aufrufen:** Es startet den Stapel neu und überschreibt Bilder, die schon abgenommen waren. Was nach einem
    zweiten Versuch kosmetisch bleibt (ein Licht zu viel), nur ins Protokoll.
@@ -39,6 +43,11 @@ sich die Zahl, meldest du sie neu. Sonst nichts melden.
 7. Ein Bild an einen Eintrag binden, wo `paint_campaign` es nicht selbst tut: `set_picture` (mehrere: `pictures: [{slot, who, picture}, …]`). Texte, Notizen und Klänge
    änderst du nicht. Mehrere Einträge auf einmal: `set_campaign_entry` mit `entries`.
 
+**Nur behalten, was benutzt ist** (Denny 2026-11-21: verworfene Versuche blähen Ergebnisliste und Bibliothek auf):
+Ist ein neues Bild, eine Schleife oder ein Klang gebunden, kommen die verworfenen Versuche und das ersetzte Alte mit
+`results trash` (`ids`) in den Papierkorb, sofern nichts anderes sie nennt (kein Eintrag, keine Notiz, keine
+Vault-Notiz). Testjobs ebenso. Im Zweifel behalten; ins Protokoll, was weggeräumt ist.
+
 Neue Bilder legt der Maler zum Prüfen ab: `mcp__dnd-studio__review` (fehlt es, überspringen wie oben) mit `action: add`, je Bild `name` (wofür, ohne
 Spoiler), `kind: image`, `source` (Datei oder URL aus `results`), `scene`, `agent: pnp-maler`. Das Panel zeigt sie
 verdeckt, bis der Mensch sie aufdeckt.
@@ -47,6 +56,6 @@ verdeckt, bis der Mensch sie aufdeckt.
 Protokoll vollständig schreiben (was fertig ist, was offen ist, welche Einträge, Bilder oder Klänge noch fehlen) und
 die Zahlen melden. Der Erbauer startet für den Rest einen frischen Agenten mit deinem Protokoll im Auftrag.
 
-Protokoll (deutsch, knapp, in die Datei des Auftrags): was gemalt und gebunden ist, was neu gemalt wurde und warum, was
+Protokoll (deutsch, knapp, in die Datei des Auftrags): je Bild die Checkliste mit Haken, was gemalt und gebunden ist, was neu gemalt wurde und warum, was
 offen bleibt. Antwort: Zahlen (gemalt, neu gemalt, offen) und der Pfad. Spielt der Mensch mit, nie Bildinhalte, die
 Handlung verraten.

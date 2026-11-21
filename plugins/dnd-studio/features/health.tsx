@@ -11,6 +11,7 @@ import type {
 import { applyLook } from "./look";
 import { createHost, startArgv, startHint, tidyError } from "../lib/host";
 import { readClash, readHealth, setHealth, toggleRule } from "../lib/state";
+import type { StudioSpoiler } from "../lib/state";
 import { SERVER_KEY } from "../lib/studio";
 import { clockTime } from "../lib/model";
 import { Card, ListRow, ProblemCard, Toggle } from "../lib/ui";
@@ -129,6 +130,8 @@ export function renderHealth(
   d: {
     health: Health | null;
     rules: Rules;
+    /** The Studio's spoiler-free mode: when known, the switch „Spoilerfrei“ follows it and cannot be pressed here. */
+    studioSpoiler?: StudioSpoiler;
     clash?: string | null;
     view?: TableView | null;
     evening?: EveningState;
@@ -259,7 +262,19 @@ export function renderHealth(
       key: "settings-rules",
       title: { icon: "list", title: "Regeln am Tisch" },
       children: RULES.map((r) =>
-        Toggle(k, {
+        r.key === "spoilerSafe" && d.studioSpoiler?.known
+          ? ListRow(k, {
+              key: `toggle-${r.key}`,
+              title: r.label,
+              meta: `Folgt dem Studio${d.studioSpoiler.campaign ? ` („${d.studioSpoiler.campaign}“)` : ""}, dort umschalten`,
+              pill: {
+                text: d.studioSpoiler.on ? k.s.on : k.s.off,
+                tone: d.studioSpoiler.on ? "ok" : "neutral",
+                glyph: false,
+              },
+              wrap: true,
+            })
+          : Toggle(k, {
           key: `toggle-${r.key}`,
           label: r.label,
           hint: r.text,

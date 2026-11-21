@@ -75,6 +75,38 @@ let campaignCache: Obj | undefined;
 
 const SILENCE_WARN_S = 12;
 
+/**
+ * The chapter the table plays, so a big campaign's NPCs and scenes are read for it alone: the chapter chosen in the
+ * Studio (`chapterPick`), else the chapter of the scene at the table (`tableAt`), from one small overview of the
+ * scenes. `{}` when the Studio names none (an older Studio, a campaign without chapters): then all are read.
+ */
+export async function tableChapter(
+  $: EngineInterface,
+): Promise<{ chapter?: number; evening?: string }> {
+  try {
+    const c = await studioCall($, "campaign", { overview: true, only: ["scenes"] });
+    return chapterOf(c);
+  } catch {
+    return {};
+  }
+}
+
+/** The table's chapter in a campaign overview (see tableChapter). */
+export function chapterOf(c: Obj): { chapter?: number; evening?: string } {
+  const pick = obj(c.chapterPick);
+  const picked = Number(pick.chapter);
+  if (Number.isFinite(picked) && picked > 0)
+    return {
+      chapter: picked,
+      ...(typeof pick.evening === "string" && pick.evening ? { evening: pick.evening } : {}),
+    };
+  const at = Number(c.tableAt);
+  const scenes = Array.isArray(c.scenes) ? c.scenes.map(obj) : [];
+  const scene = Number.isFinite(at) && at > 0 ? scenes.find((sc) => Number(sc.n) === at) ?? scenes[at - 1] : undefined;
+  const ch = Number(scene?.chapter);
+  return Number.isFinite(ch) && ch > 0 ? { chapter: ch } : {};
+}
+
 /** Reads table_state (and, first time or on demand, the campaign's NPCs and scenes) into the Table view. */
 export async function refreshTable(
   $: EngineInterface,
@@ -87,6 +119,7 @@ export async function refreshTable(
       try {
         campaignCache = await studioCall($, "campaign", {
           only: ["npcs", "scenes"],
+          ...(await tableChapter($)),
         });
       } catch {
         campaignCache = campaignCache ?? {};

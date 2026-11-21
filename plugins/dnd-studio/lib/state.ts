@@ -3,7 +3,7 @@
  * go through these functions.
  */
 import { atom, read, update } from "claude-code";
-import { isCampaign, studioCall } from "./studio";
+import { isCampaign, listCount, studioCall } from "./studio";
 import type { EngineInterface } from "claude-code";
 
 import type {
@@ -20,6 +20,7 @@ import type {
   BuildCheck,
   EveningState,
   ProgressState,
+  StudioSpoiler,
 } from "../types";
 import {
   EMPTY_CHECK,
@@ -145,8 +146,52 @@ export async function patchLive(
 ): Promise<void> {
   await update($, liveAtom, (l) => ({ ...l, ...fn(l) }));
 }
+/**
+ * The Studio's spoiler-free mode for the open campaign on this computer (`campaign {action:"spoiler"}` without `on`
+ * only reads it). `known` false: not read yet, or an older Studio without the mode; the mod's own switch holds then.
+ */
+export type { StudioSpoiler };
+const NO_SPOILER: StudioSpoiler = { known: false, on: false, campaign: "" };
+const spoilerAtom = atom(
+  { plugin: "dnd-studio", key: "studio-spoiler" } as const,
+  NO_SPOILER,
+  { shape: "studio-spoiler-1" },
+);
+export async function readStudioSpoiler($: EngineInterface): Promise<StudioSpoiler> {
+  return { ...NO_SPOILER, ...(await read($, spoilerAtom)) };
+}
+/** The Studio's answer to `campaign {action:"spoiler"}` as the pane keeps it (anything else: not known). */
+export function spoilerOf(answer: Record<string, unknown>): StudioSpoiler {
+  if (typeof answer.spoiler_free !== "boolean") return NO_SPOILER;
+  return {
+    known: true,
+    on: answer.spoiler_free,
+    campaign: typeof answer.campaign === "string" ? answer.campaign : "",
+  };
+}
+/**
+ * Reads the Studio's spoiler-free setting (never changes it: no `on`, `upto`, `played` or `unplayed`). An error (no
+ * campaign open, an older Studio) leaves it unknown, so the mod's own switch holds.
+ */
+export async function refreshSpoiler($: EngineInterface): Promise<StudioSpoiler> {
+  let got = NO_SPOILER;
+  try {
+    got = spoilerOf(await studioCall($, "campaign", { action: "spoiler" }));
+  } catch {
+    got = NO_SPOILER;
+  }
+  await update($, spoilerAtom, () => got);
+  return got;
+}
+/** Set directly (tests, and a Studio answer seen elsewhere). */
+export async function setStudioSpoiler($: EngineInterface, s: StudioSpoiler): Promise<void> {
+  await update($, spoilerAtom, () => s);
+}
+/** The rules; spoilerSafe follows the Studio's spoiler-free mode whenever the Studio said it (one source of truth). */
 export async function readRules($: EngineInterface): Promise<Rules> {
-  return { ...DEFAULT_RULES, ...(await read($, rulesAtom)) };
+  const rules = { ...DEFAULT_RULES, ...(await read($, rulesAtom)) };
+  const studio = await readStudioSpoiler($);
+  return studio.known ? { ...rules, spoilerSafe: studio.on } : rules;
 }
 export async function toggleRule(
   $: EngineInterface,
@@ -185,14 +230,13 @@ export async function campaignName($: EngineInterface): Promise<string> {
     const c = await studioCall($, "campaign", { overview: true });
     if (!isCampaign(c)) return "";
     const name = typeof c.open === "string" ? c.open : String(c.name ?? "");
-    const n = (v: unknown) => (Array.isArray(v) ? v.length : 0);
     const fetchedAt = await $.clock.now();
     await update($, campaignAtom, () => ({
       name,
-      scenes: n(c.scenes),
-      npcs: n(c.npcs),
-      places: n(c.places),
-      broken: n(c.brokenReferences),
+      scenes: listCount(c, "scenes"),
+      npcs: listCount(c, "npcs"),
+      places: listCount(c, "places"),
+      broken: Array.isArray(c.brokenReferences) ? c.brokenReferences.length : 0,
       fetchedAt,
     }));
     return name;

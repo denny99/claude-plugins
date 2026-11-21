@@ -24,6 +24,10 @@ import {
   mapOf,
   newWorldPrompt,
   noteOf,
+  isSecretNote,
+  openQuestions,
+  spoilerFreeMap,
+  stepOf,
   stepPrompt,
   stepsOf,
   stepViews,
@@ -31,7 +35,8 @@ import {
   worldsOf,
 } from "../lib/lore";
 import type { Flow } from "../lib/lore";
-import { readCampaign, readTab } from "../lib/state";
+import type { LoreMap } from "../types";
+import { readCampaign, readRules, readTab } from "../lib/state";
 import { tidyError } from "../lib/host";
 import { SERVER_KEY, STUDIO_TOOL_PREFIX } from "../lib/studio";
 import {
@@ -50,7 +55,7 @@ import type { LoreReport, LoreState } from "../types";
 
 export const LORE_PROGRESS_TOOL = "lore_progress";
 export const LORE_PROGRESS_TOOL_DESCRIPTION =
-  "Tells the D&D pane (tabs Welt and Lore) how far a world's design or lore keeping is, shown as numbered steps like the Build tab's. flow welt = skill pnp-weltenbau's ten steps (1 Idee/Kern, 2 Geografie & Karte, 3 Völker & Kulturen, 4 Fraktionen & Mächte, 5 Geschichte & Zeitleiste, 6 Magie/Technik & Regeln, 7 Orte & NPCs, 8 Konflikte & Aufhänger, 9 Lore in den Vault, 10 Review); flow lore = skill pnp-lore's six (1 Bestand sichten, 2 Notizen anlegen/abgleichen, 3 Verknüpfen, 4 Geheimes markieren, 5 Offene Fragen, 6 Kanon-Abgleich nach dem Abend). Call it with state active when a step begins and done (with a short German note such as '4 Orte, 1 Frage') when its notes are written; todo resets it. Changes nothing in the Studio.";
+  "Tells the D&D pane (tabs Welt and Lore) how far a world's design or lore keeping is, shown as numbered steps like the Build tab's. step is the number in the lists below, never a section (Abschnitt) number of a skill or a point of an agent's own work list; give title too (the step's name as below): when the title names a step, it wins. flow welt = skill pnp-weltenbau's ten steps (1 Idee/Kern, 2 Geografie & Karte, 3 Völker & Kulturen, 4 Fraktionen & Mächte, 5 Geschichte & Zeitleiste, 6 Magie/Technik & Regeln, 7 Orte & NPCs, 8 Konflikte & Aufhänger, 9 Lore in den Vault, 10 Review); flow lore = skill pnp-lore's six (1 Bestand sichten, 2 Notizen anlegen/abgleichen, 3 Verknüpfen, 4 Geheimes markieren, 5 Offene Fragen, 6 Kanon-Abgleich nach dem Abend). Call it with state active when a step begins and done (with a short German note such as '4 Orte, 1 Frage') when its notes are written; only a done report puts the ✓ on a step (notes in the vault alone show as material). todo resets it. Changes nothing in the Studio.";
 
 const EMPTY: LoreState = {
   worlds: null,
@@ -239,9 +244,9 @@ export async function loreProgressTool(
   const flow = input.flow === "lore" ? "lore" : input.flow === "welt" ? "welt" : "";
   if (!flow) return "Give flow: welt or lore.";
   const steps = stepsOf(flow);
-  const step = Math.round(Number(input.step));
-  if (!(step >= 1 && step <= steps.length))
-    return `Give step: 1 to ${steps.length}.`;
+  const step = stepOf(flow, input.step, input.title);
+  if (!step)
+    return `Give step: 1 to ${steps.length} (${steps.map((x, i) => `${i + 1} ${x.title}`).join(", ")}), or its title.`;
   const cur = await readLore($);
   const world = String(input.world ?? "").trim() || cur.world;
   if (!world) return "Give world: the world's name as the lore tool names it.";
@@ -301,6 +306,7 @@ function stateCard(
   options: PluginOptions,
   s: LoreState,
   flow: Flow,
+  safe = false,
 ): RenderElement {
   const w = s.worlds?.find((x) => x.world === s.world);
   const counts = s.map ? countsOfMap(s.map) : (w?.counts ?? {});
@@ -338,6 +344,16 @@ function stateCard(
         title: "Offene Fragen",
         meta: questions ? `${questions} offen` : "keine",
       }),
+      ...(safe
+        ? [
+            ListRow(k, {
+              key: `${flow}-spoiler`,
+              status: "idle" as const,
+              title: "Spoilerfrei",
+              meta: "nur Titel ohne Geheimes, Fäden und Erledigtes",
+            }),
+          ]
+        : []),
       ...(latest
         ? [
             ListRow(k, {
@@ -359,9 +375,10 @@ function stepsCard(
   s: LoreState,
   flow: Flow,
   campaign: string,
+  full: LoreMap | null,
 ): RenderElement {
   const w = s.worlds?.find((x) => x.world === s.world);
-  const views = stepViews(flow, s.reports[s.world]?.[flow] ?? {}, s.map, w);
+  const views = stepViews(flow, s.reports[s.world]?.[flow] ?? {}, s.map, w, full);
   const done = views.filter((v) => v.state === "done").length;
   const next = views.findIndex((v) => v.state !== "done");
   const empty = !totalOf(s.map, w);
@@ -416,29 +433,46 @@ function questionsCard(
   options: PluginOptions,
   s: LoreState,
   flow: Flow,
+  /** Spoiler-free: how many open questions are covered (their titles are not shown, nothing can be read). */
+  covered: number | null,
 ): RenderElement | null {
   const qs = s.map?.questions ?? [];
   if (!s.map) return null;
   return Card(k, {
     key: `${flow}-open`,
     title: { icon: "flag", title: "Offene Fragen", count: qs.length },
-    empty: "Keine offenen Fragen.",
-    children: qs.slice(0, 12).map((q, i) =>
-      ListRow(k, {
-        key: `${flow}-q-${i}`,
-        icon: "flag",
-        title: q,
-        wrap: true,
-        actions: [
-          {
-            key: `${flow}-q-${i}-read`,
-            label: "Lesen",
-            variant: "link",
-            onPress: () => void openNote($, options, q),
-          },
-        ],
-      }),
-    ),
+    empty: covered ? undefined : "Keine offenen Fragen.",
+    children: [
+      ...qs.slice(0, 12).map((q, i) =>
+        ListRow(k, {
+          key: `${flow}-q-${i}`,
+          icon: "flag",
+          title: q,
+          wrap: true,
+          actions:
+            covered === null
+              ? [
+                  {
+                    key: `${flow}-q-${i}-read`,
+                    label: "Lesen",
+                    variant: "link",
+                    onPress: () => void openNote($, options, q),
+                  },
+                ]
+              : [],
+        }),
+      ),
+      ...(covered
+        ? [
+            ListRow(k, {
+              key: `${flow}-q-covered`,
+              status: "idle" as const,
+              title: `${covered} verdeckt`,
+              meta: "Spoilerfrei: Fragen zu Geheimem bleiben zu",
+            }),
+          ]
+        : []),
+    ],
   });
 }
 
@@ -492,6 +526,7 @@ function notesCard(
   k: Kit,
   options: PluginOptions,
   s: LoreState,
+  safe = false,
 ): RenderElement | null {
   if (!s.map) return null;
   const kinds = KINDS.filter((x) => x.id !== "question" && (s.map!.kinds[x.id]?.length ?? 0) > 0);
@@ -507,8 +542,8 @@ function notesCard(
         ListRow(k, {
           key: `lore-hit-${i}`,
           title: h.title,
-          meta: [kindDe(h.kind), h.snippet].filter(Boolean).join(" · "),
-          actions: [read(`lore-hit-${i}-read`, h.title)],
+          meta: [kindDe(h.kind), safe ? "" : h.snippet].filter(Boolean).join(" · "),
+          actions: safe ? [] : [read(`lore-hit-${i}-read`, h.title)],
         }),
       )
     : (s.map.kinds[kind] ?? []).slice(0, 30).map((n, i) =>
@@ -519,7 +554,7 @@ function notesCard(
           pill: n.tags.includes("spoiler")
             ? { text: "Spoiler", tone: "warn", glyph: false }
             : undefined,
-          actions: [read(`lore-n-${kind}-${i}-read`, n.title)],
+          actions: safe ? [] : [read(`lore-n-${kind}-${i}-read`, n.title)],
         }),
       );
   const { Box } = k;
@@ -613,20 +648,45 @@ function noWorld(
   ];
 }
 
+/**
+ * What the tabs show of the lore. Spoiler-free (the Studio's mode for the open campaign, else the pane's own switch:
+ * readRules): only the titles and counts of notes not tagged spoiler/geheim/faden/secret/gm and not retired, search
+ * hits without their snippet, no note opened. `covered`: the open questions not shown (null: not spoiler-free).
+ */
+export async function shownLore(
+  $: EngineInterface,
+): Promise<{ s: LoreState; full: LoreMap | null; covered: number | null }> {
+  const s = await readLore($);
+  // open questions without a campaign's threads (faden) and retired notes, always
+  if (!(await readRules($)).spoilerSafe)
+    return { s: s.map ? { ...s, map: { ...s.map, questions: openQuestions(s.map) } } : s, full: s.map, covered: null };
+  const map = s.map ? spoilerFreeMap(s.map) : null;
+  return {
+    s: {
+      ...s,
+      map,
+      note: null,
+      hits: s.hits ? s.hits.filter((h) => !isSecretNote(h)).map((h) => ({ ...h, snippet: "" })) : null,
+    },
+    full: s.map,
+    covered: s.map && map ? openQuestions(s.map).length - map.questions.length : 0,
+  };
+}
+
 /** Tab Welt: the world's state, the ten design steps, the open questions, an open note. */
 export async function renderWorld(
   $: EngineInterface,
   k: Kit,
   options: PluginOptions,
 ): Promise<RenderElement[]> {
-  const s = await readLore($);
+  const { s, full, covered } = await shownLore($);
   const campaign = (await readCampaign($))?.name ?? "";
   if (!s.world) return noWorld($, k, s, "welt", campaign);
   return [
-    stateCard($, k, options, s, "welt"),
-    stepsCard($, k, s, "welt", campaign),
+    stateCard($, k, options, s, "welt", covered !== null),
+    stepsCard($, k, s, "welt", campaign, full),
     noteCard($, k, s),
-    questionsCard($, k, options, s, "welt"),
+    questionsCard($, k, options, s, "welt", covered),
   ].filter((x): x is RenderElement => !!x);
 }
 
@@ -636,15 +696,15 @@ export async function renderLore(
   k: Kit,
   options: PluginOptions,
 ): Promise<RenderElement[]> {
-  const s = await readLore($);
+  const { s, full, covered } = await shownLore($);
   const campaign = (await readCampaign($))?.name ?? "";
   if (!s.world) return noWorld($, k, s, "lore", campaign);
   return [
-    stateCard($, k, options, s, "lore"),
-    stepsCard($, k, s, "lore", campaign),
+    stateCard($, k, options, s, "lore", covered !== null),
+    stepsCard($, k, s, "lore", campaign, full),
     noteCard($, k, s),
-    notesCard($, k, options, s),
-    questionsCard($, k, options, s, "lore"),
+    notesCard($, k, options, s, covered !== null),
+    questionsCard($, k, options, s, "lore", covered),
     recentCard(k, s),
   ].filter((x): x is RenderElement => !!x);
 }

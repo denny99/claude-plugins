@@ -14,7 +14,7 @@ export type Tab = "table" | "build" | "world" | "lore" | "review" | "health";
 
 /** A world of the Studio's lore vault (GET /dnd/lore/map without a world). */
 export type LoreWorld = { world: string; counts: Record<string, number>; campaigns: string[] };
-export type LoreEntry = { title: string; tags: string[]; status: string };
+export type LoreEntry = { title: string; tags: string[]; status: string; sources?: string[] };
 /** One world's map (GET /dnd/lore/map?world=). */
 export type LoreMap = {
   world: string;
@@ -35,6 +35,8 @@ export type LoreNote = {
   updated: string;
   sources: string[];
 };
+/** The Studio's spoiler-free mode of the open campaign (campaign action spoiler, only read); known false: not said. */
+export type StudioSpoiler = { known: boolean; on: boolean; campaign: string };
 /** What Claude reported for one step with the mod tool lore_progress. */
 export type LoreReport = { state: "todo" | "active" | "done" | "warn" | "failed"; note: string; at: number };
 /** The tabs Welt and Lore: the worlds, the chosen one, its map, a search, an open note, the reported steps. */
@@ -435,6 +437,7 @@ declare module "claude-code" {
       asked: ShapedState<AskedState>;
       progress: ShapedState<ProgressState>;
       lore: ShapedState<LoreState>;
+      "studio-spoiler": ShapedState<StudioSpoiler>;
     };
   }
 }

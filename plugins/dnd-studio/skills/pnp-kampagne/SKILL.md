@@ -35,8 +35,8 @@ Kurz fragen, was fehlt (nicht alles auf einmal, sinnvolle Vorgaben vorschlagen):
 - In welcher Welt spielt sie? Die Lore einer Welt liegt im Wissens-Vault des Studios (Werkzeug `lore`, Skill
   `pnp-lore`); `lore map` zeigt die Welten. Eine neue Kampagne in einer bestehenden Welt bindet `campaign set` mit `world`,
   Architekt und Texter lesen die Lore mit `lore search`. Eine eigene Welt von Grund auf: erst Skill `pnp-weltenbau`.
-  Hat der Mensch zusätzlich einen eigenen Obsidian-Vault (Pfad des Kampagnen-Ordners, Regeln des Vaults), gleicht
-  `dnd-studio:pnp-lore` auch ihn ab; ohne ihn steht die Welt allein im Studio (Lore, `campaign`, Kanon).
+  Hat der Mensch zusätzlich einen eigenen Obsidian-Vault, steht sein Ordner im Profil (`studio_status` →
+  `vault`; setzen mit `profile edit vault`), und `dnd-studio:pnp-lore` gleicht auch ihn ab, nach seinen Regeln; ohne ihn steht die Welt allein im Studio (Lore, `campaign`, Kanon).
 
 `studio_status` zeigt das offene Profil; alles entsteht dort. Wo eine Kampagne schon existiert: `campaign` lesen und
 ausbauen statt neu anlegen.
@@ -95,11 +95,11 @@ Rahmen), dann wird nach dem Plan gebaut.
    endet mit einem Haken: einer Frage, einem Geräusch, einer Person, die etwas will). `notes` = **das Rezept für die
    Spielleitung**: Ziel der Szene, welche Würfe (Fertigkeit + ZW der Eigenschaft bzw. DC), was Erfolg und Misserfolg
    bedeuten (so hart, wie der Rahmen sagt), wer hier welchen Weg hat. `variants` für Enden, die vom Spielverlauf
-   abhängen. Spielt die Szene auf einer Karte, gehören die **Startfelder** in die Notizen: wo die
-   Helden ankommen und wo die NPCs stehen, als Feld `gx,gy` des Kartenplans („Helden am Pfad 4,14; Bartel am Meiler
-   12,8“); auf einer Karte mit Orts-Markern genügt der Ortsname („Helden in Kesselheim“, `at: "Kesselheim"`). Damit
-   setzt die Spielleitung die Marker im Spielerfenster sofort (`show_players map markers`), statt am
-   Abend im Plan zu suchen.
+   abhängen. Spielt die Szene auf einer Karte, gehören die **Startfelder** ins Feld `markers`
+   der Szene (`[{who, at}]`): wo die Helden ankommen (`who: "Helden"`) und wo die NPCs stehen, als Feld `gx,gy` des
+   Kartenplans oder, auf einer Karte mit Orts-Markern, als Ortsname (`at: "Kesselheim"`). Das Studio setzt sie beim
+   Szenenstart selbst auf die Karte, und `brokenReferences` meldet, was nicht passt (Name, Ort ohne Pin, Feld in einer
+   Wand). Nicht als Freitext in die Notizen.
    - **Der Szenentext ist Erzählerstimme, nichts anderes.** Wörtliche Rede eines NPCs mit Stimme gehört nicht hinein:
      der Text endet vor ihr („… kommt eine heisere, kleine Stimme.“), und die Worte stehen als eigener Vorlesetext in
      der Stimme des NPCs bereit (Punkt 5). Sonst liest der Erzähler Miras Satz mit seiner tiefen Stimme vor (Spieltest
@@ -317,18 +317,18 @@ Gehe den Abend im Kopf einmal als Spielleitung durch und prüfe:
 - Die Kampagne hat Musik je Stimmung (`campaign` zeigt `moodMusic`: mindestens `explore` und `fight`), und die
   wichtigen Szenen haben ihre Schleife (`animate loop`, in den Notizen der Szene).
 - Bei einem Kapitel einer Kampagne: `threads` und `party_at` gesetzt (`campaign` zeigt `threads` und `partyAt`).
-- Jede Szene auf einer Karte nennt in den Notizen die Startfelder von Helden und NPCs.
+- Jede Szene auf einer Karte hat ihre Startfelder in `markers`, und `brokenReferences` ist leer.
 - Jeder Held hat einen Weg, der zu seinem Bogen passt, und jeder Wurf nennt die Fertigkeit, die er auch hat.
 - Jeder Hinweis, ohne den es nicht weitergeht, ist auf drei Wegen zu finden; jeder Gegner hat Werte und Moral.
 - Begrüßung, bei neuer Kampagne Prolog, bei vorgefertigten Helden ihre Vorstellung, Kapitelanfang und -ende und
   Leitfaden (mit Rahmen, Plan des Gegners und Vorrat) sind da; `brokenReferences` ist leer.
-- `prepare_table` über `dnd-studio:pnp-tischbereit`, damit am Abend alles sofort klingt (nach den Bildern, nicht gleichzeitig).
+- `prepare_table` über `dnd-studio:pnp-tischbereit` (ein Job je Kapitel oder Abend, nicht die ganze Kampagne), damit am Abend alles sofort klingt (nach den Bildern, nicht gleichzeitig).
 
 ## 5. Review: drei Prüfer, bis es sitzt
 
 Wer gebaut hat, übersieht die eigenen Lücken. Deshalb prüfen nach der Abnahme **drei Reviewer** in frischem Kontext
 (eigene Agenten, gleichzeitig), jeder mit einem Fachbereich, und die Kampagne geht erst zum Menschen, wenn alle drei
-nichts mehr finden (Denny, 2026-10-30). Jeder Reviewer liest die Kampagne selbst (`campaign`, `results get`,
+nichts mehr finden (Denny, 2026-10-30), nach dem festen Ablauf unten. Jeder Reviewer liest die Kampagne selbst (`campaign`, `results get`,
 `map list`, die Stimmbeschreibungen), nicht die Meinung des Erbauers, und prüft am Studio, nicht am Text allein. Die drei sind
 Agents des Plugins (`dnd-studio:…`), jeder mit seiner Prüfliste und
 nur lesenden Werkzeugen: `dnd-studio:pnp-review-technik`, `dnd-studio:pnp-review-konsistenz`, `dnd-studio:pnp-review-spielbarkeit` (Agent-Tool mit
@@ -342,7 +342,7 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
 1. **Vollständigkeit und Technik** (`dnd-studio:pnp-review-technik`) – ist alles da und läuft es? Jedes Bild gemalt (Szenen,
    Orte, sprechende NPCs, Helden), Karten ganz gemalt, ohne Nähte, alle Orte mit Marker, und jeder Marker sitzt auf
    dem, was die Karte an der Stelle zeigt (Karte ansehen, nicht nur zählen); jede Szene auf einer Karte hat
-   Startfelder für Helden und NPCs, die auf begehbaren Feldern liegen; jede sprechende Figur mit eigener Stimmprobe,
+   Startfelder für Helden und NPCs in `markers`, die auf begehbaren Feldern liegen; jede sprechende Figur mit eigener Stimmprobe,
    Standardsätze erzeugt (`prepare_table` gelaufen, ohne Lücken und ohne `failed`); Klänge gebunden, ihre Dateien da,
    mit `make_sound` gemacht (echte Aufnahmen nur, wo das nicht reichte), mit `check_sound` gegen ihren Namen gehört, Schleifen und Lautstärken
    richtig; Handouts, Begrüßung, Leitfaden da, ein Handout mit Geheimnis zum Flüstern; bei einem Kapitel `threads`
@@ -363,14 +363,33 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
    jedem Hinweis; jeder Held mit Haken und großem Moment, ein Geheimnis lässt sich enthüllen oder bewusst behalten (beides belohnt); Plan des Gegners und Vorrat zum
    Improvisieren; bei offenem Ende tragen die Fäden einen nächsten Abend, bei einer Fortsetzung passt alles zum Kanon.
 
-Der Ablauf: Jeder Reviewer schreibt seine Mängel (was, wo, warum, wie zu beheben) in eine eigene Datei und meldet
-nur ihre Anzahl. `dnd-studio:pnp-nachbesserer` behebt sie aus den Dateien. Ziel ist ein möglichst fehlerfreier Abend (Denny,
-2026-11-01: „es soll schon möglichst fehlerfrei sein“), darum prüfen die Reviewer danach erneut, die etwas gefunden
-hatten, **höchstens drei Runden**. Was gilt als erledigt: Text, Regeln, Logik, Kanon, Spoiler, Hinweise, Stimmen,
-Klänge und fehlende Bilder müssen stimmen. **Kosmetisches an Bildern** (ein Licht zu viel, ein Detail der Karte
-fehlt, eine leichte Naht) wird nach einem Versuch nicht mehr gejagt, sondern nur gelistet: Bildmodelle haben Grenzen,
-und jedes Nachmalen bringt eigene neue Fehler (Ödland, Talsperre, 2026-11-01). Was nach drei Runden offen bleibt,
-bekommt der Mensch als Liste.
+**Der Ablauf** (Ödland Kapitel 3, 2026-11-21, Denny: „die Review-Schleife ist absurd so“: drei Runden mit je rund
+30 Mängeln; ein Viertel hatte die Nachbesserung selbst gemacht, ein Viertel blieb „offen“ ohne Zuständigen, die
+Erstprüfung las nur Stichproben). Darum ist die Schleife fest:
+
+1. **Erstprüfung**, die drei gleichzeitig, jeder liest seinen Bereich **ganz** und listet unter „Geprüft“ und „Nicht
+   geprüft“, was er gelesen hat. Ist die Kampagne zu groß für einen (ein Kapitel mit 15+ Szenen), teilt der Erbauer
+   nach Abend oder Kapitel und startet je Teil einen Reviewer, statt dass einer Stichproben liest. Jeder Mangel hat eine
+   ID und nennt alle Fundstellen.
+2. **Nachbesserung:** `dnd-studio:pnp-nachbesserer` ersetzt statt anzuhängen, ändert eine Tatsache an allen
+   Fundstellen, liest jeden Fix nach und gibt jedem Mangel, den er nicht selbst behebt, genau eine Kategorie (`an
+   Maler`, `an Klang`, `Mensch`, `bleibt`, `falsch gemeldet`). Er listet die geänderten Einträge.
+3. **Folgeaufträge erledigen, bevor geprüft wird:** Der Erbauer gibt alle Zeilen `an Maler` gesammelt an
+   `pnp-maler` und alle `an Klang` an `pnp-klang`, stellt die Fragen `Mensch` dem Menschen (spielt er mit: nur, was ohne
+   Spoiler geht, sonst entscheidet der Erbauer), und wartet, bis alles fertig ist. Erst dann die nächste Runde, sonst
+   meldet sie dieselben Punkte wieder.
+4. **Nachprüfung**, nur die Reviewer, die etwas gefunden hatten: Sie bekommen ihre letzte Mängel-Datei und das
+   Protokoll des Nachbesserers, prüfen jeden Mangel und jeden geänderten Eintrag ganz, und melden Neues außerhalb
+   davon nur, wenn es den Abend bricht. Keine neue Erstprüfung.
+5. Schritte 2–4 **höchstens zweimal** nach der Erstprüfung. Läuft eine Nachprüfung nicht deutlich kleiner als die Runde
+   davor (weniger als halb so viele Mängel), stimmt etwas am Ablauf: der Erbauer sieht sich an, woher die Mängel
+   kommen (Fix-Fehler, ungeprüft offen, übersehen), statt eine weitere Runde zu starten.
+
+Was gilt als erledigt: Text, Regeln, Logik, Kanon, Spoiler, Hinweise, Stimmen, Klänge und fehlende Bilder müssen
+stimmen (Denny, 2026-11-01: „es soll schon möglichst fehlerfrei sein“). **Kosmetisches an Bildern** (ein Licht zu
+viel, ein Detail der Karte fehlt, eine leichte Naht) wird nach zwei Versuchen nicht mehr gejagt, sondern als `bleibt`
+gelistet: Bildmodelle haben Grenzen, und jedes Nachmalen bringt eigene neue Fehler (Ödland, Talsperre, 2026-11-01).
+Was am Ende offen bleibt, bekommt der Mensch als Liste.
 
 **Spielt der Mensch selbst mit, bleibt alles spoilerfrei:** Erbauer und Reviewer arbeiten in eigenen Agenten, Mängel
 stehen nur in den Dateien, und an den Menschen gehen nur Zahlen (Szenen, Orte, NPCs, Mängel je Bereich und Runde),
@@ -385,7 +404,10 @@ startet. Für Weitergabe: `campaign export`.
 Denny, 2026-11-08: „token effizienz“; Bilder prüfen und eine Stunde Ausbau kosteten rund 3 Millionen. Das gilt für
 dich und jeden Agenten des Baus:
 - `campaign` erst mit `overview: true`, dann nur mit `only` und `names` lesen. Die ganze Kampagne ist die größte Antwort
-  der Werkzeuge. `results list` mit `name` und `brief`, `settings` ohne `available`.
+  der Werkzeuge. Bei einer großen Kampagne (mehrere Kapitel, viele NPCs) die Übersicht mit `chapter` (und `evening`)
+  auf das Kapitel begrenzen, an dem gebaut wird: Sonst zählt sie die großen Listen nur (`truncated`), und die Zeilen
+  fehlen. Abende heißen mit ihrer Nummer über die ganze Kampagne („Abend 4“); die alten Bezeichnungen (A, B) gehen
+  weiter. `results list` mit `name` und `brief`, `settings` ohne `available`.
 - Viele Bilder ansehen: je 12–16 auf einen Kontaktbogen (`results sheet`), groß (`results get`) nur die Verdächtigen.
 - Jobs eines Stapels in einem `jobs watch` bündeln (im Hintergrund; ein Agent: `background: false`, im Vordergrund)
   statt `jobs wait` alle 50 s, und zwischen den Wartezeiten nichts anderes lesen: Jede Runde schickt den ganzen Kontext

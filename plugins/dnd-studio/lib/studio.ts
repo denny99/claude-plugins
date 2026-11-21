@@ -94,10 +94,30 @@ export function answerOf(res: {
   return TRUNCATED.test(text) ? { text, truncated: true } : { text };
 }
 
-/** True when an answer of campaign get is a campaign (its name and lists), not a cut or plain-text answer. */
+/**
+ * True when an answer of campaign get is a campaign (its name and lists, or the compact overview's `counts` when a big
+ * campaign's lists were only counted), not a cut or plain-text answer.
+ */
 export function isCampaign(c: Record<string, unknown>): boolean {
   return (
     (typeof c.open === "string" || typeof c.name === "string") &&
-    (Array.isArray(c.scenes) || Array.isArray(c.npcs) || Array.isArray(c.places))
+    (Array.isArray(c.scenes) ||
+      Array.isArray(c.npcs) ||
+      Array.isArray(c.places) ||
+      (!!c.counts && typeof c.counts === "object" && !Array.isArray(c.counts)))
   );
+}
+
+/**
+ * How many entries a campaign answer has in one list: the overview's `counts` (the whole campaign, also when the list
+ * itself was only counted), else the list's length (an older Studio answers no counts).
+ */
+export function listCount(c: Record<string, unknown>, list: string): number {
+  const counts = c.counts;
+  if (counts && typeof counts === "object" && !Array.isArray(counts)) {
+    const n = (counts as Record<string, unknown>)[list];
+    if (typeof n === "number" && Number.isFinite(n)) return n;
+    if (!Array.isArray(c[list])) return 0;
+  }
+  return Array.isArray(c[list]) ? (c[list] as unknown[]).length : 0;
 }

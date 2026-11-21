@@ -32,7 +32,8 @@ Kesselheim, Schutzraum 12, Strahlung, Radio-Kultur der 1950er).
   das Fundament: es kommt in die `world`-Notiz und steht in der Rangfolge ganz oben (`pnp-lore` G2).
 - **Spielst du selbst mit?** (`pnp-lore` G11) Wenn ja: Er entscheidet die öffentliche Welt und die Weltgeheimnisse,
   Geheimes für Kampagnen schreiben später Agenten, und du liest es ihm nie vor. Die Antwort kommt in die `world`-Notiz.
-- **Wo liegt die Welt?** Nur im Studio, oder hat er einen eigenen Obsidian-Vault? Dann festlegen, welche Seite führt
+- **Wo liegt die Welt?** Nur im Studio, oder hat er einen eigenen Obsidian-Vault? Dann den Ordner ins Profil
+  (`profile edit` mit `vault`) und festlegen, welche Seite führt
   (`pnp-lore` G10 und Abschnitt 9), und in die `world`-Notiz schreiben.
 - **In welcher Sprache** schreiben wir die Notizen, in welcher die Namen? Einmal festlegen (`world`-Notiz), dann
   durchgehend.
@@ -55,9 +56,9 @@ zurück). Jeder Fakt kommt dabei in
 Schritt oder Pause?
 
 **Stand melden** (nur Anzeige im Panel; gibt es das Werkzeug `mcp__dnd-studio__lore_progress` nicht, überspringen):
-zu Beginn eines Schritts `lore_progress` mit `{flow: "welt", world, step: <Nummer>, state: "active"}`, nach dem
-`lore write` des Schritts dasselbe mit `state: "done"` und einem kurzen `note` („4 Orte, 1 Frage“). Ohne Meldung
-schätzt das Panel den Stand aus den Notizen je Art.
+zu Beginn eines Schritts `lore_progress` mit `{flow: "welt", world, step: <Nummer>, title: <Name>, state: "active"}`,
+nach dem `lore write` des Schritts dasselbe mit `state: "done"` und einem kurzen `note` („4 Orte, 1 Frage“). Nur ein
+`done` setzt den Haken; Notizen je Art zeigt das Panel nur als „Material vorhanden“.
 
 Die Reihenfolge trägt: Idee und Kern entscheiden alles Weitere. Springt der Mensch, folge ihm und hole Fehlendes
 später.

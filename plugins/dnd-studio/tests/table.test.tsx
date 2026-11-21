@@ -2,6 +2,7 @@ import { expect, mock } from "claude-code/testing";
 import { test } from "./limits";
 import { findShown } from "./shown";
 import type { TestBody } from "claude-code/testing";
+import { chapterOf } from "../features/table";
 
 const PANE = {
   plugin: "dnd-studio",
@@ -137,7 +138,13 @@ test("the GM screen shows scene, party, NPCs and sounds on every surface", async
     await ui.unmount();
   }
   // Opening the pane only read.
-  expect(calls.map((c) => c.tool).sort()).toEqual(["campaign", "table_state"]);
+  expect([...new Set(calls.map((c) => c.tool))].sort()).toEqual(["campaign", "table_state"]);
+  // the campaign is only read: the table's chapter (a small overview), its NPCs and scenes, the spoiler-free mode
+  expect(calls.filter((c) => c.tool === "campaign").map((c) => c.args)).toEqual([
+    { overview: true, only: ["scenes"] },
+    { only: ["npcs", "scenes"] },
+    { action: "spoiler" },
+  ]);
 });
 
 test("GM buttons call the right Studio tool only on press", async ($, on) => {
@@ -240,4 +247,11 @@ test("handouts for one player are denied on the shared window; ordinary scenes p
     input: { title: "Das Tor" },
   } as never);
   expect(fine.decision).toBe("allow");
+});
+
+test("the table reads its chapter's NPCs and scenes: the chapter chosen in the Studio, else the scene at the table", () => {
+  expect(chapterOf({ chapterPick: { chapter: 3, evening: "B" }, tableAt: 1, scenes: [{ n: 1, chapter: 1 }] })).toEqual({ chapter: 3, evening: "B" });
+  expect(chapterOf({ tableAt: 2, scenes: [{ n: 1, chapter: 1 }, { n: 2, chapter: 2 }] })).toEqual({ chapter: 2 });
+  // an older Studio: no chapters, all are read
+  expect(chapterOf({ scenes: [{ title: "Das Tor" }] })).toEqual({});
 });
