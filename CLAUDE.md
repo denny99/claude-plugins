@@ -14,5 +14,5 @@
 
 ## Skills shared with D&D Studio
 
-`plugins/dnd-studio/skills/` (pnp-kampagne, pnp-spielleiter) are the same skills as `skills/` in
+`plugins/dnd-studio/skills/` (pnp-kampagne, pnp-spielleiter, pnp-lore, pnp-weltenbau) are the same skills as `skills/` in
 `denny99/dnd-character-creator`: a change goes into both repositories, else they drift apart.

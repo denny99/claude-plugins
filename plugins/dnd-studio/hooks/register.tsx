@@ -29,6 +29,17 @@ import { pluginVersion } from "../lib/brand";
 import { registerLook } from "../features/look";
 import { registerTranscript } from "../features/transcript";
 import {
+  loadLoreReports,
+  LORE_PROGRESS_TOOL,
+  LORE_PROGRESS_TOOL_DESCRIPTION,
+  loreProgressTool,
+  loreStatus,
+  refreshLore,
+  registerLore,
+  renderLore,
+  renderWorld,
+} from "../features/lore";
+import {
   bandHint,
   bandStatus,
   endInitiative,
@@ -88,6 +99,8 @@ import {
 const TABS: { id: Tab; label: string; icon: IconName }[] = [
   { id: "table", label: "Tisch", icon: "dice" },
   { id: "build", label: "Bau", icon: "hammer" },
+  { id: "world", label: "Welt", icon: "globe" },
+  { id: "lore", label: "Lore", icon: "book" },
   // the id stays "review" (state, /dnd review, skills): only the word on the tab is „Abnahme“, so „prüfen“ keeps one
   // meaning (a check that runs)
   { id: "review", label: "Abnahme", icon: "speaker" },
@@ -100,6 +113,7 @@ const TAB_ALIASES: Record<string, Tab> = {
   prüfen: "review",
   abnahme: "review",
   zustand: "health",
+  welt: "world",
 };
 
 function tabOf(args: string): Tab | undefined {
@@ -118,6 +132,7 @@ export async function refreshTab(
     if ((await readTable($))?.discord) await refreshDiscord($);
   } else if (tab === "build") await refreshCampaign($);
   else if (tab === "health") await probe($, options);
+  else if (tab === "world" || tab === "lore") await refreshLore($, options);
 }
 
 export async function selectTab(
@@ -276,6 +291,7 @@ export const register: Register = (on, options) => {
   registerTranscript(on);
   registerEvening(on);
   registerLanguage(on);
+  registerLore(on, options);
 
   on("session.start", async ($, e, next) => {
     // Each registration on its own: one that fails (an old user-level MCP server named "dnd-studio" takes this
@@ -283,8 +299,8 @@ export const register: Register = (on, options) => {
     try {
       await $.command.register({
         name: "dnd",
-        description: "Open the D&D Studio pane (table, build, review, health)",
-        argumentHint: "[table|build|review|health]",
+        description: "Open the D&D Studio pane (table, build, world, lore, review, health)",
+        argumentHint: "[table|build|world|lore|review|health]",
       });
     } catch (err) {
       $.ui.log(`dnd-studio: /dnd not registered: ${String(err)}`);
@@ -380,9 +396,29 @@ export const register: Register = (on, options) => {
       $.ui.log(`dnd-studio: build_status tool not registered: ${String(err)}`, { to: "debug" });
     }
     try {
+      await $.tool.register({
+        name: LORE_PROGRESS_TOOL,
+        description: LORE_PROGRESS_TOOL_DESCRIPTION,
+        inputSchema: {
+          type: "object",
+          properties: {
+            flow: { type: "string", enum: ["welt", "lore"] },
+            world: { type: "string", description: "the world's name as the lore tool names it" },
+            step: { type: "number", description: "the step's number, from 1" },
+            state: { type: "string", enum: ["active", "done", "todo", "warn", "failed"] },
+            note: { type: "string", description: "optional: a short German note, e.g. '4 Orte, 1 Frage'" },
+          },
+          required: ["flow", "step", "state"],
+        },
+      });
+    } catch (err) {
+      $.ui.log(`dnd-studio: lore_progress tool not registered: ${String(err)}`, { to: "debug" });
+    }
+    try {
       await setClash($, clash);
       await loadRuns($);
       await loadPlanApproval($);
+      await loadLoreReports($);
       startReviewSession(await $.clock.now());
     } catch (err) {
       $.ui.log(`dnd-studio: loading kept state failed: ${String(err)}`);
@@ -427,6 +463,12 @@ export const register: Register = (on, options) => {
   on("tool.call", { tool: `mcp__dnd-studio__${PROGRESS_TOOL}` }, async ($, e) => {
     return {
       result: await progressTool($, e as unknown as Record<string, unknown>),
+    };
+  }).catch((_$: unknown, e: unknown, next: (e: never) => unknown) => next(e as never));
+
+  on("tool.call", { tool: `mcp__dnd-studio__${LORE_PROGRESS_TOOL}` }, async ($, e) => {
+    return {
+      result: await loreProgressTool($, e as unknown as Record<string, unknown>),
     };
   }).catch((_$: unknown, e: unknown, next: (e: never) => unknown) => next(e as never));
 
@@ -475,7 +517,11 @@ export const register: Register = (on, options) => {
               rules,
               check: await readCheck($),
             })
-          : tab === "review"
+          : tab === "world"
+            ? await renderWorld($, k, options)
+            : tab === "lore"
+              ? await renderLore($, k, options)
+              : tab === "review"
             ? renderReview($, k, review)
             : renderHealth($, k, options, {
                 health: await readHealth($),
@@ -491,8 +537,11 @@ export const register: Register = (on, options) => {
     // below jumps: the table's failed read, a review item that would not play or open.
     const failedItem =
       tab === "review" ? review.items.find((i) => i.error) : undefined;
-    const status =
-      tab === "table" && view?.error
+    const loreProblem =
+      tab === "world" || tab === "lore" ? await loreStatus($) : undefined;
+    const status = loreProblem
+      ? loreProblem
+      : tab === "table" && view?.error
         ? { text: view.error, tone: "bad" as const }
         : failedItem
           ? {
@@ -526,7 +575,7 @@ export const register: Register = (on, options) => {
             count: t.id === "review" && waiting ? waiting : undefined,
           })),
           active: tab,
-          maxVisible: 4,
+          maxVisible: 6,
           moreLabel: "Mehr",
           onSelect: (id) => void selectTab($, id, options),
         }),

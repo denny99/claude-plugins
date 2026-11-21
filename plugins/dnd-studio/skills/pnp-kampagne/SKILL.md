@@ -33,9 +33,11 @@ Kurz fragen, was fehlt (nicht alles auf einmal, sinnvolle Vorgaben vorschlagen):
   für die ganze Kampagne; die Spielleitung fragt sie am Abend nicht mehr (Denny 2026-11-13: „das Setting gibt das
   vor“). Fehlt etwas davon bei einer bestehenden Kampagne im Leitfaden, beim Ausbau fragen.
 
-- Gibt es einen Obsidian-Vault mit Welt-Notizen zur Kampagne (Pfad des Kampagnen-Ordners, darin öffentlicher Welt-Ordner
-  und Spoiler-Ordner, Regeln des Vaults)? Das ist optional: Ohne Vault entfallen `dnd-studio:pnp-lore` und die
-  Vault-Notizen im Auftrag an Architekt und Texter; die Welt steht dann allein im Studio (`campaign`, Kanon).
+- In welcher Welt spielt sie? Die Lore einer Welt liegt im Wissens-Vault des Studios (Werkzeug `lore`, Skill
+  `pnp-lore`); `lore map` zeigt die Welten. Eine neue Kampagne in einer bestehenden Welt bindet `set_campaign world`,
+  Architekt und Texter lesen die Lore mit `lore search`. Eine eigene Welt von Grund auf: erst Skill `pnp-weltenbau`.
+  Hat der Mensch zusätzlich einen eigenen Obsidian-Vault (Pfad des Kampagnen-Ordners, Regeln des Vaults), gleicht
+  `dnd-studio:pnp-lore` auch ihn ab; ohne ihn steht die Welt allein im Studio (Lore, `campaign`, Kanon).
 
 `studio_status` zeigt das offene Profil; alles entsteht dort. Wo eine Kampagne schon existiert: `campaign` lesen und
 ausbauen statt neu anlegen.
@@ -47,7 +49,7 @@ selbst wenig; die Arbeit machen die Agents des Plugins (Agent-Tool mit diesem `s
 
 | Schritt | Agent | Modell |
 |---|---|---|
-| Vault-Welt auf Stand (nur Geändertes, nur mit Vault) | `dnd-studio:pnp-lore` | Sonnet |
+| Lore der Welt auf Stand (nur Geändertes; ein eigener Obsidian-Vault mit) | `dnd-studio:pnp-lore` | Sonnet |
 | Bauplan | `dnd-studio:pnp-architekt` | Opus |
 | Szenen, Texte, NPCs, Orte, Leitfaden | `dnd-studio:pnp-texter` | Opus |
 | Bilder und Karten | `dnd-studio:pnp-maler` | Sonnet |

@@ -10,7 +10,47 @@ export type UiKitState = {
   pages?: Record<string, number>;
 };
 
-export type Tab = "table" | "build" | "review" | "health";
+export type Tab = "table" | "build" | "world" | "lore" | "review" | "health";
+
+/** A world of the Studio's lore vault (GET /dnd/lore/map without a world). */
+export type LoreWorld = { world: string; counts: Record<string, number>; campaigns: string[] };
+export type LoreEntry = { title: string; tags: string[]; status: string };
+/** One world's map (GET /dnd/lore/map?world=). */
+export type LoreMap = {
+  world: string;
+  kinds: Record<string, LoreEntry[]>;
+  questions: string[];
+  recent: { title: string; kind: string; updated: string }[];
+};
+export type LoreHit = { title: string; world: string; kind: string; tags: string[]; snippet: string; score: number };
+export type LoreNote = {
+  title: string;
+  world: string;
+  kind: string;
+  tags: string[];
+  status: string;
+  body: string;
+  links: string[];
+  backlinks: string[];
+  updated: string;
+  sources: string[];
+};
+/** What Claude reported for one step with the mod tool lore_progress. */
+export type LoreReport = { state: "todo" | "active" | "done" | "warn" | "failed"; note: string; at: number };
+/** The tabs Welt and Lore: the worlds, the chosen one, its map, a search, an open note, the reported steps. */
+export type LoreState = {
+  worlds: LoreWorld[] | null;
+  world: string;
+  map: LoreMap | null;
+  kind: string;
+  query: string;
+  hits: LoreHit[] | null;
+  note: LoreNote | null;
+  error: string;
+  fetchedAt: number;
+  /** By world, then flow ("welt" | "lore"), then step number ("1"…). */
+  reports: Record<string, Record<string, Record<string, LoreReport>>>;
+};
 
 export type Hero = {
   name: string;
@@ -386,6 +426,7 @@ declare module "claude-code" {
       review: ShapedState<ReviewState>;
       asked: ShapedState<AskedState>;
       progress: ShapedState<ProgressState>;
+      lore: ShapedState<LoreState>;
     };
   }
 }
