@@ -69,8 +69,10 @@ Das D&D-Panel zeigt im Tab **Lore** sechs Schritte mit Nummer und Stand (wie die
 6. **Kanon-Abgleich nach dem Abend** (Abschnitt 7 und 8), zum Schluss `lore check` (G12)
 
 **Stand melden** (nur Anzeige; gibt es das Werkzeug `mcp__dnd-studio__lore_progress` nicht, überspringen): zu Beginn
-eines Schritts `lore_progress` mit `{flow: "lore", world, step: <Nummer>, state: "active"}`, danach `state: "done"` und
-ein kurzes `note` („12 Notizen, 3 Fragen“). Ohne Meldung schätzt das Panel den Stand aus der Welt (Notizen, Fragen).
+eines Schritts `lore_progress` mit `{flow: "lore", world, step: <Nummer>, title: <Name>, state: "active"}`, danach
+`state: "done"` und ein kurzes `note` („12 Notizen, 3 Fragen“). Nummer und Name sind die der sechs Schritte oben, nicht
+die Abschnitt-Nummern (Offene Fragen ist Schritt 5, Abschnitt 4). Nur ein `done` setzt den Haken; Notizen allein zeigt
+das Panel als „Material vorhanden“, außer Schritt 1 nach `from_campaign`.
 
 ## Grundregeln: ein stimmiger Vault
 

@@ -2,7 +2,7 @@
  * The world's lore in the Studio's knowledge vault, as the tabs Welt and Lore show it: the Studio's read-only HTTP
  * routes (`/dnd/lore/map`, `/dnd/lore/search`, `/dnd/lore/note` on 127.0.0.1, the MCP server's port and token), their
  * answers made safe, and the numbered steps of world design (skill pnp-weltenbau) and lore keeping (skill pnp-lore)
- * with their state: what Claude reported with the mod tool `lore_progress`, else what the vault's counts say.
+ * with their state: what Claude reported with the mod tool `lore_progress` (the vault's counts only show as material).
  */
 import type {
   LoreHit,
@@ -84,7 +84,7 @@ export function mapOf(body: unknown): LoreMap {
     kinds[kind] = (Array.isArray(list) ? list : [])
       .map((n) => {
         const e = obj(n);
-        return { title: str(e.title), tags: strs(e.tags), status: str(e.status) };
+        return { title: str(e.title), tags: strs(e.tags), status: str(e.status), sources: strs(e.sources) };
       })
       .filter((n) => n.title);
   const qs = o.questions ?? o.open;
@@ -137,6 +137,72 @@ export function noteOf(body: unknown): LoreNote | null {
   };
 }
 
+// --- spoilers and open questions ---------------------------------------------------------------------------------
+
+/** Tags that mark a note as the game master's: hidden while spoiler-free is on. */
+export const SECRET_TAGS = ["spoiler", "geheim", "faden", "secret", "gm"];
+
+/** A note the spoiler-free pane does not name: tagged as the game master's, or retired. */
+export function isSecretNote(n: { tags?: string[]; status?: string }): boolean {
+  const tags = (n.tags ?? []).map((t) => t.toLowerCase());
+  return tags.some((t) => SECRET_TAGS.includes(t)) || (n.status ?? "").toLowerCase() === "retired";
+}
+
+/** Every note of a map by its title (the first of a title wins). */
+function byTitle(map: LoreMap): Map<string, LoreMap["kinds"][string][number]> {
+  const out = new Map<string, LoreMap["kinds"][string][number]>();
+  for (const list of Object.values(map.kinds)) for (const n of list) if (!out.has(n.title)) out.set(n.title, n);
+  return out;
+}
+
+/**
+ * The open questions that count: the map's open ones without a campaign's thread (tag `faden`, from `from_campaign`)
+ * or a retired note.
+ */
+export function openQuestions(map: LoreMap): string[] {
+  const notes = byTitle(map);
+  return map.questions.filter((q) => {
+    const n = notes.get(q);
+    if (!n) return true;
+    return !n.tags.map((t) => t.toLowerCase()).includes("faden") && n.status.toLowerCase() !== "retired";
+  });
+}
+
+/**
+ * The map as the spoiler-free pane shows it: only notes not tagged as the game master's and not retired, the open
+ * questions among them, the recent changes among them (a title the lists do not know is left out).
+ */
+export function spoilerFreeMap(map: LoreMap): LoreMap {
+  const notes = byTitle(map);
+  const kinds: LoreMap["kinds"] = {};
+  for (const [k, list] of Object.entries(map.kinds)) {
+    const kept = list.filter((n) => !isSecretNote(n));
+    if (kept.length) kinds[k] = kept;
+  }
+  const safe = (t: string) => {
+    const n = notes.get(t);
+    return !!n && !isSecretNote(n);
+  };
+  return {
+    world: map.world,
+    kinds,
+    questions: openQuestions(map).filter(safe),
+    recent: map.recent.filter((r) => safe(r.title)),
+  };
+}
+
+/** Sources `from_campaign` writes (`npc: Bartel`, `place: Bree`, `thread: …`, `canon: …`, `campaign: …`). */
+const FROM_CAMPAIGN = /^(npc|place|thread|canon|campaign):/i;
+
+/** How many notes of a map carry a source written by `from_campaign`. */
+export function fromCampaignCount(map: LoreMap | null): number {
+  if (!map) return 0;
+  return Object.values(map.kinds).reduce(
+    (n, list) => n + list.filter((e) => (e.sources ?? []).some((src) => FROM_CAMPAIGN.test(src.trim()))).length,
+    0,
+  );
+}
+
 /** How many notes of these kinds a world has (from the map's lists, else its counts). */
 export function countOf(
   kinds: readonly string[],
@@ -148,7 +214,7 @@ export function countOf(
       n +
       (map
         ? k === "question"
-          ? Math.max(map.questions.length, map.kinds[k]?.length ?? 0)
+          ? openQuestions(map).length
           : (map.kinds[k]?.length ?? 0)
         : (world?.counts[k] ?? 0)),
     0,
@@ -186,7 +252,7 @@ type StepDef = {
   title: string;
   /** Who works on it: the skill or agent. */
   who: string;
-  /** Kinds whose notes show the step begun / done (enough of them). */
+  /** Kinds whose notes count as material for the step (shown, never a ✓ on their own). */
   kinds?: string[];
   need?: number;
   /** What Claude is asked to do on a press. */
@@ -223,53 +289,78 @@ export function stepsOf(flow: Flow): StepDef[] {
 
 export type StepView = { title: string; detail: string; state: StepState; ask: string };
 
-/** The state of each step: reported (`lore_progress`) first, else read from the vault. */
+/** „Material vorhanden (3)“: notes exist for a step, which is no sign it is done. */
+const material = (n: number): string => `Material vorhanden (${n})`;
+
+/**
+ * The state of each step. Only a `lore_progress` report sets a step's state (a ✓ needs its done report): notes in
+ * the vault say nothing about whether the step was worked through (a world seeded by `from_campaign` has many), so
+ * their counts only show as „Material vorhanden (n)“. One exception: Lore step 1 (Bestand sichten) is done when the
+ * world's notes come from `from_campaign` (their sources name the campaign's NPCs, places, threads).
+ */
 export function stepViews(
   flow: Flow,
   reports: Record<string, LoreReport>,
   map: LoreMap | null,
   world: LoreWorld | undefined,
+  /** The whole map when `map` is the spoiler-free one: whether the notes came from `from_campaign` is read from it. */
+  full: LoreMap | null = map,
 ): StepView[] {
   const total = totalOf(map, world);
-  const questions = map ? map.questions.length : (world?.counts.question ?? 0);
+  const questions = map ? openQuestions(map).length : (world?.counts.question ?? 0);
   const spoilers = map
-    ? Object.values(map.kinds).some((l) => l.some((n) => n.tags.includes("spoiler")))
-    : false;
+    ? Object.values(map.kinds).reduce((n, l) => n + l.filter((e) => e.tags.includes("spoiler")).length, 0)
+    : 0;
+  const seeded = fromCampaignCount(full);
   return stepsOf(flow).map((s, i) => {
     const r = reports[String(i + 1)];
     let state: StepState = "todo";
     let count = "";
     if (flow === "welt" && s.kinds) {
       const n = countOf(s.kinds, map, world);
-      state = n >= (s.need ?? 1) ? "done" : n > 0 ? "active" : "todo";
-      if (n) count = `${n} ${n === 1 ? "Notiz" : "Notizen"}`;
-    } else if (flow === "welt" && i === 8) {
-      state = total > 0 ? "active" : "todo";
+      if (n) count = s.kinds.includes("question") ? `${n} offen` : material(n);
     } else if (flow === "lore") {
-      if (i === 0) state = total > 0 ? "done" : "todo";
-      if (i === 1) {
-        state = total >= (s.need ?? 1) ? "done" : total > 0 ? "active" : "todo";
-        if (total) count = `${total} ${total === 1 ? "Notiz" : "Notizen"}`;
-      }
-      if (i === 3 && spoilers) state = "done";
-      if (i === 4 && questions) {
-        state = "active";
-        count = `${questions} offen`;
-      }
+      if (i === 0 && seeded) {
+        state = "done";
+        count = `aus der Kampagne übernommen (${seeded})`;
+      } else if (i === 0 && total) count = material(total);
+      if (i === 1 && total) count = material(total);
+      if (i === 3 && spoilers) count = material(spoilers);
+      if (i === 4 && questions) count = `${questions} offen`;
     }
     if (r) state = r.state;
-    const detail = [s.who, r?.note || count || (state === "active" && !r ? "begonnen" : "")]
+    const detail = [s.who, r?.note || count || (r?.state === "active" ? "begonnen" : "")]
       .filter(Boolean)
       .join(" · ");
     return { title: s.title, detail, state, ask: s.ask };
   });
 }
 
+/**
+ * The step a `lore_progress` call means: its `title` (or a `step` given as a title) when it names one of the flow's
+ * steps, since skill sections (Abschnitte) and an agent's own work list are numbered differently; else the number.
+ * 0 when neither names a step.
+ */
+export function stepOf(flow: Flow, step: unknown, title: unknown): number {
+  const steps = stepsOf(flow);
+  const fold = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  for (const t of [title, step]) {
+    if (typeof t !== "string" || !t.trim() || /^\d+$/.test(t.trim())) continue;
+    const want = fold(t);
+    const k = steps.findIndex((s) => fold(s.title) === want);
+    if (k >= 0) return k + 1;
+    const part = steps.findIndex((s) => fold(s.title).includes(want) || want.includes(fold(s.title)));
+    if (part >= 0) return part + 1;
+  }
+  const n = Math.round(Number(step));
+  return n >= 1 && n <= steps.length ? n : 0;
+}
+
 /** The prompt of a step button: work on step `n` of the world `world`. */
 export function stepPrompt(flow: Flow, world: string, n: number): string {
   const s = stepsOf(flow)[n - 1];
   const skill = flow === "welt" ? "pnp-weltenbau" : "pnp-lore";
-  return `D&D-Panel (Tab ${flow === "welt" ? "Welt" : "Lore"}): Arbeite mit dem Skill ${skill} an Schritt ${n} „${s?.title ?? ""}“ der Welt „${world}“: ${s?.ask ?? ""}. Erst lesen (lore map, lore search), dann mit mir im Gespräch; melde den Stand mit lore_progress.`;
+  return `D&D-Panel (Tab ${flow === "welt" ? "Welt" : "Lore"}): Arbeite mit dem Skill ${skill} an Schritt ${n} „${s?.title ?? ""}“ der Welt „${world}“: ${s?.ask ?? ""}. Erst lesen (lore map, lore search), dann mit mir im Gespräch; melde den Stand mit lore_progress (flow ${flow}, step ${n}, title „${s?.title ?? ""}“).`;
 }
 
 /** The prompt of „Aus Kampagne übernehmen“: seed the world's lore from the open campaign. */

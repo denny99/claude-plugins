@@ -106,8 +106,11 @@ test("Build: Check reads campaign, maps and studio_status; rows show status and 
     "campaign",
     "map",
     "studio_status",
+    "campaign",
   ]);
   expect(w.calls[0]?.args).toEqual({ overview: true });
+  // the Studio's spoiler-free mode, read after the tab's own reads (never set: no on)
+  expect(w.calls[6]?.args).toEqual({ action: "spoiler" });
   expect(w.calls[1]?.args).toEqual({ only: ["scenes"] });
   expect(w.calls[4]?.args).toEqual({ action: "list" });
 
@@ -429,7 +432,7 @@ test("Build: a build agent's end checks the campaign again while the Build tab i
   const w = world(on);
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd", args: "build" } as never);
-  const reads = () => w.calls.filter((c) => c.tool === "campaign").length;
+  const reads = () => w.calls.filter((c) => c.tool === "campaign" && c.args.action !== "spoiler").length;
   const first = reads();
   expect(first).toBeGreaterThan(0);
   await $.agent.spawn({
@@ -489,4 +492,43 @@ test("pure: a place with no in needs no marker while the campaign has no campaig
   expect(pins).toMatchObject({ status: "ok", counts: "1/1" });
   const withWorld = acceptanceOf({ ...campaign, worldMap: true }, { maps: [] }, "").find((i) => i.key === "pins");
   expect(withWorld).toMatchObject({ status: "failed", counts: "1/2", detail: "Die Rostmark" });
+});
+
+test("Build: a big campaign's compact overview (lists only counted) is read chapter by chapter; counts from counts", async ($, on) => {
+  const scenes = [
+    { n: 1, title: "Das Tor", chapter: 1, place: "Bree", text: "t", notes: "Rezept", picture: "p", start: true },
+    { n: 2, title: "Im Wald", chapter: 2, place: "Wald" },
+    { n: 3, title: "Zwischenspiel", place: "Bree", text: "t", notes: "Rezept", picture: "p" },
+  ];
+  const { scenes: _s, ...rest } = CAMPAIGN as Record<string, unknown>;
+  const overview = {
+    ...rest,
+    counts: { scenes: 3, npcs: (CAMPAIGN.npcs as unknown[]).length, places: (CAMPAIGN.places as unknown[]).length },
+    countsByChapter: { "1": { scenes: 1 }, "2": { scenes: 1 }, "-": { scenes: 1 } },
+    truncated: "the overview would pass 60000 characters: scenes only counted. Read a chapter with chapter (and evening), a list with only, entries with names",
+  };
+  const w = world(on, {
+    campaign: (a: Record<string, unknown>) => {
+      const of = (body: unknown) => [{ type: "text", text: JSON.stringify(body) }];
+      if (a.overview && !a.only) return of(overview);
+      const only = (a.only as string[] | undefined)?.[0];
+      if (a.overview && only === "scenes") {
+        const ch = a.chapter as number;
+        return of({ ...rest, scenes: scenes.filter((x) => x.chapter === ch || x.chapter === undefined).map(({ n, title, chapter }) => ({ n, title, chapter, chars: 10 })) });
+      }
+      if (only === "scenes" && !a.names) return of({ ...rest, scenes });
+      return of(CAMPAIGN);
+    },
+  });
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd", args: "build" } as never);
+  const chapterReads = w.calls.filter((c) => c.tool === "campaign" && c.args.overview && c.args.chapter);
+  expect(chapterReads.map((c) => c.args)).toEqual([
+    { overview: true, only: ["scenes"], chapter: 1 },
+    { overview: true, only: ["scenes"], chapter: 2 },
+  ]);
+  const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
+  expect(await findShown(ui, /Szenen mit Bild/)).toBeDefined();
+  expect(await rowShown(ui, "Szenen mit Bild, Vorlesetext und Ablauf", "2/3")).toBe(true);
+  await ui.unmount();
 });

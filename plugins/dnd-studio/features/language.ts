@@ -2,11 +2,12 @@
  * New campaigns are German unless asked otherwise: the Studio's `campaign new` documents "default German" for
  * `language` but makes an English campaign when the argument is left out, so the mod puts it in.
  * Only this one MCP tool is hooked, never Bash. The same hook keeps the build's kept state with its campaign
- * (features/build.tsx forgetBuild/renameBuild).
+ * (features/build.tsx forgetBuild/renameBuild), and the Studio's spoiler-free mode when Claude reads or sets it.
  */
 import type { EngineInterface, On } from "claude-code";
 import { forgetBuild, renameBuild } from "./build";
-import { profileName, readCampaign, setCampaign } from "../lib/state";
+import { profileName, readCampaign, setCampaign, setStudioSpoiler, spoilerOf } from "../lib/state";
+import { answerOf } from "../lib/studio";
 
 export const CAMPAIGN_TOOL = "mcp__plugin_dnd-studio_dnd-studio__campaign";
 /** The Studio's own enum value (new_campaign: language German | English). */
@@ -49,6 +50,13 @@ async function campaignChanged(
   if (r.deny || r.isError || (r.result as { isError?: boolean })?.isError)
     return;
   const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  // the Studio's spoiler-free mode of the open campaign, as Claude just read or set it: the pane follows at once
+  if (input.action === "spoiler") {
+    if (str(input.campaign)) return;
+    const got = spoilerOf(answerOf({ content: r.result }));
+    if (got.known) await setStudioSpoiler($, got);
+    return;
+  }
   const profile = await profileName($);
   if (input.action === "new" && str(input.name)) {
     await forgetBuild($, { profile, campaign: str(input.name) });
