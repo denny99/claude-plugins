@@ -23,6 +23,17 @@ Prüfe:
   `groan` lassen die deutsche Stimme kippen. Rufnamen vorn im Namen eines NPCs („Kühn (Direktor)“, nicht „Direktor
   Albrecht Kühn“), sonst heißt die Brücke „… geht zu Direktor hinüber“.
 - Szenentexte reine Erzählerstimme ohne wörtliche Rede und ohne vorausgesetzten Stand.
+- **Zum Sprechen geschrieben** (gm_guide `sprechen`), nur bei dem, was vorgelesen wird (Szenen- und Vorlesetexte,
+  erste Worte, Standardsätze):
+  - Kurze Sätze statt Kommaketten.
+  - Etwa ein `[emphasis]` je Satz, vor dem tragenden Wort; nicht keins in einem langen Text, nicht drei in einem Satz.
+  - `…` vor der Pointe; kein `[pause]` mitten im Satz.
+  - Keine Großbuchstaben als Betonung.
+  - Keine Marke außerhalb eckiger Klammern, keine Tippfehler in Marken (`[emphsis]` würde die Stimme vorlesen).
+  - Keine Marken in Feldern, die niemand vorliest.
+- **Aussprache:** Jeder erfundene Name, der vorgelesen wird, steht in `pronunciations` (`campaign`), mit `*` bei
+  Wörtern mit Endungen. Kein Name ist im Text selbst umgeschrieben. Fehlt einer, gehört er als Mangel in die Datei:
+  den Namen und wo er vorkommt, eine Schreibweise nur, wenn sie aus Vault oder Kanon folgt.
 - **Spoiler, gerade die unabsichtlichen:** Lies jeden Text, den die Spieler hören oder sehen (Szenen, Vorlesetexte,
   Begrüßung, Charaktervorstellung, Bilder, Kartennamen, NPC-Namen), so, als wüsstest du nur, was die Helden bis dahin
   wissen: keine Andeutung, Wortwahl oder Bildeinzelheit, die Spielleiterwissen verrät (wer der Verräter ist, was im

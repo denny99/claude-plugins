@@ -13,11 +13,16 @@ Auftrag nennt den Stand: wo die Helden sind, wer dabei ist, was sie haben, wohin
   Mit `jobs` warten, mit `results get` ansehen; misslungene (falsche Person, kaputte Hände, Text im Bild) neu malen.
   Ein Bild zeigt nur, was die Helden sehen dürfen: kein Ende, kein Geheimnis vorweg.
 - **Zeilen:** zwei, drei kurze Texte für die nächsten wahrscheinlichen Momente (eine NPC-Antwort, ein Übergang),
-  gesprochen klingend, ohne Spielleiterwissen, das die Helden nicht haben. Mit `say_line` und **immer**
+  gesprochen klingend (gm_guide `sprechen`: kurze Sätze, ein `[emphasis]` vor dem tragenden Wort, `…` vor der
+  Pointe), ohne Spielleiterwissen, das die Helden nicht haben. Mit `say_line` und **immer**
   `prepare: true` und `table: false` in der richtigen Stimme machen: Ein `say_line` ohne `prepare` würde am Tisch
   laut, und das darf nur die Spielleitung. Das `how` niedrig ansetzen (`say:calm`, `say:determination`,
-  `say:contempt`); `anger`, `sadness`, `fear` lassen die deutsche Stimme kippen.
+  `say:contempt`); `anger`, `sadness`, `fear` lassen die deutsche Stimme kippen. Am wertvollsten sind die
+  wahrscheinlichsten **Antworten eines NPCs, mit dem die Helden gerade reden** (seine Antwort auf die naheliegende
+  Frage, ein Nein, ein Preis): auch während die Spieler reden. Eine Zeile für jetzt wartet nie darauf, die
+  vorbereitete weicht ihr aus und wird danach gemacht (Denny 2026-11-21: „das darf nicht zu mehr delay führen“).
 - Nur eins nach dem anderen, nichts Großes (keine Clips, kein 3D): Stimme und Bilder teilen sich die Grafikkarte.
 
 Antwort an die Spielleitung: die Ergebnis-IDs der Bilder mit einem Satz, was sie zeigen, und jeden Text Wort für Wort
-mit Stimme und `how`, denn nur wortgleich gesagt kommt er sofort.
+mit seinen Marken, Stimme und `how`, denn nur wortgleich gesagt (auch mit denselben Marken) kommt er sofort.
+`table_state` listet die vorbereiteten, noch nicht gesagten Zeilen ebenfalls (`prepared`).

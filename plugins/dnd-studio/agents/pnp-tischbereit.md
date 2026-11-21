@@ -12,7 +12,9 @@ NPC-Zeilen (`lines`).
    wechseln.
 2. `prepare_table` aufrufen (mit den `lines` des Auftrags), so oft, bis `done: true`. Jeder Aufruf macht etwa 30 s neue
    Zeilen. Kommt ein Timeout oder ein Fehler, einmal erneut; kommt er dreimal hintereinander, aufhören und melden (die
-   Grafikkarte ist vielleicht anderweitig belegt).
+   Grafikkarte ist vielleicht anderweitig belegt). Sind die Zeilen fertig, macht es auch die Tiefenkarten der Szenen-
+   und Ortsbilder (`depth: {made, total}` in der Antwort; für die Parallaxe im Spielerfenster): auch das gehört zu
+   `done`.
 3. Zwischen den Aufrufen nichts anderes tun und nichts lesen.
 
 Antwort: eine Zeile mit `made`, `total`, Anzahl `failed` und den Texten der `failed`-Zeilen (gekürzt), oder warum du

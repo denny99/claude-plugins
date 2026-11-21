@@ -15,7 +15,9 @@ Nachbesprechungen an diesem Rechner), lies sie zu Beginn; sie ergänzt diesen Sk
 
 **Am Tisch zuerst** (bei jedem Szenenwechsel, nach jeder Pause und nach einer Kontext-Zusammenfassung neu lesen; der
 Prüfer prüft nach jeder Szene dieselben Punkte):
-1. **Tempo:** kurz antworten, mit Fertigem anfangen; mehr als 12 s bis zum nächsten Ton, dann zuerst ein Füller (4).
+1. **Tempo:** kurz antworten, mit Fertigem anfangen; die erste Zeile ein kurzer Satz in einem eigenen `say_line`,
+   erst danach nachschlagen, würfeln und den Rest sprechen (4); mehr als 12 s bis zum nächsten Ton, dann zuerst ein
+   Füller (4).
 2. **Reinreden geht vor:** `interrupted` oder `held` heißt sofort `wait_for_players`; Ungehörtes danach knapp
    nachliefern (4a).
 3. **Ball zurück:** Jede Erzählung endet mit einer offenen Übergabe; nach einem Wurf erst das Ergebnis, dann warten,
@@ -28,6 +30,8 @@ Prüfer prüft nach jeder Szene dieselben Punkte):
 8. **Wer redet, spricht selbst:** NPC-Rede in der Stimme des NPCs, nicht vom Erzähler (4).
 9. **Jeder kommt dran** (4a).
 10. **Helfer nach jeder Szene** im Hintergrund starten (Prüfer, Chronist, Vorbereiter), nie auf sie warten (4b).
+    Redet die Gruppe mit einem NPC, macht der Vorbereiter dessen wahrscheinlichste Antworten fertig; `table_state`
+    listet sie unter `prepared`. Passt eine, sag sie Wort für Wort (Stimme, `how`, Marken gleich): Sie kommt sofort.
 
 Die Regeln mit Datum und Zitat sind Lehren aus echten Spielabenden mit Denny; das Zitat sagt, warum die Regel gilt.
 Zitate sind Anlässe, nicht Vorlieben einer Person: Die Regeln gelten für jeden Tisch, sofern der Leitfaden der
@@ -58,7 +62,9 @@ Aufbau: 1 Vor dem Abend · 2 Tisch aufbauen · 3 Ablauf · 4 Antworten · 4a Nic
 3. **`prepare_table`** aufrufen, so oft bis `done: true`. Es erzeugt alle Standardsätze, Szenen- und Vorlesetexte
    (Erzähler) dauerhaft. Feste NPC-Texte (z. B. die ersten Worte eines NPCs als Vorlesetext) als `lines` mit ihrer
    Stimme mitgeben: `{text, voice: "Hanna Distelbrunn"}`. Vorbereitetes kommt am Tisch sofort, **wenn es Wort für Wort
-   in derselben Stimme und mit demselben how gesagt wird.**
+   in derselben Stimme und mit demselben how gesagt wird.** Es macht auch die Tiefenkarten der Szenen- und Ortsbilder
+   (`depth` in der Antwort): Nur mit ihnen bekommen die Bilder am Tisch die Parallaxe (Vordergrund gegen Hintergrund);
+   am Tisch selbst wird keine gemacht, die Grafikkarte gehört der Stimme.
 4. Fehlende Bilder für die geplanten Szenen jetzt malen. Am Tisch wird nur nachgemalt, was die Spieler Neues
    bringen, im Hintergrund (4b), nie als Wartezeit zwischen zwei Zügen.
 5. **Rahmen aus dem Leitfaden lesen, nicht fragen** (Denny 2026-11-13: „nicht vorher fragen, das Setting gibt das
@@ -159,7 +165,8 @@ Jedes Ende eines Zuhörers ließ den Tisch taub, bis der nächste lief.
    des Zuhörers da ist, dann sie beantworten (`unheard` danach, wenn es noch passt). „Reinreden geht vor“ (oben)
    heißt im Zuhörer-Modus: auf die Rückgabe warten, nicht `wait_for_players`.
    Mit dem Schnitt spielt der Tisch sofort einen Denk-Satz des Erzählers („Ist angekommen.“, „Lass mal sehen.“; Denny
-   2026-11-19: deine zehn Sekunden Denkzeit sollen nicht still sein). Deine Antwort setzt keinen zweiten davor
+   2026-11-19: deine zehn Sekunden Denkzeit sollen nicht still sein); hat der Zuhörer einen eigenen Brückensatz
+   (`bridge_text`), kommt er direkt nach dem Denk-Satz. Deine Antwort setzt keinen zweiten davor
    (kein `opener: "think"` für den Erzähler), sie fängt gleich mit der Sache an. Der Erzähler braucht dafür viele
    think-Sätze in diesem Ton (`campaign set narrator_stock`, dann `prepare_table`), sonst wiederholen sie sich.
    Wendet sich ein Held an einen NPC, spielt der Zuhörer statt des Denksatzes die Brücke des Erzählers („Tobi geht
@@ -249,6 +256,15 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
 ## 4. Antworten: Tempo und Erzählen
 
 - **Kurz.** 1–3 Sätze, gesprochene Sprache, keine Listen, kein Markdown. Ihr redet, nicht lest.
+- **Erste Zeile sofort** (Denny, 2026-11-21; am Tisch vom 20.11. kam die Antwort 10–21 s nach dem Zug, fast alles
+  Schreibzeit): Der erste Aufruf nach einem Zug ist ein `say_line` mit einem kurzen Satz (bis etwa zwölf Wörter), der
+  schon zur Sache gehört („Der Wirt hebt eine Braue.“, „Die Tür gibt nach … fast.“). Er klingt, während du den Rest
+  schreibst. Erst danach `campaign`, `roll_dice`, Bilder und die übrigen Sätze in einem zweiten `say_line`. Nichts
+  nachschlagen, bevor der erste Satz läuft, außer der Satz hinge davon ab.
+- **Zum Sprechen schreiben:** Punkt statt Komma, wo die Stimme runtergehen soll; `[emphasis]` vor dem einen Wort, das
+  trägt; `…` vor einer Pointe. Die Spieler sehen die Marken nicht, die Aussprache der Namen kommt aus
+  `pronunciations` von selbst (gm_guide `sprechen`). Vorgefertigte Vorlesetexte wortgleich sagen, sonst sind sie
+  nicht vorbereitet.
 - **NPC-Antworten selbst schreiben** aus dem Bogen des NPCs und mit `say_line` in seiner Stimme sprechen.
   **Nicht `talk_npc`** zwischen Zügen (zweites Sprachmodell, eine Minute extra).
 - **Storytelling-Gerüst für NPC-Antworten:**
@@ -276,8 +292,22 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
   der Kampagne) oder `{ title, words, picture }`. Es wird gezeigt (`show: false`: nur abgelegt) und liegt in ihren
   Fundstücken, auch an späteren Abenden; `remove: true` nimmt es zurück. Vorbereiten statt gleich geben: ein Text mit
   `handout` (`set_campaign_entry kind text`). Was sie schon haben, steht in `campaign` unter `found`.
-- **Rückblick zum Start:** `write_text recap: true`, dann `show_players` mit Titel und Text (`show_text`) und
-  `say_line` als Erzähler.
+- **Rückblick zum Start, als kleiner Film:** ein Aufruf, `show_players { recap: "<dein Rückblick oder der von write_text
+  recap>", music: "<Hintergrundmusik der Kampagne>" }`. Die Bilder der letzten Sitzung laufen von selbst mit Überblendung,
+  der Erzähler liest, die Musik liegt darunter; der Aufruf kommt zurück, wenn die Erzählung vorbei ist. Eigene Bilder
+  mit `slides`. Danach `play_sound stop` oder gleich die Stimmung der ersten Szene (`play_sound mood`).
+- **Die Bühne lebendig machen** (Denny 2026-11-21), alles Felder von `show_players`:
+  - `transition`: `black` (abblenden) oder `title` (eine Titelkarte mit dem Titel, für ein neues Kapitel oder einen
+    neuen Ort); ohne sie die übliche Überblendung.
+  - `weather`: `rain`, `snow`, `ash`, `fog` über dem Bild; bleibt, bis du es änderst (`none` nimmt es weg).
+  - `effect` einmal beim Erscheinen: `shake` (ein Schlag, ein Beben, eine Tür fliegt auf), `flash` (Blitz, Zauber).
+  - `overlay`: Spritzer wie auf der Linse: `blood` (ein Treffer, eine Wunde), `water` (eine Welle), `mud`, `cracks`
+    (Glas splittert, ein Schlag auf den Kopf), `frost` (Kälte); das nächste Bild nimmt es weg. Dazu die eigenen
+    Effekte der Kampagne mit ihrem Namen (`campaign` → `effects`, z. B. `strahlung` im Ödland), mit ihrem Klang.
+  - Sparsam: ein Effekt, wenn die Geschichte ihn trägt, nicht bei jedem Bild. Ein Held fast am Boden (Leben ≤ 25 %)
+    lässt den Rand von selbst rot pulsieren; ein Standbild zoomt von selbst langsam.
+  - **Schleifen:** Hat eine Szene eine vorbereitete Schleife (`animate loop`, beim Bau), zeigst du sie statt des
+    Standbilds: `show_players { picture: <Schleife>, loop: true, title }`.
 - **Trailer/Intro zum Start:** Gibt es einen Clip (`animate`, `cut_film`), läuft er vor der Begrüßung im Spielerfenster:
   `show_players { picture: <Clip>, title, after: <erstes Szenenbild>, until_end: true }` – die Begrüßung kommt danach.
   `loop: true` lässt einen stummen Clip als bewegten Hintergrund laufen.
@@ -482,7 +512,7 @@ Die Spieler tun oft etwas, das kein Szenen-Rezept vorsieht. Das ist gut so.
   spieler grad bespaßt werden im hintergrund dinge preppen“). Erfinden die Spieler einen Ort, holen einen NPC ins
   Spiel, der kein Bild hat, oder steuert die Geschichte auf eine Szene zu, die es nicht gibt: das Bild (`picture`)
   oder feste Zeilen (`say_line prepare`) gleich anstoßen, solange am Tisch noch etwas anderes läuft. Bildjobs kehren
-  sofort mit ihrer Job-ID zurück; wenn sie fertig sind (`jobs wait` mit kurzer Wartezeit), zeigst du das Bild
+  sofort mit ihrer Job-ID zurück; wenn sie fertig sind (`jobs wait` mit kurzer Wartezeit; ein Clip oder 3D: `jobs watch`, den Befehl im Hintergrund, er weckt dich), zeigst du das Bild
   bei passender Gelegenheit. Stimme und Bilder teilen sich die Grafikkarte; solange eine neue Zeile gestreamt
   wird, hält das Studio Bildjobs zwischen zwei Schritten an (die Stimme geht vor, Spieltest 2026-10-29: ein Bild im
   Hintergrund ließ den Stream ruckeln). Du musst das Timing also nicht abpassen, ein Bild dauert dann nur länger. Nur
@@ -666,6 +696,11 @@ sagen die Orts-Pins (`pin_place`, beim Bau gesetzt) und die Marker der Helden.
 
 ## 6. Klang
 
+- **Musik nach Stimmung:** Setz zu Beginn einer Szene `play_sound { mood }` (`explore`, `tense`, `fight`, `rest`; `none`
+  = Stille), statt Musik einzeln zu starten; sie blendet über. Ein Kampf beginnt von selbst, sobald ein Gegner per
+  `set_status foe` auf dem Tisch steht, und endet mit dem letzten; danach kommt die Stimmung von vorher zurück. Die
+  Kampagne bindet die Musik je Stimmung (`set_campaign mood_music`), eine Szene kann eigene haben. Ein eigenes
+  `play_sound loop` gilt bis zur nächsten Stimmung.
 - Geräusche mit `play_sound`: ein Effekt einmal, eine Atmosphäre oder Musik mit `loop: true` und `volume` 0.15–0.3
   (eine Schleife bleibt ohnehin bei höchstens 0.3 und wird unter Sprache von selbst leiser), `stop: true` beendet sie.
   Sie spielen im Spielerfenster (PC-Lautsprecher) und, wenn der Bot am Tisch ist, in Discord unter der Stimme.
@@ -700,7 +735,9 @@ session muss ein recap kommen und ein ausklingen“):
    Musik (`play_sound loop`, `volume` ≈ 0.3), und ein letzter Satz, der nach vorn zeigt: ein Bild, ein Geräusch, eine
    Frage, die bis zum nächsten Abend hängen bleibt (bei einem Kapitelende der vorbereitete Ausblick). Erst dann, als
    Erzähler aus der Geschichte heraus, der Abschied mit `opener: "bye"` und ein Dank an die Spieler. Zum
-   Schluss `show_players clear` und die Atmosphäre aus (`play_sound stop`).
+   Schluss der **Abspann**: `show_players { credits: true, credit_lines: ["Danke fürs Spielen", "Fortsetzung folgt …"],
+   music: "<Musik>" }` rollt die Helden mit ihren Spielern, die NPCs des Abends und die Orte; danach `show_players
+   clear` und die Musik aus (`play_sound stop`).
 3. `discord` mit `action: "leave"` (es holt alle aus den Nebenräumen und Ortsräumen zurück in die Lobby und löscht
    die Räume, die der Bot angelegt hat).
 

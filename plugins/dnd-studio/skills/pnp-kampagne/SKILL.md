@@ -129,7 +129,10 @@ Rahmen), dann wird nach dem Plan gebaut.
    - **Haken der Helden:** Jeder Held bekommt irgendwo einen Haken aus seinem Hintergrund (eine Bekannte, ein altes
      Versprechen, sein Volk), nicht nur einen Wurf, der zu seinen Fertigkeiten passt.
 5. **Vorlesetexte** (`kind text`, auch die Szenentexte): zwei, drei konkrete Sinnesdetails (Geruch, Geräusch, ein
-   Ding mit Geschichte) statt Stimmungswörtern, kurz wie in einem guten Roman, im Ton der Kampagne. Anfang und Ende
+   Ding mit Geschichte) statt Stimmungswörtern, kurz wie in einem guten Roman, im Ton der Kampagne. **Geschrieben
+   zum Sprechen** (`references/sprechen.md`, gm_guide `sprechen`): kurze Sätze statt Kommaketten, etwa eine Betonung
+   je Satz mit `[emphasis]` vor dem Wort, `…` vor dem, was wirken soll; die Spieler sehen die Marken nicht. Jeder
+   erfundene Name kommt mit seiner Aussprache in `campaign set pronunciations`, nie als Umschreibung in den Text. Anfang und Ende
    sind Szenen, kein Pflichtprogramm (Denny 2026-11-13: „Intros und Outros bissel flach“), darum gehören hinein:
    - **Begrüßung** („Willkommen (zu Beginn)“): kurz, nur Organisatorisches.
    - **Prolog** bei einer neuen Kampagne oder einer Welt, die die Spieler nicht kennen („bei neuen Kampagnen fehlt
@@ -218,6 +221,10 @@ Fäden, mit denen es beginnt, und den Ort, an dem der Abend anfängt.
   `tempo` nur sanft (0.9–1.1, mehr klingt robotisch). Längere Pausen gibt es nicht: nachträglich eingefügte Stille
   klingt wie ein Schnitt. Nur, wenn die Kampagne es will; nach einer Änderung `prepare_table`, es legt den
   Effekt über denselben Take. Im Studio: das Schild „Effekte“ auf der Stimmkarte, dort auch „Effekte bearbeiten“.
+- **Aussprache** (`campaign set pronunciations`): die eigenen Namen und Wörter der Kampagne, wie die Stimme sie sagen
+  soll (`{"Korath": "[emphasis] Ko-rat", "Gasriese*": "[emphasis] Gas-Riese"}`); die Texte behalten ihre Schreibweise.
+  Einen Satz mit dem Wort in Varianten sprechen lassen und den Menschen wählen lassen. Einzelheiten:
+  `references/sprechen.md`.
 - **Standardsätze** (`set_campaign_entry stock`, Erzähler: `campaign set narrator_stock`): NPCs `greet`, `bye`,
   `think`, `yes`, `no`, `gesture`, der Erzähler dieselben mit `approach` statt `gesture`. Sie machen den Abend schnell,
   weil sie vorab erzeugt werden und am Tisch sofort kommen. Wie viele, in welcher Art und über welche Stimmungen:
@@ -225,8 +232,8 @@ Fäden, mit denen es beginnt, und den Ort, an dem der Abend anfängt.
 
 ## 3. Bilder, Karten, Klang (die langsamen Teile, gesammelt)
 
-Bilder belegen die GPU minutenlang. Deshalb erst wenn der Text steht, gebündelt, und mit `jobs wait` abwarten statt
-einzeln:
+Bilder belegen die GPU minutenlang. Deshalb erst wenn der Text steht, gebündelt, und gebündelt abwarten statt
+einzeln (`jobs watch`: den Befehl mit Bash im Hintergrund starten, er weckt dich, wenn alle fertig sind):
 - `paint_campaign`: ein Aufruf für alles, mit `items` (`[{kind, name}, …]`, Arten gemischt; je Art werden die Bildworte
   erst alle geschrieben, dann gemalt): NPC-Porträts, Orte, Szenen. Jede Szene braucht ein Bild, das die
   Spieler beim Vorlesen sehen. Jeder sprechende NPC braucht ein Porträt: Es erscheint im Spielerfenster, während er
@@ -279,6 +286,21 @@ einzeln:
   `say_line sound` am Tisch. Am Tisch hat jeder Klang einen Knopf, die Spielleitung – Mensch oder Claude – startet
   ihn, wenn er passt; im Studio geht dasselbe im Dialog der Szene unter „Klänge“. Ein Klang, der zu keiner Szene
   gehört (ein Wesen, das überall heult), in die Notizen des NPC.
+- **Musik nach Stimmung** (Denny 2026-11-21): Je Kampagne eine Musik für `explore`, `tense`, `fight`, `rest`
+  (`make_sound` mit `kind: "bgmusic"`, lange Schleifen), gebunden mit `set_campaign { mood_music: { explore: <Datei>,
+  fight: <Datei>, … } }`. Eine Szene mit eigener Musik je Stimmung: in ihren `sounds` den Klang mit `mood: "fight"`.
+  Am Tisch blendet die Musik dann mit der Stimmung über, ein Kampf schaltet von selbst um.
+- **Schleifen für die wichtigen Szenen** (Ankunft an einem Ort, der Höhepunkt, ein Ort mit Feuer, Nebel oder Wasser):
+  `animate { start: <Szenenbild>, loop: true, idea: "was sich bewegt: das Feuer flackert, Rauch zieht" }` macht ein
+  lebendes Standbild (Kamera und Personen still, ohne Ton, 5 s, nahtlos). Nur vor dem Abend: mit offenem Tisch passt
+  das Video neben der Stimme nicht auf die Karte. Die Schleife in die Notizen der Szene, damit die Spielleitung sie
+  mit `show_players loop: true` zeigt.
+- **Tiefenkarten** für die Parallaxe im Spielerfenster macht `prepare_table` selbst (Abschnitt 2, `pnp-tischbereit`).
+- **Eigene Effekte der Welt** (Denny 2026-11-21: Strahlung im Ödland): was die Welt besonders macht, als Effekt über dem
+  Bild aus Bausteinen, ohne GPU: `set_campaign { effects: { strahlung: { tint: "#b8ff3a", glow: 0.6, grain: 0.5,
+  flicker: 0.4, aberration: 0.35, pulse: 0.6, particles: "glow", sound: <Geigerzähler> } } }` (`particles`: glow,
+  sparks, dust; alle Stärken 0–1). Die Spielleitung zeigt ihn mit `show_players overlay: "strahlung"`. In den Notizen
+  der Szenen vermerken, wo er passt; im Leitfaden, was er bedeutet.
 
 ## 4. Abnahme: Ist der Abend spielfertig?
 
@@ -287,6 +309,8 @@ Gehe den Abend im Kopf einmal als Spielleitung durch und prüfe:
 - Es gibt eine Kampagnenkarte mit allen Orten als Marker, und jeder Ort, an dem eine Szene spielt, hat seine Karte.
 - Jeder sprechende NPC hat Porträt, Stimme (mit Stimmprobe), `sheet`, Standardsätze; jeder stumme hat Geräusche.
 - Jeder gebundene Klang ist eine Aufnahme, mit `check_sound` gegen das gehört, was er sein soll.
+- Die Kampagne hat Musik je Stimmung (`campaign` zeigt `moodMusic`: mindestens `explore` und `fight`), und die
+  wichtigen Szenen haben ihre Schleife (`animate loop`, in den Notizen der Szene).
 - Bei einem Kapitel einer Kampagne: `threads` und `party_at` gesetzt (`campaign` zeigt `threads` und `partyAt`).
 - Jede Szene auf einer Karte nennt in den Notizen die Startfelder von Helden und NPCs.
 - Jeder Held hat einen Weg, der zu seinem Bogen passt, und jeder Wurf nennt die Fertigkeit, die er auch hat.
@@ -325,7 +349,9 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
    Stil); Stimmbeschreibungen passen (Alter, Geschlecht, „German“, Jugendliche nicht kindlich); Standardsätze mit
    niedrigem `how`, Rufname vorn; Szenentexte reine Erzählerstimme ohne wörtliche Rede und ohne vorausgesetzten Stand;
    keine unabsichtlichen Spoiler in Texten, Bildern und Namen; was nur einen Helden angeht, steht im Handout zum
-   Flüstern statt in einem Text für alle.
+   Flüstern statt in einem Text für alle; was gesprochen wird, ist zum Sprechen geschrieben (`references/sprechen.md`:
+   kurze Sätze, `[emphasis]` sparsam vor dem tragenden Wort, `…` vor der Pointe, keine Großbuchstaben und keine
+   Umschreibung eines Namens im Text) und jeder erfundene Name steht in `pronunciations`.
 3. **Umfang und Spielbarkeit** (`dnd-studio:pnp-review-spielbarkeit`) – trägt der Abend? Genug Stoff für die gewünschte Länge
    im Tempo dieser Gruppe (Abschnitt 1, „Mehr Strecke statt mehr Verzweigungen“), dazu der Situations-Vorrat;
    eine Ausweichszene für die naheliegende Abzweigung, kein Überbau aus Kann-Schwellen und Fassungen; drei Wege zu
@@ -336,8 +362,9 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
 - `campaign` erst mit `overview: true`, dann nur mit `only` und `names` lesen. Die ganze Kampagne ist die größte Antwort
   der Werkzeuge. `results list` mit `name` und `brief`, `settings` ohne `available`.
 - Viele Bilder ansehen: je 12–16 auf einen Kontaktbogen (`results sheet`), groß (`results get`) nur die Verdächtigen.
-- Jobs eines Stapels in einem `jobs wait` bündeln und zwischen den Wartezeiten nichts anderes lesen: Jede Runde schickt
-  den ganzen Kontext neu.
+- Jobs eines Stapels in einem `jobs watch` bündeln (im Hintergrund; ein Agent: `background: false`, im Vordergrund)
+  statt `jobs wait` alle 50 s, und zwischen den Wartezeiten nichts anderes lesen: Jede Runde schickt den ganzen Kontext
+  neu.
 - Vor einem langen Agenten mit einem Probeaufruf prüfen, ob sein Weg geht (ist die Ergebnisliste überhaupt gefüllt?).
 - **Jeden Eintrag einmal schreiben:** alles zu einem Eintrag sammeln, dann ein `set_campaign_entry` mit allen Feldern;
   viele Einträge in einem Aufruf mit `entries`. Jeder Aufruf ist eine volle Runde (ein Bau schrieb 190-mal, ein
@@ -346,7 +373,8 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
   pictures`, `set_voice voices`, `write_text texts`, `party set players`, `map plan patches`, `paint_map tiles`,
   `picture`/`picture_tool pictures`, `make_3d`/`model_tool models`, `make_sound sounds`, `add_file paths`, `results get
   ids`. Ein Feld neben der Liste gilt für jeden Eintrag; ein Fehler hält den Rest nicht auf (`failed`, je Eintrag
-  `error`). Job-Werkzeuge geben alle `job_ids` zurück: die in einem `jobs wait` abwarten.
+  `error`). Job-Werkzeuge geben alle `job_ids` zurück: die in einem `jobs watch` abwarten. Braucht ein Aufruf
+  länger als 25 s zum Vorbereiten, kommt statt der Jobs eine Aufruf-ID (`call-…`): sie steht für alle seine Jobs.
 - Karten-Plan lesen ohne Bilder: `map list` mit `map` und `pictures: false`.
 - **Lange Agenten geben ab:** Die Bau-Agenten (Texter, Maler, Klang, Nachbesserer) hören nach etwa 60
   Werkzeugaufrufen oder bei großem Kontext auf, schreiben ihr Protokoll vollständig (fertig, offen, welche Einträge)
