@@ -15,7 +15,9 @@ Nachbesprechungen an diesem Rechner), lies sie zu Beginn; sie ergänzt diesen Sk
 
 **Am Tisch zuerst** (bei jedem Szenenwechsel, nach jeder Pause und nach einer Kontext-Zusammenfassung neu lesen; der
 Prüfer prüft nach jeder Szene dieselben Punkte):
-1. **Tempo:** kurz antworten, mit Fertigem anfangen; mehr als 12 s bis zum nächsten Ton, dann zuerst ein Füller (4).
+1. **Tempo:** kurz antworten, mit Fertigem anfangen; die erste Zeile ein kurzer Satz in einem eigenen `say_line`,
+   erst danach nachschlagen, würfeln und den Rest sprechen (4); mehr als 12 s bis zum nächsten Ton, dann zuerst ein
+   Füller (4).
 2. **Reinreden geht vor:** `interrupted` oder `held` heißt sofort `wait_for_players`; Ungehörtes danach knapp
    nachliefern (4a).
 3. **Ball zurück:** Jede Erzählung endet mit einer offenen Übergabe; nach einem Wurf erst das Ergebnis, dann warten,
@@ -159,7 +161,8 @@ Jedes Ende eines Zuhörers ließ den Tisch taub, bis der nächste lief.
    des Zuhörers da ist, dann sie beantworten (`unheard` danach, wenn es noch passt). „Reinreden geht vor“ (oben)
    heißt im Zuhörer-Modus: auf die Rückgabe warten, nicht `wait_for_players`.
    Mit dem Schnitt spielt der Tisch sofort einen Denk-Satz des Erzählers („Ist angekommen.“, „Lass mal sehen.“; Denny
-   2026-11-19: deine zehn Sekunden Denkzeit sollen nicht still sein). Deine Antwort setzt keinen zweiten davor
+   2026-11-19: deine zehn Sekunden Denkzeit sollen nicht still sein); hat der Zuhörer einen eigenen Brückensatz
+   (`bridge_text`), kommt er direkt nach dem Denk-Satz. Deine Antwort setzt keinen zweiten davor
    (kein `opener: "think"` für den Erzähler), sie fängt gleich mit der Sache an. Der Erzähler braucht dafür viele
    think-Sätze in diesem Ton (`campaign set narrator_stock`, dann `prepare_table`), sonst wiederholen sie sich.
    Wendet sich ein Held an einen NPC, spielt der Zuhörer statt des Denksatzes die Brücke des Erzählers („Tobi geht
@@ -249,6 +252,11 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
 ## 4. Antworten: Tempo und Erzählen
 
 - **Kurz.** 1–3 Sätze, gesprochene Sprache, keine Listen, kein Markdown. Ihr redet, nicht lest.
+- **Erste Zeile sofort** (Denny, 2026-11-21; am Tisch vom 20.11. kam die Antwort 10–21 s nach dem Zug, fast alles
+  Schreibzeit): Der erste Aufruf nach einem Zug ist ein `say_line` mit einem kurzen Satz (bis etwa zwölf Wörter), der
+  schon zur Sache gehört („Der Wirt hebt eine Braue.“, „Die Tür gibt nach … fast.“). Er klingt, während du den Rest
+  schreibst. Erst danach `campaign`, `roll_dice`, Bilder und die übrigen Sätze in einem zweiten `say_line`. Nichts
+  nachschlagen, bevor der erste Satz läuft, außer der Satz hinge davon ab.
 - **Zum Sprechen schreiben:** Punkt statt Komma, wo die Stimme runtergehen soll; `[emphasis]` vor dem einen Wort, das
   trägt; `…` vor einer Pointe. Die Spieler sehen die Marken nicht, die Aussprache der Namen kommt aus
   `pronunciations` von selbst (gm_guide `sprechen`). Vorgefertigte Vorlesetexte wortgleich sagen, sonst sind sie
@@ -486,7 +494,7 @@ Die Spieler tun oft etwas, das kein Szenen-Rezept vorsieht. Das ist gut so.
   spieler grad bespaßt werden im hintergrund dinge preppen“). Erfinden die Spieler einen Ort, holen einen NPC ins
   Spiel, der kein Bild hat, oder steuert die Geschichte auf eine Szene zu, die es nicht gibt: das Bild (`picture`)
   oder feste Zeilen (`say_line prepare`) gleich anstoßen, solange am Tisch noch etwas anderes läuft. Bildjobs kehren
-  sofort mit ihrer Job-ID zurück; wenn sie fertig sind (`jobs wait` mit kurzer Wartezeit), zeigst du das Bild
+  sofort mit ihrer Job-ID zurück; wenn sie fertig sind (`jobs wait` mit kurzer Wartezeit; ein Clip oder 3D: `jobs watch`, den Befehl im Hintergrund, er weckt dich), zeigst du das Bild
   bei passender Gelegenheit. Stimme und Bilder teilen sich die Grafikkarte; solange eine neue Zeile gestreamt
   wird, hält das Studio Bildjobs zwischen zwei Schritten an (die Stimme geht vor, Spieltest 2026-10-29: ein Bild im
   Hintergrund ließ den Stream ruckeln). Du musst das Timing also nicht abpassen, ein Bild dauert dann nur länger. Nur

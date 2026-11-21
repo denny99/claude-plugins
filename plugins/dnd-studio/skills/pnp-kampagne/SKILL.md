@@ -232,8 +232,8 @@ Fäden, mit denen es beginnt, und den Ort, an dem der Abend anfängt.
 
 ## 3. Bilder, Karten, Klang (die langsamen Teile, gesammelt)
 
-Bilder belegen die GPU minutenlang. Deshalb erst wenn der Text steht, gebündelt, und mit `jobs wait` abwarten statt
-einzeln:
+Bilder belegen die GPU minutenlang. Deshalb erst wenn der Text steht, gebündelt, und gebündelt abwarten statt
+einzeln (`jobs watch`: den Befehl mit Bash im Hintergrund starten, er weckt dich, wenn alle fertig sind):
 - `paint_campaign`: ein Aufruf für alles, mit `items` (`[{kind, name}, …]`, Arten gemischt; je Art werden die Bildworte
   erst alle geschrieben, dann gemalt): NPC-Porträts, Orte, Szenen. Jede Szene braucht ein Bild, das die
   Spieler beim Vorlesen sehen. Jeder sprechende NPC braucht ein Porträt: Es erscheint im Spielerfenster, während er
@@ -345,8 +345,9 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
 - `campaign` erst mit `overview: true`, dann nur mit `only` und `names` lesen. Die ganze Kampagne ist die größte Antwort
   der Werkzeuge. `results list` mit `name` und `brief`, `settings` ohne `available`.
 - Viele Bilder ansehen: je 12–16 auf einen Kontaktbogen (`results sheet`), groß (`results get`) nur die Verdächtigen.
-- Jobs eines Stapels in einem `jobs wait` bündeln und zwischen den Wartezeiten nichts anderes lesen: Jede Runde schickt
-  den ganzen Kontext neu.
+- Jobs eines Stapels in einem `jobs watch` bündeln (im Hintergrund; ein Agent: `background: false`, im Vordergrund)
+  statt `jobs wait` alle 50 s, und zwischen den Wartezeiten nichts anderes lesen: Jede Runde schickt den ganzen Kontext
+  neu.
 - Vor einem langen Agenten mit einem Probeaufruf prüfen, ob sein Weg geht (ist die Ergebnisliste überhaupt gefüllt?).
 - **Jeden Eintrag einmal schreiben:** alles zu einem Eintrag sammeln, dann ein `set_campaign_entry` mit allen Feldern;
   viele Einträge in einem Aufruf mit `entries`. Jeder Aufruf ist eine volle Runde (ein Bau schrieb 190-mal, ein
@@ -355,7 +356,8 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
   pictures`, `set_voice voices`, `write_text texts`, `party set players`, `map plan patches`, `paint_map tiles`,
   `picture`/`picture_tool pictures`, `make_3d`/`model_tool models`, `make_sound sounds`, `add_file paths`, `results get
   ids`. Ein Feld neben der Liste gilt für jeden Eintrag; ein Fehler hält den Rest nicht auf (`failed`, je Eintrag
-  `error`). Job-Werkzeuge geben alle `job_ids` zurück: die in einem `jobs wait` abwarten.
+  `error`). Job-Werkzeuge geben alle `job_ids` zurück: die in einem `jobs watch` abwarten. Braucht ein Aufruf
+  länger als 25 s zum Vorbereiten, kommt statt der Jobs eine Aufruf-ID (`call-…`): sie steht für alle seine Jobs.
 - Karten-Plan lesen ohne Bilder: `map list` mit `map` und `pictures: false`.
 - **Lange Agenten geben ab:** Die Bau-Agenten (Texter, Maler, Klang, Nachbesserer) hören nach etwa 60
   Werkzeugaufrufen oder bei großem Kontext auf, schreiben ihr Protokoll vollständig (fertig, offen, welche Einträge)
