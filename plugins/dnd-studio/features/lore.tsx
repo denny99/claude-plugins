@@ -14,7 +14,6 @@ import type {
   RenderElement,
 } from "claude-code";
 
-import { portOf } from "./health";
 import {
   countsOfMap,
   countsText,
@@ -22,7 +21,6 @@ import {
   hitsOf,
   kindDe,
   KINDS,
-  loreUrl,
   mapOf,
   newWorldPrompt,
   noteOf,
@@ -35,7 +33,7 @@ import {
 import type { Flow } from "../lib/lore";
 import { readCampaign, readTab } from "../lib/state";
 import { tidyError } from "../lib/host";
-import { STUDIO_TOOL_PREFIX } from "../lib/studio";
+import { SERVER_KEY, STUDIO_TOOL_PREFIX } from "../lib/studio";
 import {
   askAction,
   Card,
@@ -100,25 +98,37 @@ export async function loadLoreReports($: EngineInterface): Promise<void> {
 
 // --- the Studio's routes ------------------------------------------------------------------------------------------
 
-/** GET one lore route; the parsed JSON, or throws with a short German reason. */
+/**
+ * One read of the Studio's lore through its MCP tool `lore` (the MCP server answers only /mcp, so the Studio's HTTP
+ * routes are not reachable on its port); the parsed JSON (an object or a list), or throws with a short German reason.
+ */
 async function loreGet(
   $: EngineInterface,
-  options: PluginOptions,
+  _options: PluginOptions,
   route: "map" | "search" | "note",
   params: Record<string, string | number | undefined>,
 ): Promise<unknown> {
-  const token = typeof options.token === "string" ? options.token : "";
-  const res = await $.http.fetch(loreUrl(portOf(options), route, params), {
-    method: "GET",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (res.status === 404)
-    throw new Error(
-      "Das Studio kennt die Lore noch nicht (HTTP 404): Studio-App aktualisieren.",
-    );
-  if (!res.ok) throw new Error(`Lore nicht lesbar: HTTP ${res.status}`);
+  const given = (o: Record<string, unknown>) =>
+    Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== ""));
+  const args =
+    route === "map"
+      ? given({ action: "map", world: params.world })
+      : route === "search"
+        ? given({ action: "search", query: params.q, world: params.world, kind: params.kind, limit: params.limit })
+        : given({ action: "read", world: params.world, title: params.title });
+  const link = await $.mcp.connect(SERVER_KEY);
+  if (!link.isConnected) throw new Error(`Studio nicht verbunden: ${link.message || link.reason}`);
+  const res = await $.mcp.call(link.server, "lore", args);
+  const text = Array.isArray(res.content)
+    ? res.content.map((b) => (b && typeof b === "object" && "text" in b ? String((b as { text: unknown }).text) : "")).join("")
+    : "";
+  if (res.isError || /^unknown tool/i.test(text)) {
+    if (/unknown tool/i.test(text)) throw new Error("Das Studio kennt die Lore noch nicht: Studio-App aktualisieren.");
+    throw new Error(text || "Lore nicht lesbar");
+  }
+  if (res.structuredContent !== undefined && res.structuredContent !== null) return res.structuredContent;
   try {
-    return JSON.parse(res.text) as unknown;
+    return JSON.parse(text) as unknown;
   } catch {
     throw new Error("Lore nicht lesbar: keine JSON-Antwort");
   }

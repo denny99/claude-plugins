@@ -1,4 +1,4 @@
-// Tabs Welt and Lore: the Studio's lore routes faked with the Ödland of „Die Rostmark-Chroniken“; numbered steps like
+// Tabs Welt and Lore: the Studio's lore tool faked with the Ödland of „Die Rostmark-Chroniken“; numbered steps like
 // the Bau tab's „Bau-Abschnitte“, fed by lore_progress or the vault's counts; buttons that ask Claude.
 import { expect } from "claude-code/testing";
 import { test } from "./limits";
@@ -22,66 +22,64 @@ const OEDLAND_MAP = {
     technology: [{ title: "Strahlung", tags: [], status: "canon" }],
     character: [{ title: "Ansagerin von Radio Kesselheim", tags: [], status: "draft" }],
   },
-  questions: [{ title: "Wer sendet auf 87,5?" }],
+  open: ["Wer sendet auf 87,5?"],
   recent: [{ title: "Kesselheim", kind: "place", updated: "2026-11-21T14:05:00Z" }],
 };
-const WORLDS = [
-  {
-    world: "Ödland",
-    counts: { world: 1, theme: 1, place: 3, faction: 1, technology: 1, character: 1, question: 1 },
-    campaigns: ["Die Rostmark-Chroniken"],
-  },
-];
+const WORLDS = {
+  worlds: [
+    {
+      world: "Ödland",
+      notes: 9,
+      kinds: { world: 1, theme: 1, place: 3, faction: 1, technology: 1, character: 1, question: 1 },
+      campaigns: ["Die Rostmark-Chroniken"],
+    },
+  ],
+};
 const NOTE = {
   title: "Kesselheim",
   world: "Ödland",
   kind: "place",
   tags: ["rostmark"],
   status: "canon",
-  body: "Kesselheim ist die größte Siedlung der [[Rostmark]], um einen erloschenen Kühlturm gebaut.\n\n## Nur Spielleitung\nDer Kühlturm wird wieder warm.",
+  body: "Kesselheim ist die größte Siedlung der [[Rostmark]], um einen erloschenen Kühlturm gebaut.\n\n## Geheim (Spielleitung)\nDer Kühlturm wird wieder warm.",
   links: ["Rostmark", "Kesselheimer Rat"],
   backlinks: ["Radio Kesselheim"],
   updated: "2026-11-21T14:05:00Z",
   sources: ["kampagne:Die Rostmark-Chroniken"],
 };
 
-type Fetch = { url: string; headers: Record<string, string> };
+type Call = { tool: string; args: Record<string, unknown> };
 
-/** Fakes the Studio's /dnd/lore routes; `worlds` and `status` change what it answers. */
+/**
+ * Fakes the Studio's MCP tool `lore` (map, search, read) in its real shapes; `worlds` and `map` change what it
+ * answers, `old` is a Studio without the tool.
+ */
 function studio(
-  on: Parameters<typeof world>[0],
-  o: { worlds?: unknown; map?: unknown; status?: number } = {},
-): Fetch[] {
-  const seen: Fetch[] = [];
-  on("http.fetch", (_, e) => {
-    const ev = e as unknown as { url: string; init?: { headers?: Record<string, string> } };
-    seen.push({ url: ev.url, headers: ev.init?.headers ?? {} });
-    const u = new URL(ev.url);
-    const answer = (body: unknown) => ({
-      value: { status: o.status ?? 200, ok: (o.status ?? 200) < 300, headers: {}, text: JSON.stringify(body) } as never,
-    });
-    if (!u.pathname.startsWith("/dnd/lore/")) return answer({});
-    if (u.pathname === "/dnd/lore/map")
-      return answer(u.searchParams.get("world") ? (o.map ?? OEDLAND_MAP) : (o.worlds ?? WORLDS));
-    if (u.pathname === "/dnd/lore/search")
-      return answer([
-        { title: "Kesselheim", world: "Ödland", kind: "place", tags: [], snippet: "größte Siedlung der Rostmark", score: 3 },
-      ]);
-    if (u.pathname === "/dnd/lore/note") return answer(NOTE);
-    return answer({});
-  });
-  return seen;
+  w: ReturnType<typeof world>,
+  o: { worlds?: unknown; map?: unknown; old?: boolean } = {},
+): Call[] {
+  w.answers.lore = (a: Record<string, unknown>) => {
+    const body = o.old
+      ? "unknown tool lore"
+      : a.action === "map"
+        ? a.world ? (o.map ?? OEDLAND_MAP) : (o.worlds ?? WORLDS)
+        : a.action === "search"
+          ? [{ title: "Kesselheim", world: "Ödland", kind: "place", tags: [], snippet: "größte Siedlung der Rostmark", score: 3 }]
+          : a.action === "read" ? [NOTE] : {};
+    return [{ type: "text", text: typeof body === "string" ? body : JSON.stringify(body) }];
+  };
+  return w.calls as Call[];
 }
+const lore = (calls: Call[]) => calls.filter((c) => c.tool === "lore").map((c) => c.args);
 
 const OEDLAND_CAMPAIGN = { ...CAMPAIGN, open: "Die Rostmark-Chroniken" };
 
 test("Lore tab: the world's state, six numbered steps, browse, search and read a note; the kit rules hold", async ($, on) => {
-  world(on, { campaign: OEDLAND_CAMPAIGN });
-  const seen = studio(on);
+  const seen = studio(world(on, { campaign: OEDLAND_CAMPAIGN }));
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd", args: "lore" } as never);
-  expect(seen.some((f) => f.url === "http://127.0.0.1:37641/dnd/lore/map")).toBe(true);
-  expect(seen.some((f) => f.url.endsWith("/dnd/lore/map?world=%C3%96dland"))).toBe(true);
+  expect(lore(seen)).toContainEqual({ action: "map" });
+  expect(lore(seen)).toContainEqual({ action: "map", world: "Ödland" });
   const ui = await $.ui.mount({ ...pane(90, 80), surface: "desktop" });
   expect(await ui.find({ type: "Button", key: "tab-lore" })).toBeDefined();
   expect(await findShown(ui, "Lore-Abschnitte")).toBeDefined();
@@ -100,7 +98,7 @@ test("Lore tab: the world's state, six numbered steps, browse, search and read a
 
   // read a note
   await ui.press({ key: "lore-n-faction-0-read" });
-  expect(seen.some((f) => f.url.includes("/dnd/lore/note?world=%C3%96dland&title=Kesselheimer%20Rat"))).toBe(true);
+  expect(lore(seen)).toContainEqual({ action: "read", world: "Ödland", title: "Kesselheimer Rat" });
   expect(await findShown(ui, /größte Siedlung der \[\[Rostmark\]\]/)).toBeDefined();
   expect(await findShown(ui, "Radio Kesselheim")).toBeDefined();
   expect(kitRuleLines(await ui.drawn())).toEqual([]);
@@ -110,16 +108,12 @@ test("Lore tab: the world's state, six numbered steps, browse, search and read a
 });
 
 test("Lore tab: the search asks the Studio with world and limit and lists the hits", async ($, on) => {
-  world(on);
-  const seen = studio(on);
+  const seen = studio(world(on));
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd", args: "lore" } as never);
   const ui = await $.ui.mount({ ...pane(90, 80), surface: "desktop" });
   await ui.input({ key: "lore-search", text: "Kessel" });
-  const hit = seen.find((f) => f.url.includes("/dnd/lore/search"));
-  expect(hit?.url).toContain("q=Kessel");
-  expect(hit?.url).toContain("world=%C3%96dland");
-  expect(hit?.url).toContain("limit=20");
+  expect(lore(seen).find((a) => a.action === "search")).toEqual({ action: "search", query: "Kessel", world: "Ödland", limit: 20 });
   expect(await findShown(ui, "Treffer")).toBeDefined();
   expect(await findShown(ui, /größte Siedlung der Rostmark/)).toBeDefined();
   await ui.unmount();
@@ -127,7 +121,7 @@ test("Lore tab: the search asks the Studio with world and limit and lists the hi
 
 test("Welt tab: ten steps from the vault's counts, lore_progress overrides one, the step button asks Claude", async ($, on) => {
   const w = world(on);
-  studio(on);
+  studio(w);
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd", args: "welt" } as never);
   const ui = await $.ui.mount({ ...pane(90, 80), surface: "desktop" });
@@ -161,9 +155,9 @@ test("Welt tab: ten steps from the vault's counts, lore_progress overrides one, 
 
 test("Welt tab: a world without notes offers „Aus Kampagne übernehmen“ (lore from_campaign) for the open campaign", async ($, on) => {
   const w = world(on, { campaign: OEDLAND_CAMPAIGN });
-  studio(on, {
-    worlds: [{ world: "Ödland", counts: {}, campaigns: ["Die Rostmark-Chroniken"] }],
-    map: { world: "Ödland", kinds: {}, questions: [], recent: [] },
+  studio(w, {
+    worlds: { worlds: [{ world: "Ödland", notes: 0, kinds: {}, campaigns: ["Die Rostmark-Chroniken"] }] },
+    map: { world: "Ödland", kinds: {}, open: [], recent: [] },
   });
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd", args: "build" } as never); // reads the open campaign
@@ -179,8 +173,7 @@ test("Welt tab: a world without notes offers „Aus Kampagne übernehmen“ (lor
 });
 
 test("Lore tab: an old Studio without the routes says so in the status line", async ($, on) => {
-  world(on);
-  studio(on, { status: 404 });
+  studio(world(on), { old: true });
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd", args: "lore" } as never);
   const ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
@@ -199,8 +192,7 @@ test("steps: a report wins over the counts; question notes begin step 5 of the l
 });
 
 test("Welt and Lore: the terminal at 48 columns cuts no button and no line", async ($, on) => {
-  world(on);
-  studio(on);
+  studio(world(on));
   await $.session.start({ cwd: "/", surface: "terminal", isInteractive: true });
   for (const tab of ["world", "lore"])
     for (const cols of [48, 120]) {

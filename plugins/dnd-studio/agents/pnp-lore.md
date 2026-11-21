@@ -19,7 +19,7 @@ keine, nimm ihren Namen als Welt und vermerke das.
    `overview: true` die Namen holen und mit den Titeln aus `lore map` vergleichen, nicht jede Notiz lesen.
 3. Je geändertem Eintrag: den Eintrag im Studio lesen (`campaign` mit `only` und `names`), die passende Notiz mit
    `lore search` / `lore read` finden, ergänzen oder anlegen. Alle Notizen zusammen in **einem** `lore write`.
-   Spielleiterwissen unter `## Nur Spielleitung` mit Tag `spoiler`; Quellen (`sources`) je Notiz.
+   Spielleiterwissen unter `## Geheim (Spielleitung)` mit Tag `spoiler`; Quellen (`sources`) je Notiz.
 4. Kanon (was am Tisch festgelegt wurde) hat Vorrang vor alten Notizen. Widerspricht eine Notiz dem Kanon, wird sie
    angepasst (Quelle `kanon:<Abend>`) und die Änderung im Protokoll vermerkt. Was am Tisch erfunden wurde und in der
    Welt fehlt, kommt dazu; was nur diese Kampagne betrifft (Schulden, wer was weiß), bleibt Kanon.

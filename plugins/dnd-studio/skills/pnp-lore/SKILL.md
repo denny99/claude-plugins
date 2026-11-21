@@ -20,9 +20,9 @@ eine Radio-Kultur wie in den 1950ern.
 | Aktion          | Was                                                                                                    |
 | --------------- | ------------------------------------------------------------------------------------------------------ |
 | `map`           | Ohne `world`: alle Welten mit Anzahl je Art und ihren Kampagnen. Mit `world`: die Titel je Art, die offenen Fragen, zuletzt Geändertes. |
-| `search`        | `q`, optional `world`, `kind`, `limit`: Treffer mit Ausschnitt. Der erste Griff bei jeder Frage.        |
+| `search`        | `query`, optional `world`, `kind`, `tag`, `limit`: Treffer mit Ausschnitt. Der erste Griff bei jeder Frage.        |
 | `read`          | `title`, `world`: eine Notiz ganz, mit Links, Rückverweisen und Quellen.                               |
-| `write`         | `notes: [{title, world, kind, tags?, status?, body, sources?}]`: mehrere Notizen je Aufruf, neu oder geändert. |
+| `write`         | `notes: [{title, world, kind, tags?, status?, body, sources?}]`: mehrere Notizen je Aufruf, neu oder geändert. `body` ersetzt den Text, `tags` und `sources` kommen dazu (`"-tag"` nimmt einen Tag weg). |
 | `delete`        | `title`, `world`: nimmt eine Notiz heraus (nur Überholtes, nie Kanon).                                 |
 | `from_campaign` | `campaign`, `world`: legt die Lore einer Welt aus einer bestehenden Kampagne an (siehe unten).         |
 
@@ -57,7 +57,7 @@ Das D&D-Panel zeigt im Tab **Lore** sechs Schritte mit Nummer und Stand (wie die
 1. **Bestand sichten** (Abschnitt 1; bei einer bestehenden Kampagne `from_campaign`, Abschnitt 2)
 2. **Notizen anlegen/abgleichen** (Abschnitte 3 und 8)
 3. **Verknüpfen**: jede Notiz hat ihre `[[Links]]`, Zeitleiste und „Namen und Aussprache“ sind nachgezogen
-4. **Geheimes markieren**: Spielleiterwissen unter `## Nur Spielleitung` mit Tag `spoiler`
+4. **Geheimes markieren**: Spielleiterwissen unter `## Geheim (Spielleitung)` mit Tag `spoiler`
 5. **Offene Fragen** (Abschnitt 4)
 6. **Kanon-Abgleich nach dem Abend** (Abschnitt 7 und 8)
 
@@ -94,7 +94,7 @@ NPCs → `character`, Kanon → in die betroffenen Notizen, Fäden → `question
   „Kesselheimer Markt“, „Radio Kesselheim“).
 - **Der erste Satz sagt, was es ist**, so dass er allein in einer Trefferliste trägt: „Kesselheim ist die größte
   Siedlung der Rostmark, um einen erloschenen Kühlturm gebaut.“
-- **Was die Helden wissen können, zuerst**; Spielleiterwissen darunter unter `## Nur Spielleitung` (und Tag `spoiler`).
+- **Was die Helden wissen können, zuerst**; Spielleiterwissen darunter unter `## Geheim (Spielleitung)` (und Tag `spoiler`).
   Spielt der Mensch selbst mit, liest du ihm nichts davon vor.
 - **Verlinkt:** jeder Ort, jede Person, jedes Ereignis, das eine eigene Notiz hat oder haben sollte, als
   `[[Titel]]`. Ein Link auf eine Notiz, die es noch nicht gibt, ist erlaubt, wenn sie bald entsteht; sonst eine
@@ -114,7 +114,7 @@ Kesselheim ist die größte Siedlung der [[Rostmark]], um einen erloschenen Küh
 - Wie es ist: Wellblech, Röhrenradios in jedem Fenster, abends die Sendung von [[Radio Kesselheim]].
 - Gefahr: Strahlungsnester im Kühlturm (siehe [[Strahlung]]).
 
-## Nur Spielleitung
+## Geheim (Spielleitung)
 Der Rat verschweigt, dass der Kühlturm wieder warm wird.
 ```
 

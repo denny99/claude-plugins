@@ -64,11 +64,12 @@ export function loreUrl(
 
 /** GET /dnd/lore/map without a world: every world with its counts and campaigns. */
 export function worldsOf(body: unknown): LoreWorld[] {
-  return (Array.isArray(body) ? body : [])
+  const list = Array.isArray(body) ? body : obj(body).worlds;
+  return (Array.isArray(list) ? list : [])
     .map((w) => {
       const o = obj(w);
       const counts: Record<string, number> = {};
-      for (const [k, v] of Object.entries(obj(o.counts))) counts[k] = num(v);
+      for (const [k, v] of Object.entries(obj(o.counts ?? o.kinds))) counts[k] = num(v);
       return { world: str(o.world), counts, campaigns: strs(o.campaigns) };
     })
     .filter((w) => w.world);
@@ -85,8 +86,9 @@ export function mapOf(body: unknown): LoreMap {
         return { title: str(e.title), tags: strs(e.tags), status: str(e.status) };
       })
       .filter((n) => n.title);
-  const questions = (Array.isArray(o.questions) ? o.questions : [])
-    .map((q) => str(obj(q).title))
+  const qs = o.questions ?? o.open;
+  const questions = (Array.isArray(qs) ? qs : [])
+    .map((q) => (typeof q === "string" ? q : str(obj(q).title)))
     .filter(Boolean);
   const recent = (Array.isArray(o.recent) ? o.recent : [])
     .map((r) => {
@@ -99,7 +101,8 @@ export function mapOf(body: unknown): LoreMap {
 
 /** GET /dnd/lore/search: the hits. */
 export function hitsOf(body: unknown): LoreHit[] {
-  return (Array.isArray(body) ? body : [])
+  const list = Array.isArray(body) ? body : obj(body).results;
+  return (Array.isArray(list) ? list : [])
     .map((h) => {
       const o = obj(h);
       return {
@@ -116,7 +119,8 @@ export function hitsOf(body: unknown): LoreHit[] {
 
 /** GET /dnd/lore/note: one note. */
 export function noteOf(body: unknown): LoreNote | null {
-  const o = obj(body);
+  const list = Array.isArray(body) ? body : obj(body).notes;
+  const o = Array.isArray(list) ? obj(list[0]) : obj(body);
   if (!str(o.title)) return null;
   return {
     title: str(o.title),
