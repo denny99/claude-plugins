@@ -286,6 +286,16 @@ einzeln (`jobs watch`: den Befehl mit Bash im Hintergrund starten, er weckt dich
   `say_line sound` am Tisch. Am Tisch hat jeder Klang einen Knopf, die Spielleitung – Mensch oder Claude – startet
   ihn, wenn er passt; im Studio geht dasselbe im Dialog der Szene unter „Klänge“. Ein Klang, der zu keiner Szene
   gehört (ein Wesen, das überall heult), in die Notizen des NPC.
+- **Musik nach Stimmung** (Denny 2026-11-21): Je Kampagne eine Musik für `explore`, `tense`, `fight`, `rest`
+  (`make_sound` mit `kind: "bgmusic"`, lange Schleifen), gebunden mit `set_campaign { mood_music: { explore: <Datei>,
+  fight: <Datei>, … } }`. Eine Szene mit eigener Musik je Stimmung: in ihren `sounds` den Klang mit `mood: "fight"`.
+  Am Tisch blendet die Musik dann mit der Stimmung über, ein Kampf schaltet von selbst um.
+- **Schleifen für die wichtigen Szenen** (Ankunft an einem Ort, der Höhepunkt, ein Ort mit Feuer, Nebel oder Wasser):
+  `animate { start: <Szenenbild>, loop: true, idea: "was sich bewegt: das Feuer flackert, Rauch zieht" }` macht ein
+  lebendes Standbild (Kamera und Personen still, ohne Ton, 5 s, nahtlos). Nur vor dem Abend: mit offenem Tisch passt
+  das Video neben der Stimme nicht auf die Karte. Die Schleife in die Notizen der Szene, damit die Spielleitung sie
+  mit `show_players loop: true` zeigt.
+- **Tiefenkarten** für die Parallaxe im Spielerfenster macht `prepare_table` selbst (Abschnitt 2, `pnp-tischbereit`).
 
 ## 4. Abnahme: Ist der Abend spielfertig?
 
@@ -294,6 +304,8 @@ Gehe den Abend im Kopf einmal als Spielleitung durch und prüfe:
 - Es gibt eine Kampagnenkarte mit allen Orten als Marker, und jeder Ort, an dem eine Szene spielt, hat seine Karte.
 - Jeder sprechende NPC hat Porträt, Stimme (mit Stimmprobe), `sheet`, Standardsätze; jeder stumme hat Geräusche.
 - Jeder gebundene Klang ist eine Aufnahme, mit `check_sound` gegen das gehört, was er sein soll.
+- Die Kampagne hat Musik je Stimmung (`campaign` zeigt `moodMusic`: mindestens `explore` und `fight`), und die
+  wichtigen Szenen haben ihre Schleife (`animate loop`, in den Notizen der Szene).
 - Bei einem Kapitel einer Kampagne: `threads` und `party_at` gesetzt (`campaign` zeigt `threads` und `partyAt`).
 - Jede Szene auf einer Karte nennt in den Notizen die Startfelder von Helden und NPCs.
 - Jeder Held hat einen Weg, der zu seinem Bogen passt, und jeder Wurf nennt die Fertigkeit, die er auch hat.

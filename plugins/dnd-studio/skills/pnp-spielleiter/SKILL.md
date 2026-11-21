@@ -62,7 +62,9 @@ Aufbau: 1 Vor dem Abend · 2 Tisch aufbauen · 3 Ablauf · 4 Antworten · 4a Nic
 3. **`prepare_table`** aufrufen, so oft bis `done: true`. Es erzeugt alle Standardsätze, Szenen- und Vorlesetexte
    (Erzähler) dauerhaft. Feste NPC-Texte (z. B. die ersten Worte eines NPCs als Vorlesetext) als `lines` mit ihrer
    Stimme mitgeben: `{text, voice: "Hanna Distelbrunn"}`. Vorbereitetes kommt am Tisch sofort, **wenn es Wort für Wort
-   in derselben Stimme und mit demselben how gesagt wird.**
+   in derselben Stimme und mit demselben how gesagt wird.** Es macht auch die Tiefenkarten der Szenen- und Ortsbilder
+   (`depth` in der Antwort): Nur mit ihnen bekommen die Bilder am Tisch die Parallaxe (Vordergrund gegen Hintergrund);
+   am Tisch selbst wird keine gemacht, die Grafikkarte gehört der Stimme.
 4. Fehlende Bilder für die geplanten Szenen jetzt malen. Am Tisch wird nur nachgemalt, was die Spieler Neues
    bringen, im Hintergrund (4b), nie als Wartezeit zwischen zwei Zügen.
 5. **Rahmen aus dem Leitfaden lesen, nicht fragen** (Denny 2026-11-13: „nicht vorher fragen, das Setting gibt das
@@ -290,8 +292,21 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
   der Kampagne) oder `{ title, words, picture }`. Es wird gezeigt (`show: false`: nur abgelegt) und liegt in ihren
   Fundstücken, auch an späteren Abenden; `remove: true` nimmt es zurück. Vorbereiten statt gleich geben: ein Text mit
   `handout` (`set_campaign_entry kind text`). Was sie schon haben, steht in `campaign` unter `found`.
-- **Rückblick zum Start:** `write_text recap: true`, dann `show_players` mit Titel und Text (`show_text`) und
-  `say_line` als Erzähler.
+- **Rückblick zum Start, als kleiner Film:** ein Aufruf, `show_players { recap: "<dein Rückblick oder der von write_text
+  recap>", music: "<Hintergrundmusik der Kampagne>" }`. Die Bilder der letzten Sitzung laufen von selbst mit Überblendung,
+  der Erzähler liest, die Musik liegt darunter; der Aufruf kommt zurück, wenn die Erzählung vorbei ist. Eigene Bilder
+  mit `slides`. Danach `play_sound stop` oder gleich die Stimmung der ersten Szene (`play_sound mood`).
+- **Die Bühne lebendig machen** (Denny 2026-11-21), alles Felder von `show_players`:
+  - `transition`: `black` (abblenden) oder `title` (eine Titelkarte mit dem Titel, für ein neues Kapitel oder einen
+    neuen Ort); ohne sie die übliche Überblendung.
+  - `weather`: `rain`, `snow`, `ash`, `fog` über dem Bild; bleibt, bis du es änderst (`none` nimmt es weg).
+  - `effect` einmal beim Erscheinen: `shake` (ein Schlag, ein Beben, eine Tür fliegt auf), `flash` (Blitz, Zauber).
+  - `overlay`: Spritzer wie auf der Linse: `blood` (ein Treffer, eine Wunde), `water` (eine Welle), `mud`, `cracks`
+    (Glas splittert, ein Schlag auf den Kopf), `frost` (Kälte); das nächste Bild nimmt es weg.
+  - Sparsam: ein Effekt, wenn die Geschichte ihn trägt, nicht bei jedem Bild. Ein Held fast am Boden (Leben ≤ 25 %)
+    lässt den Rand von selbst rot pulsieren; ein Standbild zoomt von selbst langsam.
+  - **Schleifen:** Hat eine Szene eine vorbereitete Schleife (`animate loop`, beim Bau), zeigst du sie statt des
+    Standbilds: `show_players { picture: <Schleife>, loop: true, title }`.
 - **Trailer/Intro zum Start:** Gibt es einen Clip (`animate`, `cut_film`), läuft er vor der Begrüßung im Spielerfenster:
   `show_players { picture: <Clip>, title, after: <erstes Szenenbild>, until_end: true }` – die Begrüßung kommt danach.
   `loop: true` lässt einen stummen Clip als bewegten Hintergrund laufen.
@@ -680,6 +695,11 @@ sagen die Orts-Pins (`pin_place`, beim Bau gesetzt) und die Marker der Helden.
 
 ## 6. Klang
 
+- **Musik nach Stimmung:** Setz zu Beginn einer Szene `play_sound { mood }` (`explore`, `tense`, `fight`, `rest`; `none`
+  = Stille), statt Musik einzeln zu starten; sie blendet über. Ein Kampf beginnt von selbst, sobald ein Gegner per
+  `set_status foe` auf dem Tisch steht, und endet mit dem letzten; danach kommt die Stimmung von vorher zurück. Die
+  Kampagne bindet die Musik je Stimmung (`set_campaign mood_music`), eine Szene kann eigene haben. Ein eigenes
+  `play_sound loop` gilt bis zur nächsten Stimmung.
 - Geräusche mit `play_sound`: ein Effekt einmal, eine Atmosphäre oder Musik mit `loop: true` und `volume` 0.15–0.3
   (eine Schleife bleibt ohnehin bei höchstens 0.3 und wird unter Sprache von selbst leiser), `stop: true` beendet sie.
   Sie spielen im Spielerfenster (PC-Lautsprecher) und, wenn der Bot am Tisch ist, in Discord unter der Stimme.
@@ -714,7 +734,9 @@ session muss ein recap kommen und ein ausklingen“):
    Musik (`play_sound loop`, `volume` ≈ 0.3), und ein letzter Satz, der nach vorn zeigt: ein Bild, ein Geräusch, eine
    Frage, die bis zum nächsten Abend hängen bleibt (bei einem Kapitelende der vorbereitete Ausblick). Erst dann, als
    Erzähler aus der Geschichte heraus, der Abschied mit `opener: "bye"` und ein Dank an die Spieler. Zum
-   Schluss `show_players clear` und die Atmosphäre aus (`play_sound stop`).
+   Schluss der **Abspann**: `show_players { credits: true, credit_lines: ["Danke fürs Spielen", "Fortsetzung folgt …"],
+   music: "<Musik>" }` rollt die Helden mit ihren Spielern, die NPCs des Abends und die Orte; danach `show_players
+   clear` und die Musik aus (`play_sound stop`).
 3. `discord` mit `action: "leave"` (es holt alle aus den Nebenräumen und Ortsräumen zurück in die Lobby und löscht
    die Räume, die der Bot angelegt hat).
 
