@@ -66,7 +66,7 @@ export const STALE_TEXT = "MCP schemas stale — restart Claude";
 export const NO_WATCHER_NOTE =
   "Your last turn ended at a live table without a running watcher: the players' turns go unnoticed. Call wait_for_players with watch: true and run its command with Bash run_in_background before you end a turn.";
 export const NO_LISTENER_NOTE =
-  'Your last answer ended in listener mode (discord listener haiku) without a running pnp-zuhoerer: nothing wakes you when the players speak. Start exactly one dnd-studio:pnp-zuhoerer in the background (Agent, run_in_background: true) at the beginning of each answer to a listener wake (pnp-spielleiter, "Mit dem Zuhörer").';
+  'Your last answer ended in listener mode (discord listener haiku) without a running pnp-zuhoerer: nothing wakes you when the players speak. Start exactly one dnd-studio:pnp-zuhoerer in the background (Agent, run_in_background: true) at the beginning of each answer to a listener wake (pnp-spielleiter, references/zuhoerer.md).';
 export const LISTENER_AGENT = "pnp-zuhoerer";
 
 /**

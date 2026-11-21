@@ -32,6 +32,7 @@ export const KINDS: { id: string; de: string; plural: string }[] = [
   { id: "rule", de: "Regel", plural: "Regeln" },
   { id: "theme", de: "Thema", plural: "Themen" },
   { id: "question", de: "Frage", plural: "Fragen" },
+  { id: "decision", de: "Entscheidung", plural: "Entscheidungen" },
   { id: "note", de: "Notiz", plural: "Notizen" },
 ];
 
@@ -194,7 +195,7 @@ type StepDef = {
 
 /** The world design steps (skill pnp-weltenbau §1), as Yannick built Korath. */
 export const WELT_STEPS: StepDef[] = [
-  { title: "Idee/Kern", who: "pnp-weltenbau", kinds: ["world", "theme"], need: 2, ask: "Ton, Säulen und Grenzen der Welt klären" },
+  { title: "Idee/Kern", who: "pnp-weltenbau", kinds: ["world", "theme"], need: 2, ask: "Ton, Säulen, Grenzen, Sprache und führende Quelle der Welt klären und die Heimat-Notizen anlegen (das Entscheidungsprotokoll mit dem ersten lore decide)" },
   { title: "Geografie & Karte", who: "pnp-weltenbau · Karte", kinds: ["place"], need: 3, ask: "Land, Großregionen und Orte klären und die Weltkarte malen" },
   { title: "Völker & Kulturen", who: "pnp-weltenbau", kinds: ["people", "religion", "language"], need: 2, ask: "Völker, Kulturen, Glauben und Namen klären" },
   { title: "Fraktionen & Mächte", who: "pnp-weltenbau", kinds: ["faction"], need: 2, ask: "Fraktionen mit Ziel, Mittel, Gegner und Gesicht klären" },
@@ -202,18 +203,18 @@ export const WELT_STEPS: StepDef[] = [
   { title: "Magie/Technik & Regeln", who: "pnp-weltenbau", kinds: ["magic", "technology", "rule"], need: 1, ask: "Magie oder Technik, ihren Preis und Tisch-Regeln klären" },
   { title: "Orte & NPCs", who: "pnp-weltenbau", kinds: ["character", "creature", "item"], need: 3, ask: "Orte im Kleinen und die Gesichter der Welt klären" },
   { title: "Konflikte & Aufhänger", who: "pnp-weltenbau", kinds: ["question"], need: 3, ask: "Konflikte und drei Abenteuer-Aufhänger klären" },
-  { title: "Lore in den Vault", who: "pnp-weltenbau · lore", ask: "prüfen, dass alles mit Art, Quelle und Links in der Lore steht" },
-  { title: "Review", who: "pnp-weltenbau", ask: "die Notizen frisch lesen und Widersprüche und Lücken vorlegen" },
+  { title: "Lore in den Vault", who: "pnp-weltenbau · lore", ask: "mit lore check prüfen: Art, Quelle, Links, kein Fakt doppelt, Fragen verlinkt, nichts Geheimes durchsickernd" },
+  { title: "Review", who: "pnp-weltenbau", ask: "die Notizen frisch lesen und Widersprüche, doppelte Fakten und Lücken vorlegen (Widersprüche als Frage, nie selbst entscheiden)" },
 ];
 
 /** The lore keeping steps (skill pnp-lore, „Die sechs Schritte“). */
 export const LORE_STEPS: StepDef[] = [
   { title: "Bestand sichten", who: "pnp-lore · from_campaign", ask: "den Bestand sichten (lore map; ohne Notizen erst from_campaign)" },
   { title: "Notizen anlegen/abgleichen", who: "pnp-lore", need: 5, ask: "die Notizen mit Kampagne und Kanon abgleichen" },
-  { title: "Verknüpfen", who: "pnp-lore", ask: "Links, Zeitleiste und Namen und Aussprache nachziehen" },
+  { title: "Verknüpfen", who: "pnp-lore", ask: "Links nachziehen, jeden Fakt nur in seiner Heimat-Notiz lassen, Zeitleiste, Namen und Aussprache und Entscheidungen nachziehen" },
   { title: "Geheimes markieren", who: "pnp-lore", ask: "Spielleiterwissen mit spoiler markieren" },
   { title: "Offene Fragen", who: "pnp-lore · pnp-weltenbau", ask: "die offenen Fragen sichten, beantwortete herausnehmen" },
-  { title: "Kanon-Abgleich nach dem Abend", who: "pnp-lore nach pnp-chronist", ask: "den Kanon des letzten Abends in die Lore übernehmen" },
+  { title: "Kanon-Abgleich nach dem Abend", who: "pnp-lore nach pnp-chronist", ask: "den Kanon des letzten Abends in die Lore übernehmen und mit lore check prüfen" },
 ];
 
 export function stepsOf(flow: Flow): StepDef[] {

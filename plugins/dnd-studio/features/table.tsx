@@ -4,6 +4,7 @@
  * else only annotates.
  */
 import { noteProgressCall } from "./progress";
+import { prepJobOf } from "../lib/progress";
 import type { EngineInterface, On, RenderElement } from "claude-code";
 
 import {
@@ -466,7 +467,7 @@ export async function observe(
     case "prepare_table":
       if (typeof json.total === "number")
         await patchLive($, () => ({
-          prepared: `${String(json.made ?? json.done ?? "?")}/${String(json.total)}${json.failed ? `, ${Array.isArray(json.failed) ? json.failed.length : String(json.failed)} failed` : ""}`,
+          prepared: `${String(json.made ?? json.done ?? "?")}/${String(json.total)}${json.failed ? `, ${Array.isArray(json.failed) ? json.failed.length : String(json.failed)} failed` : ""}${prepJobOf(json) ? " läuft" : ""}`,
         }));
       break;
     case "profile": {
@@ -561,6 +562,9 @@ async function guardReason(
 ): Promise<string | undefined> {
   const rules = await readRules($);
   const input = inputOf((e as Obj).input ?? {});
+  // campaign joins get/new/set/export/spoiler (since 2026-10-29): only its writes are guarded, reading stays free
+  if (tool === "campaign" && ["get", "export", undefined, ""].includes(input.action as string | undefined))
+    return undefined;
   if ((tool === "show_players" || tool === "give_find") && rules.denyLeaks) {
     const forWhom = looksPrivate(input);
     if (forWhom)
@@ -733,8 +737,8 @@ export function registerTable(on: On): void {
   ).catch(denyOnFailure);
   on(
     "tool.check",
-    { tool: "mcp__plugin_dnd-studio_dnd-studio__set_campaign" },
-    ($, e, next) => guard($, e, next, "set_campaign"),
+    { tool: "mcp__plugin_dnd-studio_dnd-studio__campaign" },
+    ($, e, next) => guard($, e, next, "campaign"),
   ).catch(denyOnFailure);
   on(
     "tool.check",

@@ -109,7 +109,8 @@ zeigt ihn als `listener`. Ist er an:
 - Unter der Nachricht des Bots stehen nur **Absenden** und **Pause/Weiter**, dazu die Wählen-Knöpfe, solange jemand im
   Kanal noch keinen Helden hat. Push-to-Talk und die Sprechknöpfe sind weg; jeder redet einfach.
 - Ein Zug endet nach 2,5 s Stille. Er ist weich: deine Zeile läuft weiter, nichts wird gesperrt. Ob er für dich ist,
-  entscheidet der Zuhörer (`dnd-studio:pnp-zuhoerer`, SKILL „Mit dem Zuhörer“).
+  entscheidet der Zuhörer (Agent `dnd-studio:pnp-zuhoerer`; wie die Spielleitung mit ihm arbeitet:
+  `zuhoerer.md` neben dieser Datei, nur mit dem Plugin).
 - Absenden schickt den Zug sofort, schneidet deine Zeile und weckt dich ohne Prüfung (`sent: true`). Ohne laufenden
   Zug heißt es: „Wir sind fertig mit Beraten“.
 - Die Nachricht sagt klein, dass der Bot mithört und alles auf deinem Rechner bleibt.

@@ -195,6 +195,14 @@ export type ProgressState = {
     failed: number;
     at: number;
     since: number;
+    /** The Studio's prepare job (`prep-…`) while it runs: `jobs wait` reports it, the mod polls it. */
+    job?: string;
+    /** The scope's chapter, for the label ("Stimmen Kap. 3"). */
+    chapter?: string;
+    /** The Studio's own estimate (eta_s) at `at`, ms. */
+    etaMs?: number;
+    /** The job finished or was cancelled: no row any more. */
+    ended?: boolean;
   } | null;
   /** What an agent said it will make in all, per kind (build_progress), with when. */
   planned: Partial<Record<GpuKind, { total: number; at: number }>>;

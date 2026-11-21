@@ -15,7 +15,9 @@ import {
   noteEntry,
   notePlanned,
   noteStarted,
+  noteVoiceJob,
   noteVoices,
+  preparedText,
   startedIds,
 } from "../lib/progress";
 import type { ProgressState } from "../lib/progress";
@@ -157,4 +159,125 @@ test("progress: the texter's entries are a count from the plan, without a time",
   expect(p.total).toBeNull();
   expect(bandProgress(p, 24)).toBe("Texte 3/12");
   expect(bandProgress(buildProgress(noteEntry(s, T0 + 2 * MIN, 9), T0 + 2 * MIN), 24)).toBeNull();
+});
+
+const PREP = {
+  job_ids: ["prep-7"],
+  running: true,
+  scope: { chapter: 3, evening: "Abend 2", scenes: 4, texts: 9, npcs: 5 },
+  made: 10,
+  new: 0,
+  total: 50,
+  eta_s: 600,
+  next: "jobs wait",
+};
+
+test("progress: a prepare job starts the voice row, jobs wait moves it on and ends it with the final counts", () => {
+  let s = noteVoices(EMPTY_PROGRESS, PREP, T0, T0 + 1000);
+  let p = buildProgress(s, T0 + 1000);
+  expect(p.steps[0]!.label).toBe("Stimmen Kap. 3");
+  expect([p.steps[0]!.done, p.steps[0]!.total]).toEqual([10, 50]);
+  // the Studio's eta_s, counted down since its report
+  expect(p.steps[0]!.leftMs).toBe(600_000);
+  expect(preparedText(s)).toBe("10/50 läuft");
+  // no report for 45 min: the open job stays (no TTL vanish) and reads „läuft“
+  p = buildProgress(s, T0 + 45 * MIN);
+  expect(p.steps[0]!.label).toBe("Stimmen Kap. 3 (läuft)");
+  expect(p.steps[0]!.leftMs).toBe(0);
+
+  // a wait that names other jobs only changes nothing
+  expect(noteVoiceJob(s, { action: "wait", job_ids: ["x"] }, { finished: false, progress: [{ id: "x", made: 1, total: 2 }] }, T0 + MIN)).toBe(s);
+  // progress without eta_s: the measured mean (20 lines in 60 s → 3 s a line, 20 left → 60 s)
+  s = noteVoiceJob(s, { action: "wait", job_ids: ["prep-7"] }, { finished: false, progress: [{ id: "prep-7", made: 30, total: 50 }] }, T0 + 61_000);
+  p = buildProgress(s, T0 + 61_000);
+  expect([p.steps[0]!.done, p.steps[0]!.leftMs]).toEqual([30, 60_000]);
+  expect(bandProgress(p, 30)).toBe("Stimmen Kap. 3 30/50 · ~1 min");
+  // with eta_s and failed lines
+  s = noteVoiceJob(s, { action: "wait", job_ids: ["prep-7"] }, { finished: false, progress: [{ id: "prep-7", made: 40, total: 50, failed: 1, eta_s: 120 }] }, T0 + 90_000);
+  p = buildProgress(s, T0 + 90_000);
+  expect([p.steps[0]!.done, p.steps[0]!.leftMs]).toEqual([40, 120_000]);
+  expect(preparedText(s)).toBe("40/50, 1 failed läuft");
+  // finished: the job's result, the row is gone
+  s = noteVoiceJob(s, { action: "wait", job_ids: ["prep-7"] }, { finished: true, made: 48, new: 38, total: 50, failed: 2, depth: "all" }, T0 + 2 * MIN);
+  expect(buildProgress(s, T0 + 2 * MIN).steps.length).toBe(0);
+  expect(preparedText(s)).toBe("48/50, 2 failed");
+});
+
+test("progress: jobs cancel ends the prepare job's row", () => {
+  let s = noteVoices(EMPTY_PROGRESS, PREP, T0, T0);
+  s = noteVoiceJob(s, { action: "cancel", job_ids: ["prep-7"] }, {}, T0 + MIN);
+  expect(buildProgress(s, T0 + MIN).steps.length).toBe(0);
+  expect(preparedText(s)).toBe("10/50");
+});
+
+test("progress: the mod polls the Studio itself while a prepare job runs, and stops when it is done", async ($, on) => {
+  let round = 0;
+  const w = world(on, {
+    jobs: (a: Record<string, unknown>) => {
+      round++;
+      const ids = a.job_ids as string[];
+      const body =
+        round < 2
+          ? { finished: false, progress: [{ id: ids[0], made: 30, total: 50, eta_s: 300 }] }
+          : { finished: true, made: 50, new: 40, total: 50, failed: 0, depth: "all" };
+      return [{ type: "text", text: JSON.stringify(body) }];
+    },
+  });
+  on("tool.call", (_, e) => {
+    if (e.tool === `${PREFIX}prepare_table`) return { result: [{ type: "text", text: JSON.stringify(PREP) }] } as never;
+    return { result: [{ type: "text", text: "{}" }] } as never;
+  });
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  const words = async () => {
+    const b = await $.ui.mount({ ...band(), surface: "desktop" });
+    const t = (await b.findAll({ type: "Text" })).map((x) => x.text).join(" ");
+    await b.unmount();
+    return t;
+  };
+  // the acceptance check reads `prepared` when it runs (/dnd build), as with the old answer
+  const prepared = async () => {
+    await $.command.run({ command: "dnd", args: "build" } as never);
+    const r = (await $.tool.call({ tool: "mcp__dnd-studio__build_status", input: {} } as never)) as { result?: unknown };
+    return String(r.result ?? "").split("\n").find((l) => l.includes("Stimmen vorbereitet")) ?? "";
+  };
+  await $.tool.call({ tool: `${PREFIX}prepare_table`, input: { evening: true } } as never);
+  expect(await words()).toContain("Stimmen Kap. 3 10/50");
+  expect(await prepared()).toContain("10/50 läuft");
+
+  // no jobs call from Claude: the mod asks after 20 s
+  await w.clock.advance(20_000);
+  const polls = w.calls.filter((c) => c.tool === "jobs");
+  expect(polls.length).toBe(1);
+  expect(polls[0]!.args).toEqual({ action: "wait", job_ids: ["prep-7"], timeout_seconds: 1 });
+  expect(await words()).toContain("Stimmen Kap. 3 30/50");
+  expect(await prepared()).toContain("30/50 läuft");
+
+  await w.clock.advance(20_000);
+  expect(w.calls.filter((c) => c.tool === "jobs").length).toBe(2);
+  expect(await words()).not.toContain("Stimmen");
+  expect(await prepared()).toContain("50/50");
+
+  // done: no more polls
+  await w.clock.advance(60_000);
+  expect(w.calls.filter((c) => c.tool === "jobs").length).toBe(2);
+});
+
+test("progress: an open picture job is polled too, Claude's own wait not needed", async ($, on) => {
+  const w = world(on, {
+    jobs: (a: Record<string, unknown>) => [
+      { type: "text", text: JSON.stringify({ finished: true, jobs: (a.job_ids as string[]).map((id) => ({ id, done: true })) }) },
+    ],
+  });
+  on("tool.call", (_, e) => {
+    if (e.tool === `${PREFIX}picture`) return { result: [{ type: "text", text: JSON.stringify({ id: "pic1", mode: "picture", queued: true }) }] } as never;
+    return { result: [{ type: "text", text: "{}" }] } as never;
+  });
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.tool.call({ tool: `${PREFIX}picture`, input: { idea: "a" } } as never);
+  await w.clock.advance(20_000);
+  expect(w.calls.filter((c) => c.tool === "jobs").map((c) => c.args)).toEqual([
+    { action: "wait", job_ids: ["pic1"], timeout_seconds: 1 },
+  ]);
+  await w.clock.advance(60_000);
+  expect(w.calls.filter((c) => c.tool === "jobs").length).toBe(1);
 });

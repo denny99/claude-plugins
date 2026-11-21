@@ -1,6 +1,6 @@
 ---
 name: pnp-kampagne
-description: 'Baut in D&D Studio (MCP-Server dnd-studio) eine spielfertige Pen-and-Paper-Kampagne oder ein Abenteuer, von der Idee bis zum Spielabend – Zusammenfassung, NPCs mit Porträt, Stimme und Standardsätzen, Orte mit Karten, Szenen mit Bild, Vorlesetexte, Würfe, Klänge aus echten Aufnahmen und ein Leitfaden für die KI-Spielleitung. Verwenden, sobald jemand ein Abenteuer, eine Kampagne, ein One-Shot, ein Solo-Abenteuer oder ein Testabenteuer für den Studio-Spieltisch anlegen, ausbauen, umbauen oder „spielfertig machen“ will, auch wenn nur grob („bau mir was Kleines im Breeland für heute Abend“, „mach aus der Idee eine Kampagne“, „ergänz NPCs und Szenen“, „bau das nächste Kapitel nach dem letzten Abend“). Auch für Karten mit Orts-Pins, Handouts und Bögen der Helden und das Review vor dem Spielabend. Einen Abend leiten: Skill pnp-spielleiter.'
+description: 'Baut in D&D Studio (MCP-Server dnd-studio) eine spielfertige Pen-and-Paper-Kampagne oder ein Abenteuer, von der Idee bis zum Spielabend – Zusammenfassung, NPCs mit Porträt, Stimme und Standardsätzen, Orte mit Karten, Szenen mit Bild, Vorlesetexte, Würfe, Klänge und Musik je Stimmung aus dem Studio und ein Leitfaden für die KI-Spielleitung. Verwenden, sobald jemand ein Abenteuer, eine Kampagne, ein One-Shot, ein Solo-Abenteuer oder ein Testabenteuer für den Studio-Spieltisch anlegen, ausbauen, umbauen oder „spielfertig machen“ will, auch wenn nur grob („bau mir was Kleines im Breeland für heute Abend“, „mach aus der Idee eine Kampagne“, „ergänz NPCs und Szenen“, „bau das nächste Kapitel nach dem letzten Abend“). Auch für Karten mit Orts-Pins, Handouts und Bögen der Helden, Stimmen und Standardsätze vorab und das Review vor dem Spielabend. Einen Abend leiten: Skill pnp-spielleiter.'
 ---
 
 # Eine Kampagne in D&D Studio bauen
@@ -18,8 +18,8 @@ Schreibweise: `campaign set`, `map new`, `party sheet`, `results get` meinen das
 ## 0. Klären, bevor gebaut wird
 
 **Eigene Tisch-Regeln:** Liegt im Arbeitsordner dieser Sitzung eine Datei `pnp-regeln.md` (Lehren aus früheren
-Nachbesprechungen und Bauten an diesem Rechner), lies sie zu Beginn; sie ergänzt diesen Skill und geht ihm bei Widerspruch vor.
-
+Nachbesprechungen und Bauten an diesem Rechner), lies sie zu Beginn; sie ergänzt diesen Skill und geht ihm bei
+Widerspruch vor.
 
 Kurz fragen, was fehlt (nicht alles auf einmal, sinnvolle Vorgaben vorschlagen):
 - Spielsystem (`The One Ring`, `d20`, `other`) und Sprache (Deutsch/Englisch).
@@ -32,9 +32,8 @@ Kurz fragen, was fehlt (nicht alles auf einmal, sinnvolle Vorgaben vorschlagen):
   Tödlichkeit, Härte und Grenzen werden hier beim Aufsetzen entschieden, stehen im Leitfaden unter Rahmen und gelten
   für die ganze Kampagne; die Spielleitung fragt sie am Abend nicht mehr (Denny 2026-11-13: „das Setting gibt das
   vor“). Fehlt etwas davon bei einer bestehenden Kampagne im Leitfaden, beim Ausbau fragen.
-
 - In welcher Welt spielt sie? Die Lore einer Welt liegt im Wissens-Vault des Studios (Werkzeug `lore`, Skill
-  `pnp-lore`); `lore map` zeigt die Welten. Eine neue Kampagne in einer bestehenden Welt bindet `set_campaign world`,
+  `pnp-lore`); `lore map` zeigt die Welten. Eine neue Kampagne in einer bestehenden Welt bindet `campaign set` mit `world`,
   Architekt und Texter lesen die Lore mit `lore search`. Eine eigene Welt von Grund auf: erst Skill `pnp-weltenbau`.
   Hat der Mensch zusätzlich einen eigenen Obsidian-Vault (Pfad des Kampagnen-Ordners, Regeln des Vaults), gleicht
   `dnd-studio:pnp-lore` auch ihn ab; ohne ihn steht die Welt allein im Studio (Lore, `campaign`, Kanon).
@@ -58,7 +57,8 @@ selbst wenig; die Arbeit machen die Agents des Plugins (Agent-Tool mit diesem `s
 | Review | `dnd-studio:pnp-review-technik`, `-konsistenz`, `-spielbarkeit` | Sonnet |
 | Mängel beheben | `dnd-studio:pnp-nachbesserer` | Sonnet |
 
-Was die GPU braucht (Maler, Tischbereit, Bild-Edits des Nachbesserers), läuft nacheinander, nicht gleichzeitig: sonst
+Wie der Bau Tokens spart (lesen, bündeln, Agenten abgeben lassen): Abschnitt 6. Was die GPU braucht (Maler,
+Tischbereit, Bild-Edits des Nachbesserers), läuft nacheinander, nicht gleichzeitig: sonst
 laufen Stimmen in Timeouts. Fehlt ein Agent (das Plugin ist nicht oder zu alt installiert), sagst du das dem Menschen
 (Plugin `dnd-studio` aktualisieren). Beim Bau, nie am Tisch, darf dann ein allgemeiner Agent die Aufgabe bekommen, mit
 `model` wie in der Tabelle und den Regeln der Agent-Datei im Auftrag.
@@ -71,7 +71,7 @@ NPCs, Zeitplan (Agent-Tool mit `subagent_type: "dnd-studio:pnp-architekt"`; der 
 mitspielt, und den Pfad der Plan-Datei im Scratchpad). Der Mensch segnet ihn ab (spielt er mit, nur Zahlen und
 Rahmen), dann wird nach dem Plan gebaut.
 
-1. `campaign new` immer mit `language` (`"German"`, nur auf Wunsch `"English"`; ohne setzt der Mod `"German"`), dann `campaign set`: `about` (Setting, Zeit, Geschichte in 1–3 Absätzen, Stimmung), `language`,
+1. `campaign new` immer mit `language` (`"German"`, nur auf Wunsch `"English"`; ohne nimmt das Studio `"German"`), dann `campaign set`: `about` (Setting, Zeit, Geschichte in 1–3 Absätzen, Stimmung), `language`,
    `game`, `narrator` (Erzählerstimme in Worten, englisch beschrieben, mit Sprache am Ende: „a calm, warm narrator …,
    German“). Ist das Spiel umgedeutet (Der Eine Ring im Ödland), bekommen die Sonderseiten der Würfel eigene Namen und
    Zeichen: `dice_faces` (Ödland 2026-10-30: die Rune als Atom-Symbol ⚛, das Auge als Totenkopf 💀); die Regeln bleiben.
@@ -132,8 +132,9 @@ Rahmen), dann wird nach dem Plan gebaut.
      Versprechen, sein Volk), nicht nur einen Wurf, der zu seinen Fertigkeiten passt.
 5. **Vorlesetexte** (`kind text`, auch die Szenentexte): zwei, drei konkrete Sinnesdetails (Geruch, Geräusch, ein
    Ding mit Geschichte) statt Stimmungswörtern, kurz wie in einem guten Roman, im Ton der Kampagne. **Geschrieben
-   zum Sprechen** (`references/sprechen.md`, gm_guide `sprechen`): kurze Sätze statt Kommaketten, etwa eine Betonung
-   je Satz mit `[emphasis]` vor dem Wort, `…` vor dem, was wirken soll; die Spieler sehen die Marken nicht. Jeder
+   zum Sprechen** (`references/sprechen.md`, gm_guide `sprechen`): die Art des Textes entscheidet. Beschreibungen und
+   stille Momente bleiben, wie sie geschrieben sind, mit einem `[emphasis]` je drei, vier Sätze und ohne `…`; Spannung
+   in kurzen Sätzen; NPC-Worte höchstens mit einer Betonung, die die Figur selbst setzt. Die Spieler sehen die Marken nicht. Jeder
    erfundene Name kommt mit seiner Aussprache in `campaign set pronunciations`, nie als Umschreibung in den Text. Anfang und Ende
    sind Szenen, kein Pflichtprogramm (Denny 2026-11-13: „Intros und Outros bissel flach“), darum gehören hinein:
    - **Begrüßung** („Willkommen (zu Beginn)“): kurz, nur Organisatorisches.
@@ -152,8 +153,8 @@ Rahmen), dann wird nach dem Plan gebaut.
    - **Kapitelende:** ein Schlusstext je möglichem Ende (`variants`), der aufgreift, was die Helden getan haben, und
      ein Ausblick (ein Bild, ein Geräusch, eine offene Frage), der bis zum nächsten Kapitel trägt.
 
-   Dazu Übergänge, feste erste Worte der NPCs (Titel
-   mit Stimme, z. B. „Hanna bittet um Hilfe (Szene 1, Hannas Stimme)“), Enden mit `variants`. Handouts mit `handout`.
+   Dazu Übergänge, feste erste Worte der NPCs als eigener Text mit `voice: "<NPC>"` (dann macht `prepare_table` ihn
+   in dessen Stimme; im Titel wann, z. B. „Hanna bittet um Hilfe (Szene 1)“), Enden mit `variants`. Handouts mit `handout`.
    **Handouts mit Geheimnis sind zum Flüstern** (Ödland-Abend 2026-10-30: die Bögen mit dem persönlichen Geheimnis
    mussten zu je einem Spieler, das Spielerfenster zeigt aber allen alles): ein eigenes Handout je Held (der Bogen
    mit seinem Geheimnis, ein Brief nur für ihn), im Titel für wen und wann („Handout: Jules Bogen (für Jule, nach der
@@ -230,7 +231,8 @@ Fäden, mit denen es beginnt, und den Ort, an dem der Abend anfängt.
 - **Standardsätze** (`set_campaign_entry stock`, Erzähler: `campaign set narrator_stock`): NPCs `greet`, `bye`,
   `think`, `yes`, `no`, `gesture`, der Erzähler dieselben mit `approach` statt `gesture`. Sie machen den Abend schnell,
   weil sie vorab erzeugt werden und am Tisch sofort kommen. Wie viele, in welcher Art und über welche Stimmungen:
-  `references/standardsaetze.md` (die Quelle dafür).
+  `references/standardsaetze.md` (die Quelle dafür). Spielt der Tisch mit offenem Mikro (Zuhörer), braucht der
+  Erzähler außerdem die Brücken `look` und `act` und viele `think`-Sätze (ebenda).
 
 ## 3. Bilder, Karten, Klang (die langsamen Teile, gesammelt)
 
@@ -246,7 +248,7 @@ einzeln (`jobs watch`: den Befehl mit Bash im Hintergrund starten, er weckt dich
 - **Bekannte Orte bleiben wiedererkennbar** (Denny nach Ödland Kapitel 2, Abend 1, 2026-11-01: Orte, an denen die
   Gruppe schon war, sahen auf neuen Bildern anders aus). Hat ein Ort schon ein Bild (Ort oder Szene, auch aus einem
   früheren Kapitel), entsteht jedes neue Bild von ihm als Edit mit diesem Bild als Basis (`picture` mit dem alten
-  Bild, FLUX.2 Klein): nur Tageszeit, Licht, Wetter, Figuren oder Blickwinkel ändern. Neu aus Text nur, was noch nie
+  Bild, FLUX Klein): nur Tageszeit, Licht, Wetter, Figuren oder Blickwinkel ändern. Neu aus Text nur, was noch nie
   gezeigt wurde. Danach Alt und Neu nebeneinander ansehen: Bauten, Formen und Farben müssen dieselben sein.
 - **Karten gehören dazu, nicht nur Bilder.** Die Spieler wollen wissen, wo sie sind und wohin es geht; die Spielleitung
   zeigt sie am Tisch. Zwei Ebenen:
@@ -275,8 +277,8 @@ einzeln (`jobs watch`: den Befehl mit Bash im Hintergrund starten, er weckt dich
     there were no map markers placed“).
 - Geräusche und Musik macht **das Studio mit `make_sound`** (Stable Audio 3, seit 2026-11-17 deutlich besser; Denny),
   alle Klänge eines Kapitels in einem Aufruf: `sounds: [{name, kind, idea, seconds}, …]`.
-  Echte Aufnahmen, z. B. von Pixabay (pixabay.com/sound-effects, /music) oder Freesound, nur wenn das Erzeugte nach
-  Versuchen nicht gut genug ist. Herunterladen nur mit Freigabe des Menschen; dann mit `add_file` ins Studio.
+  Echte Aufnahmen, z. B. von Pixabay (pixabay.com/sound-effects, /music) oder Freesound, nur wenn das Studio nach zwei
+  Versuchen nichts Brauchbares liefert oder ein Lied mit Gesang gebraucht wird (so arbeitet `dnd-studio:pnp-klang`). Herunterladen nur mit Freigabe des Menschen; dann mit `add_file` ins Studio.
   Suchen mit kurzen Worten wie auf Freesound, eine Quelle je Klang („goat bleating, close“, „fire whoosh“), für eine
   Schleife lange, gleichmäßige Aufnahmen. Vor dem Binden mit **`check_sound`** hören lassen: was der Klang sein soll und
   zwei, drei Verwechslungen, die am Tisch stören würden („heavy rain on a metal roof“, „applause“, „music“); liegt
@@ -289,18 +291,18 @@ einzeln (`jobs watch`: den Befehl mit Bash im Hintergrund starten, er weckt dich
   ihn, wenn er passt; im Studio geht dasselbe im Dialog der Szene unter „Klänge“. Ein Klang, der zu keiner Szene
   gehört (ein Wesen, das überall heult), in die Notizen des NPC.
 - **Musik nach Stimmung** (Denny 2026-11-21): Je Kampagne eine Musik für `explore`, `tense`, `fight`, `rest`
-  (`make_sound` mit `kind: "bgmusic"`, lange Schleifen), gebunden mit `set_campaign { mood_music: { explore: <Datei>,
-  fight: <Datei>, … } }`. Eine Szene mit eigener Musik je Stimmung: in ihren `sounds` den Klang mit `mood: "fight"`.
+  (`make_sound` mit `kind: "bgmusic"`, lange Schleifen), gebunden mit `campaign set` und `mood_music: { explore: <Datei>,
+  fight: <Datei>, … }`. Eine Szene mit eigener Musik je Stimmung: in ihren `sounds` den Klang mit `mood: "fight"`.
   Am Tisch blendet die Musik dann mit der Stimmung über, ein Kampf schaltet von selbst um.
 - **Schleifen für die wichtigen Szenen** (Ankunft an einem Ort, der Höhepunkt, ein Ort mit Feuer, Nebel oder Wasser):
   `animate { start: <Szenenbild>, loop: true, idea: "was sich bewegt: das Feuer flackert, Rauch zieht" }` macht ein
   lebendes Standbild (Kamera und Personen still, ohne Ton, 5 s, nahtlos). Nur vor dem Abend: mit offenem Tisch passt
   das Video neben der Stimme nicht auf die Karte. Die Schleife in die Notizen der Szene, damit die Spielleitung sie
   mit `show_players loop: true` zeigt.
-- **Tiefenkarten** für die Parallaxe im Spielerfenster macht `prepare_table` selbst (Abschnitt 2, `pnp-tischbereit`).
+- **Tiefenkarten** für die Parallaxe im Spielerfenster macht `prepare_table` selbst (Abschnitt 4, `dnd-studio:pnp-tischbereit`).
 - **Eigene Effekte der Welt** (Denny 2026-11-21: Strahlung im Ödland): was die Welt besonders macht, als Effekt über dem
-  Bild aus Bausteinen, ohne GPU: `set_campaign { effects: { strahlung: { tint: "#b8ff3a", glow: 0.6, grain: 0.5,
-  flicker: 0.4, aberration: 0.35, pulse: 0.6, particles: "glow", sound: <Geigerzähler> } } }` (`particles`: glow,
+  Bild aus Bausteinen, ohne GPU: `campaign set` mit `effects: { strahlung: { tint: "#b8ff3a", glow: 0.6, grain: 0.5,
+  flicker: 0.4, aberration: 0.35, pulse: 0.6, particles: "glow", sound: <Geigerzähler> } }` (`particles`: glow,
   sparks, dust; alle Stärken 0–1). Die Spielleitung zeigt ihn mit `show_players overlay: "strahlung"`. In den Notizen
   der Szenen vermerken, wo er passt; im Leitfaden, was er bedeutet.
 
@@ -310,7 +312,8 @@ Gehe den Abend im Kopf einmal als Spielleitung durch und prüfe:
 - Jede Szene hat Bild, Vorlesetext und Rezept in den Notizen; die Reihenfolge stimmt.
 - Es gibt eine Kampagnenkarte mit allen Orten als Marker, und jeder Ort, an dem eine Szene spielt, hat seine Karte.
 - Jeder sprechende NPC hat Porträt, Stimme (mit Stimmprobe), `sheet`, Standardsätze; jeder stumme hat Geräusche.
-- Jeder gebundene Klang ist eine Aufnahme, mit `check_sound` gegen das gehört, was er sein soll.
+- Jeder gebundene Klang ist da (mit `make_sound` gemacht, eine Aufnahme nur als Ausweg) und mit `check_sound` gegen
+  das gehört, was er sein soll.
 - Die Kampagne hat Musik je Stimmung (`campaign` zeigt `moodMusic`: mindestens `explore` und `fight`), und die
   wichtigen Szenen haben ihre Schleife (`animate loop`, in den Notizen der Szene).
 - Bei einem Kapitel einer Kampagne: `threads` und `party_at` gesetzt (`campaign` zeigt `threads` und `partyAt`).
@@ -325,7 +328,7 @@ Gehe den Abend im Kopf einmal als Spielleitung durch und prüfe:
 
 Wer gebaut hat, übersieht die eigenen Lücken. Deshalb prüfen nach der Abnahme **drei Reviewer** in frischem Kontext
 (eigene Agenten, gleichzeitig), jeder mit einem Fachbereich, und die Kampagne geht erst zum Menschen, wenn alle drei
-nichts mehr finden (der Nutzer, 2026-10-30). Jeder Reviewer liest die Kampagne selbst (`campaign`, `results get`,
+nichts mehr finden (Denny, 2026-10-30). Jeder Reviewer liest die Kampagne selbst (`campaign`, `results get`,
 `map list`, die Stimmbeschreibungen), nicht die Meinung des Erbauers, und prüft am Studio, nicht am Text allein. Die drei sind
 Agents des Plugins (`dnd-studio:…`), jeder mit seiner Prüfliste und
 nur lesenden Werkzeugen: `dnd-studio:pnp-review-technik`, `dnd-studio:pnp-review-konsistenz`, `dnd-studio:pnp-review-spielbarkeit` (Agent-Tool mit
@@ -352,7 +355,7 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
    niedrigem `how`, Rufname vorn; Szenentexte reine Erzählerstimme ohne wörtliche Rede und ohne vorausgesetzten Stand;
    keine unabsichtlichen Spoiler in Texten, Bildern und Namen; was nur einen Helden angeht, steht im Handout zum
    Flüstern statt in einem Text für alle; was gesprochen wird, ist zum Sprechen geschrieben (`references/sprechen.md`:
-   kurze Sätze, `[emphasis]` sparsam vor dem tragenden Wort, `…` vor der Pointe, keine Großbuchstaben und keine
+   die Art des Textes entscheidet, `[emphasis]` sparsam und nie auf Füllwörtern, kein zerhackter Text, keine Großbuchstaben und keine
    Umschreibung eines Namens im Text) und jeder erfundene Name steht in `pronunciations`.
 3. **Umfang und Spielbarkeit** (`dnd-studio:pnp-review-spielbarkeit`) – trägt der Abend? Genug Stoff für die gewünschte Länge
    im Tempo dieser Gruppe (Abschnitt 1, „Mehr Strecke statt mehr Verzweigungen“), dazu der Situations-Vorrat;
@@ -360,7 +363,27 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
    jedem Hinweis; jeder Held mit Haken und großem Moment, ein Geheimnis lässt sich enthüllen oder bewusst behalten (beides belohnt); Plan des Gegners und Vorrat zum
    Improvisieren; bei offenem Ende tragen die Fäden einen nächsten Abend, bei einer Fortsetzung passt alles zum Kanon.
 
-**Sparsam mit Tokens** (Denny, 2026-11-08: „token effizienz“; Bilder prüfen und eine Stunde Ausbau kosteten rund 3 Millionen):
+Der Ablauf: Jeder Reviewer schreibt seine Mängel (was, wo, warum, wie zu beheben) in eine eigene Datei und meldet
+nur ihre Anzahl. `dnd-studio:pnp-nachbesserer` behebt sie aus den Dateien. Ziel ist ein möglichst fehlerfreier Abend (Denny,
+2026-11-01: „es soll schon möglichst fehlerfrei sein“), darum prüfen die Reviewer danach erneut, die etwas gefunden
+hatten, **höchstens drei Runden**. Was gilt als erledigt: Text, Regeln, Logik, Kanon, Spoiler, Hinweise, Stimmen,
+Klänge und fehlende Bilder müssen stimmen. **Kosmetisches an Bildern** (ein Licht zu viel, ein Detail der Karte
+fehlt, eine leichte Naht) wird nach einem Versuch nicht mehr gejagt, sondern nur gelistet: Bildmodelle haben Grenzen,
+und jedes Nachmalen bringt eigene neue Fehler (Ödland, Talsperre, 2026-11-01). Was nach drei Runden offen bleibt,
+bekommt der Mensch als Liste.
+
+**Spielt der Mensch selbst mit, bleibt alles spoilerfrei:** Erbauer und Reviewer arbeiten in eigenen Agenten, Mängel
+stehen nur in den Dateien, und an den Menschen gehen nur Zahlen (Szenen, Orte, NPCs, Mängel je Bereich und Runde),
+nie Plot, Geheimnisse oder Gegner. Was die Spieler ohnehin sehen sollen (die Vorstellung der vorgefertigten Helden),
+darf in den Bericht.
+
+Dem Menschen am Ende kurz sagen, was steht, was fehlt (z. B. „Karten nicht gemalt, GPU war belegt“) und wie man
+startet. Für Weitergabe: `campaign export`.
+
+## 6. Sparsam mit Tokens (beim ganzen Bau)
+
+Denny, 2026-11-08: „token effizienz“; Bilder prüfen und eine Stunde Ausbau kosteten rund 3 Millionen. Das gilt für
+dich und jeden Agenten des Baus:
 - `campaign` erst mit `overview: true`, dann nur mit `only` und `names` lesen. Die ganze Kampagne ist die größte Antwort
   der Werkzeuge. `results list` mit `name` und `brief`, `settings` ohne `available`.
 - Viele Bilder ansehen: je 12–16 auf einen Kontaktbogen (`results sheet`), groß (`results get`) nur die Verdächtigen.
@@ -384,20 +407,3 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
   (sein ganzer Kontext würde bei jedem Schritt neu gelesen).
 - Mechanische Arbeit (aufräumen, zählen) auf einem kleinen Modell. Prüfen nur, was sich geändert hat; ab Runde 2 nur
   die offenen Punkte.
-
-Der Ablauf: Jeder Reviewer schreibt seine Mängel (was, wo, warum, wie zu beheben) in eine eigene Datei und meldet
-nur ihre Anzahl. `dnd-studio:pnp-nachbesserer` behebt sie aus den Dateien. Ziel ist ein möglichst fehlerfreier Abend (Denny,
-2026-11-01: „es soll schon möglichst fehlerfrei sein“), darum prüfen die Reviewer danach erneut, die etwas gefunden
-hatten, **höchstens drei Runden**. Was gilt als erledigt: Text, Regeln, Logik, Kanon, Spoiler, Hinweise, Stimmen,
-Klänge und fehlende Bilder müssen stimmen. **Kosmetisches an Bildern** (ein Licht zu viel, ein Detail der Karte
-fehlt, eine leichte Naht) wird nach einem Versuch nicht mehr gejagt, sondern nur gelistet: Bildmodelle haben Grenzen,
-und jedes Nachmalen bringt eigene neue Fehler (Ödland, Talsperre, 2026-11-01). Was nach drei Runden offen bleibt,
-bekommt der Mensch als Liste.
-
-**Spielt der Mensch selbst mit, bleibt alles spoilerfrei:** Erbauer und Reviewer arbeiten in eigenen Agenten, Mängel
-stehen nur in den Dateien, und an den Menschen gehen nur Zahlen (Szenen, Orte, NPCs, Mängel je Bereich und Runde),
-nie Plot, Geheimnisse oder Gegner. Was die Spieler ohnehin sehen sollen (die Vorstellung der vorgefertigten Helden),
-darf in den Bericht.
-
-Dem Menschen am Ende kurz sagen, was steht, was fehlt (z. B. „Karten nicht gemalt, GPU war belegt“) und wie man
-startet. Für Weitergabe: `campaign export`.
