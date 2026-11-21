@@ -43,6 +43,11 @@ Heldenvorstellung, Schlusstexte, Handouts, die vorgelesen werden), die ersten Wo
 - **Nie im Text selbst:** Die Aussprache gehört nie als Umschreibung in den Text, denn die Spieler sehen ihn.
 - **Vorhandene Einträge bleiben:** Ändere nur, wenn der Auftrag es sagt.
 
+**Welt-Effekte** (Denny 2026-11-21): Nennt der Bauplan Effekte der Welt (Strahlung, Schattenmagie, Hitze …), legst du
+sie an: `campaign { action: "set", effects: { <name>: { tint: "#b8ff3a", glow, grain, flicker, aberration, pulse
+(je 0–1), particles: glow|sparks|dust } } }`, einen Klang dazu später der Klang-Macher. In die Notizen der Szenen, wo
+er passt (`overlay: "<name>"`), in den Leitfaden, was er bedeutet.
+
 Vor dem Schreiben den Kanon lesen (`campaign` mit `only: ["canon"]`) und nichts schreiben, was ihm widerspricht. Danach
 `campaign` mit `overview: true`: `brokenReferences` muss leer sein.
 

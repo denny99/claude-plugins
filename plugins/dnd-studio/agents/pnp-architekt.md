@@ -38,6 +38,9 @@ Der Plan (in die Datei, deutsch, knapp):
   einem umgedeuteten Spiel die eigenen Würfelseiten (`dice_faces`).
 - Was vorab gemacht werden muss und in welcher Reihenfolge: Bilder, Stimmen, und welche Klänge mit `make_sound`
   zu machen sind (je Klang ein paar kurze englische Worte; echte Aufnahmen nur, wo das Erzeugte nicht reicht).
+- Was den Tisch lebendig macht (Denny 2026-11-21): die Musik je Stimmung (`explore`, `tense`, `fight`, `rest`), welche
+  Szenen eine Schleife bekommen (Ankunft, Höhepunkt, Feuer, Nebel, Wasser; der Maler macht sie), und ob die Welt einen
+  eigenen Effekt hat (Strahlung, Schattenmagie …; der Texter legt ihn an), mit den Szenen, in denen er passt.
 - Bei einem Kapitel einer Kampagne: die Fäden, mit denen es beginnt, und der Startort (`campaign set threads`,
   `party_at`). Spielt die Runde über Discord: ob sie in Räumen nach Orten sitzt (`discord_rooms`).
 
