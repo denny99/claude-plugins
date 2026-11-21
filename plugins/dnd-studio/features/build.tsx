@@ -690,10 +690,10 @@ function fileParts(
 const STAGE_DE: Record<string, string> = {
   Lore: "Welt-Notizen abgleichen",
   Plan: "Bauplan",
-  Texts: "Texte",
-  Pictures: "Bilder",
-  Sounds: "Klänge",
-  Voices: "Stimmen vorbereiten",
+  Texts: "Texte und Welt-Effekte",
+  Pictures: "Bilder und Schleifen",
+  Sounds: "Klänge und Stimmungsmusik",
+  Voices: "Stimmen und Tiefenkarten",
   Review: "Abnahme und drei Prüfungen",
   Fixes: "Nachbessern",
 };
