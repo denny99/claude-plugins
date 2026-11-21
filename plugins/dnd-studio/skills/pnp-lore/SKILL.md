@@ -302,7 +302,10 @@ geändert hat); sie schreibt die Lore danach nicht selbst noch einmal.
 
 ## 9. Ein eigener Obsidian-Vault
 
-Hat der Mensch seine Welt in einem Obsidian-Vault, wird **eine** Seite die führende (G10), mit ihm entschieden und in
+Hat der Mensch seine Welt in einem Obsidian-Vault, gehört sein Ordner ins Profil: `profile edit` mit `vault`
+(z. B. `~/Dokumente/dnd-kampagnen/Ödland`); `studio_status` zeigt ihn als `vault: {path, found}`. Dann kennen ihn alle
+Agenten des Mods, das Aufräumen des Studios behält jede Datei, die eine seiner Notizen nennt, und gelesen und geschrieben
+wird er direkt als Dateien, nicht über ein anderes Plugin. Dann wird **eine** Seite die führende (G10), mit ihm entschieden und in
 der `world`-Notiz festgehalten (`Führende Quelle: Studio` oder `Führende Quelle: Obsidian-Vault <Ordner>`):
 - **Studio führt:** den Vault einmal mit `lore write` übernehmen (Arten zuordnen, Quellen `obsidian:<Datei>`); danach
   wird nur noch im Studio geschrieben, der Vault ist Archiv oder wird vom Studio aus nachgezogen.

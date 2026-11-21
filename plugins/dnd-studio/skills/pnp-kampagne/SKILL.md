@@ -35,8 +35,8 @@ Kurz fragen, was fehlt (nicht alles auf einmal, sinnvolle Vorgaben vorschlagen):
 - In welcher Welt spielt sie? Die Lore einer Welt liegt im Wissens-Vault des Studios (Werkzeug `lore`, Skill
   `pnp-lore`); `lore map` zeigt die Welten. Eine neue Kampagne in einer bestehenden Welt bindet `campaign set` mit `world`,
   Architekt und Texter lesen die Lore mit `lore search`. Eine eigene Welt von Grund auf: erst Skill `pnp-weltenbau`.
-  Hat der Mensch zusätzlich einen eigenen Obsidian-Vault (Pfad des Kampagnen-Ordners, Regeln des Vaults), gleicht
-  `dnd-studio:pnp-lore` auch ihn ab; ohne ihn steht die Welt allein im Studio (Lore, `campaign`, Kanon).
+  Hat der Mensch zusätzlich einen eigenen Obsidian-Vault, steht sein Ordner im Profil (`studio_status` →
+  `vault`; setzen mit `profile edit vault`), und `dnd-studio:pnp-lore` gleicht auch ihn ab, nach seinen Regeln; ohne ihn steht die Welt allein im Studio (Lore, `campaign`, Kanon).
 
 `studio_status` zeigt das offene Profil; alles entsteht dort. Wo eine Kampagne schon existiert: `campaign` lesen und
 ausbauen statt neu anlegen.
