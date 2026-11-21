@@ -243,14 +243,14 @@ test("steps: only a report sets the state; counts are material; from_campaign is
   expect(stale[0]?.state).toBe("done");
   // a world taken over from a campaign: Welt steps with notes are done, steps without notes and the questions stay open
   const welt2 = stepViews("welt", {}, seeded, undefined);
-  expect(welt2[1]?.state).toBe("done");
+  expect(welt2.every((v) => v.state === "done")).toBe(true);
   expect(welt2[1]?.detail).toContain("aus der Kampagne übernommen (6)");
-  expect(welt2[3]?.state).toBe("todo");
-  expect(welt2[7]?.state).toBe("todo");
-  expect(welt2[8]?.state).toBe("todo");
-  // once the person works on the world with pnp-weltenbau, only its reports set a ✓ again
-  const welt3 = stepViews("welt", { "4": { state: "active", note: "", at: 1 } }, seeded, undefined);
-  expect(welt3[1]?.state).toBe("todo");
+  expect(welt2[3]?.detail).toContain("mit der Kampagne entworfen");
+  // a Welt report changes only its own step; the others stay taken over
+  const welt3 = stepViews("welt", { "4": { state: "done", note: "9 Fraktionen", at: 1 }, "8": { state: "warn", note: "Aufhänger fehlen", at: 2 } }, seeded, undefined);
+  expect(welt3[1]?.state).toBe("done");
+  expect(welt3[3]?.detail).toContain("9 Fraktionen");
+  expect(welt3[7]?.state).toBe("warn");
 
   // spoiler-free: only notes not tagged spoiler/geheim/faden/secret/gm and not retired
   const safe = spoilerFreeMap(seeded);

@@ -297,8 +297,9 @@ const material = (n: number): string => `Material vorhanden (${n})`;
  * the vault say nothing about whether the step was worked through (a world seeded by `from_campaign` has many), so
  * their counts only show as „Material vorhanden (n)“. One exception: Lore step 1 (Bestand sichten) is done when the
  * world's notes come from `from_campaign` (their sources name the campaign's NPCs, places, threads); an older
- * „active“ report does not undo it. And a world taken over from a campaign (seeded, no Welt report yet) shows its
- * Welt steps that have notes as done, „aus der Kampagne übernommen (n)“: it was never built step by step.
+ * „active“ report does not undo it. And a world taken over from a campaign (seeded) shows every Welt step done
+ * („aus der Kampagne übernommen (n)“ or „mit der Kampagne entworfen“): it was designed with the campaign, not step by
+ * step; a Welt report sets only its own step.
  */
 export function stepViews(
   flow: Flow,
@@ -314,22 +315,23 @@ export function stepViews(
     ? Object.values(map.kinds).reduce((n, l) => n + l.filter((e) => e.tags.includes("spoiler")).length, 0)
     : 0;
   const seeded = fromCampaignCount(full);
-  // a world taken over from a campaign (from_campaign) was never built step by step: its steps with notes count as done
-  // until the person works on the world with pnp-weltenbau (then its reports decide)
-  const takenOver = flow === "welt" && seeded > 0 && Object.keys(reports).length === 0;
+  // a world taken over from a campaign (from_campaign) was designed with the campaign, not step by step: every Welt step
+  // counts as done; a report changes only its own step (Denny 2026-11-21: „am Ende ist alles abgehakt“)
+  const takenOver = flow === "welt" && seeded > 0;
   return stepsOf(flow).map((s, i) => {
     const r = reports[String(i + 1)];
     let state: StepState = "todo";
     let count = "";
     // a state read from the data (taken over from the campaign) is not undone by an older „begonnen“ report
     let fromData = false;
-    if (flow === "welt" && s.kinds) {
+    if (flow === "welt" && takenOver) {
+      const n = s.kinds ? countOf(s.kinds, map, world) : 0;
+      state = "done";
+      fromData = true;
+      count = n && !s.kinds?.includes("question") ? `aus der Kampagne übernommen (${n})` : "mit der Kampagne entworfen";
+    } else if (flow === "welt" && s.kinds) {
       const n = countOf(s.kinds, map, world);
-      if (n && takenOver && !s.kinds.includes("question")) {
-        state = "done";
-        fromData = true;
-        count = `aus der Kampagne übernommen (${n})`;
-      } else if (n) count = s.kinds.includes("question") ? `${n} offen` : material(n);
+      if (n) count = s.kinds.includes("question") ? `${n} offen` : material(n);
     } else if (flow === "lore") {
       if (i === 0 && seeded) {
         state = "done";
