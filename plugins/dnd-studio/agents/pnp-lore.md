@@ -43,8 +43,12 @@ keine, nimm ihren Namen als Welt und vermerke das.
    beheben, Widersprüche nach G4 als Frage anlegen, die Zahlen ins Protokoll.
 
 **Stand melden** (nur Anzeige im Tab Lore des Panels; gibt es `mcp__dnd-studio__lore_progress` nicht, überspringen):
-je Schritt des Skills `pnp-lore` (1 Bestand sichten … 6 Kanon-Abgleich) zu Beginn `{flow: "lore", world, step,
-state: "active"}`, am Ende `state: "done"` mit kurzem `note`.
+je Schritt des Skills `pnp-lore` zu Beginn `{flow: "lore", world, step, title, state: "active"}`, am Ende
+`state: "done"` mit kurzem `note`. `step` und `title` sind die sechs Schritte des Skills, **nicht** die Punkte 1–8
+oben und nicht seine Abschnitt-Nummern: 1 „Bestand sichten“ (Punkt 1), 2 „Notizen anlegen/abgleichen“ (Punkte 2–4),
+3 „Verknüpfen“ (Punkt 5 ohne Fragen, Punkt 6), 4 „Geheimes markieren“, 5 „Offene Fragen“ (beantwortete heraus, neue
+anlegen), 6 „Kanon-Abgleich nach dem Abend“ (Punkt 8, `lore check`). Ein Auftrag nur für offene Fragen meldet Schritt 5.
+Nur ein `done` setzt im Panel den Haken.
 
 **Eigener Obsidian-Vault (optional).** Nur wenn der Auftrag einen Vault-Ordner nennt (z. B. `Ödland/`) und es ihn
 gibt. Abgeglichen wird **nur in eine Richtung**, von der führenden Quelle aus (Skill `pnp-lore` G10 und Abschnitt 9; die

@@ -67,6 +67,8 @@ import {
   setClash,
   setTab,
   configureProtectedProfiles,
+  refreshSpoiler,
+  readStudioSpoiler,
 } from "../lib/state";
 import { isLive } from "../lib/model";
 import {
@@ -133,6 +135,8 @@ export async function refreshTab(
   } else if (tab === "build") await refreshCampaign($);
   else if (tab === "health") await probe($, options);
   else if (tab === "world" || tab === "lore") await refreshLore($, options);
+  // the Studio's spoiler-free mode decides what every tab hides (read only, never changed here)
+  if (tab !== "review") await refreshSpoiler($);
 }
 
 export async function selectTab(
@@ -404,7 +408,8 @@ export const register: Register = (on, options) => {
           properties: {
             flow: { type: "string", enum: ["welt", "lore"] },
             world: { type: "string", description: "the world's name as the lore tool names it" },
-            step: { type: "number", description: "the step's number, from 1" },
+            step: { type: ["number", "string"], description: "the step's number in the tool's list, from 1 (not a skill's section number)" },
+            title: { type: "string", description: "the step's name as the tool's list gives it, e.g. 'Offene Fragen'; wins over a step number that does not match" },
             state: { type: "string", enum: ["active", "done", "todo", "warn", "failed"] },
             note: { type: "string", description: "optional: a short German note, e.g. '4 Orte, 1 Frage'" },
           },
@@ -526,6 +531,7 @@ export const register: Register = (on, options) => {
             : renderHealth($, k, options, {
                 health: await readHealth($),
                 rules,
+                studioSpoiler: await readStudioSpoiler($),
                 clash: await readClash($),
                 view,
                 evening,

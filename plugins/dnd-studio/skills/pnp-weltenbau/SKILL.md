@@ -55,9 +55,9 @@ zurück). Jeder Fakt kommt dabei in
 Schritt oder Pause?
 
 **Stand melden** (nur Anzeige im Panel; gibt es das Werkzeug `mcp__dnd-studio__lore_progress` nicht, überspringen):
-zu Beginn eines Schritts `lore_progress` mit `{flow: "welt", world, step: <Nummer>, state: "active"}`, nach dem
-`lore write` des Schritts dasselbe mit `state: "done"` und einem kurzen `note` („4 Orte, 1 Frage“). Ohne Meldung
-schätzt das Panel den Stand aus den Notizen je Art.
+zu Beginn eines Schritts `lore_progress` mit `{flow: "welt", world, step: <Nummer>, title: <Name>, state: "active"}`,
+nach dem `lore write` des Schritts dasselbe mit `state: "done"` und einem kurzen `note` („4 Orte, 1 Frage“). Nur ein
+`done` setzt den Haken; Notizen je Art zeigt das Panel nur als „Material vorhanden“.
 
 Die Reihenfolge trägt: Idee und Kern entscheiden alles Weitere. Springt der Mensch, folge ihm und hole Fehlendes
 später.
