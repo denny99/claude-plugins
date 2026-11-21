@@ -833,8 +833,10 @@ function acceptanceRows(
 
   // Scenes on a map name the start squares.
   const onMap = scenes.filter((s) => !!placeMap.get(str(s.place)));
+  // the scene's markers field (the Studio sets them when the scene starts), or start squares still written in its
+  // setup or notes (older campaigns)
   const noStart = onMap
-    .filter((s) => !START_RE.test(str(s.notes)))
+    .filter((s) => !arr(s.markers).length && !START_RE.test(`${str(s.setup)} ${str(s.notes)}`))
     .map((s) => str(s.title));
   out.push(
     item(
