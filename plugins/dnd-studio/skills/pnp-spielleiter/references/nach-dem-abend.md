@@ -26,3 +26,11 @@ Gehört zu Skill `pnp-spielleiter`, Abschnitt 7: was nach dem Abschied kommt, we
    installierten Skill schreiben: Der Plugin-Ordner wird beim nächsten Update überschrieben. Nur wenn das Quell-Repo
    des Plugins in dieser Sitzung ausgecheckt ist (`plugins/dnd-studio/skills/…`), schreibst du sie dort in den Skill
    und committest nach seinem OK.
+
+## Ein Spieler mit eigenem Studio
+
+Spoilerfrei (Denny 2026-11-21): Was am Tisch gezeigt, gesagt oder
+übergeben wurde, markieren `show_players`, `say_line` und `give_find` selbst als gespielt. Was an einem Abend ohne
+Studio lief, markierst du nach: `campaign { action: "spoiler", played: ["<Szene>", "<NPC>", "<Ort>"] }` (Titel und
+Namen; `unplayed` nimmt es zurück). Auf seinem Rechner schaltet `campaign { action: "spoiler", on: true }` den Modus
+an, `upto` deckt den Zeitstrahl bis zu einer Szene auf. Deine Werkzeuge sehen immer alles.
