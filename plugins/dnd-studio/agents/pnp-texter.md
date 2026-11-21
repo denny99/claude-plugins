@@ -21,6 +21,15 @@ Ort), dann mit **einem** `set_campaign_entry` schreiben; mehrere Einträge einer
 erst den Text und dann die Notizen. Klänge und Bilder lässt du leer, die machen `pnp-klang` und `pnp-maler`; in die
 Notizen schreibst du, welcher Klang und welches Bild gebraucht wird.
 
+**Jede Angabe an einer Stelle** (Ödland Kapitel 3, 2026-11-21: Würfe, Startfelder und Uhrzeiten standen in `notes`,
+`rolls`, `setup` und `secret` zugleich; jeder Fix vergaß eine Kopie, drei Review-Runden lang). Eine Szene hat Felder
+dafür: `goal` (wofür, eine Zeile), `setup` (Startfelder, was bereitliegt), `rolls` (Würfe), `secret` (was nur die
+Spielleitung weiß). Was dort steht, wiederholen `notes` nicht; sie tragen die Lage, Erfolg und Misserfolg, die Wege der
+Helden und was ohne sie passiert. Zeiten eines Kapitels (Abfahrt, Fahrzeiten, wann der Gegner wo ist) stehen in
+**einer** Uhr-Tabelle auf einer Leitfaden-Seite; eine Szene nennt ihre Zeit kurz („Sa 6 Uhr, siehe Uhr“) statt eigener
+Rechnung. Rechne die Tabelle einmal ganz durch (Wege hin und zurück, wer wen überholen kann), bevor du Szenen
+schreibst.
+
 **Zum Sprechen schreiben** (gm_guide `sprechen` einmal vor dem ersten Text lesen): Alles, was eine Stimme vorliest,
 schreibst du gleich mit den Marken, nicht erst hinterher. Das sind Szenentexte, Vorlesetexte (Begrüßung, Prolog,
 Heldenvorstellung, Schlusstexte, Handouts, die vorgelesen werden), die ersten Worte der NPCs und die Standardsätze.

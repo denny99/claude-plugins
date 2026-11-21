@@ -328,7 +328,7 @@ Gehe den Abend im Kopf einmal als Spielleitung durch und prüfe:
 
 Wer gebaut hat, übersieht die eigenen Lücken. Deshalb prüfen nach der Abnahme **drei Reviewer** in frischem Kontext
 (eigene Agenten, gleichzeitig), jeder mit einem Fachbereich, und die Kampagne geht erst zum Menschen, wenn alle drei
-nichts mehr finden (Denny, 2026-10-30). Jeder Reviewer liest die Kampagne selbst (`campaign`, `results get`,
+nichts mehr finden (Denny, 2026-10-30), nach dem festen Ablauf unten. Jeder Reviewer liest die Kampagne selbst (`campaign`, `results get`,
 `map list`, die Stimmbeschreibungen), nicht die Meinung des Erbauers, und prüft am Studio, nicht am Text allein. Die drei sind
 Agents des Plugins (`dnd-studio:…`), jeder mit seiner Prüfliste und
 nur lesenden Werkzeugen: `dnd-studio:pnp-review-technik`, `dnd-studio:pnp-review-konsistenz`, `dnd-studio:pnp-review-spielbarkeit` (Agent-Tool mit
@@ -363,14 +363,33 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
    jedem Hinweis; jeder Held mit Haken und großem Moment, ein Geheimnis lässt sich enthüllen oder bewusst behalten (beides belohnt); Plan des Gegners und Vorrat zum
    Improvisieren; bei offenem Ende tragen die Fäden einen nächsten Abend, bei einer Fortsetzung passt alles zum Kanon.
 
-Der Ablauf: Jeder Reviewer schreibt seine Mängel (was, wo, warum, wie zu beheben) in eine eigene Datei und meldet
-nur ihre Anzahl. `dnd-studio:pnp-nachbesserer` behebt sie aus den Dateien. Ziel ist ein möglichst fehlerfreier Abend (Denny,
-2026-11-01: „es soll schon möglichst fehlerfrei sein“), darum prüfen die Reviewer danach erneut, die etwas gefunden
-hatten, **höchstens drei Runden**. Was gilt als erledigt: Text, Regeln, Logik, Kanon, Spoiler, Hinweise, Stimmen,
-Klänge und fehlende Bilder müssen stimmen. **Kosmetisches an Bildern** (ein Licht zu viel, ein Detail der Karte
-fehlt, eine leichte Naht) wird nach einem Versuch nicht mehr gejagt, sondern nur gelistet: Bildmodelle haben Grenzen,
-und jedes Nachmalen bringt eigene neue Fehler (Ödland, Talsperre, 2026-11-01). Was nach drei Runden offen bleibt,
-bekommt der Mensch als Liste.
+**Der Ablauf** (Ödland Kapitel 3, 2026-11-21, Denny: „die Review-Schleife ist absurd so“: drei Runden mit je rund
+30 Mängeln; ein Viertel hatte die Nachbesserung selbst gemacht, ein Viertel blieb „offen“ ohne Zuständigen, die
+Erstprüfung las nur Stichproben). Darum ist die Schleife fest:
+
+1. **Erstprüfung**, die drei gleichzeitig, jeder liest seinen Bereich **ganz** und listet unter „Geprüft“ und „Nicht
+   geprüft“, was er gelesen hat. Ist die Kampagne zu groß für einen (ein Kapitel mit 15+ Szenen), teilt der Erbauer
+   nach Abend oder Kapitel und startet je Teil einen Reviewer, statt dass einer Stichproben liest. Jeder Mangel hat eine
+   ID und nennt alle Fundstellen.
+2. **Nachbesserung:** `dnd-studio:pnp-nachbesserer` ersetzt statt anzuhängen, ändert eine Tatsache an allen
+   Fundstellen, liest jeden Fix nach und gibt jedem Mangel, den er nicht selbst behebt, genau eine Kategorie (`an
+   Maler`, `an Klang`, `Mensch`, `bleibt`, `falsch gemeldet`). Er listet die geänderten Einträge.
+3. **Folgeaufträge erledigen, bevor geprüft wird:** Der Erbauer gibt alle Zeilen `an Maler` gesammelt an
+   `pnp-maler` und alle `an Klang` an `pnp-klang`, stellt die Fragen `Mensch` dem Menschen (spielt er mit: nur, was ohne
+   Spoiler geht, sonst entscheidet der Erbauer), und wartet, bis alles fertig ist. Erst dann die nächste Runde, sonst
+   meldet sie dieselben Punkte wieder.
+4. **Nachprüfung**, nur die Reviewer, die etwas gefunden hatten: Sie bekommen ihre letzte Mängel-Datei und das
+   Protokoll des Nachbesserers, prüfen jeden Mangel und jeden geänderten Eintrag ganz, und melden Neues außerhalb
+   davon nur, wenn es den Abend bricht. Keine neue Erstprüfung.
+5. Schritte 2–4 **höchstens zweimal** nach der Erstprüfung. Läuft eine Nachprüfung nicht deutlich kleiner als die Runde
+   davor (weniger als halb so viele Mängel), stimmt etwas am Ablauf: der Erbauer sieht sich an, woher die Mängel
+   kommen (Fix-Fehler, ungeprüft offen, übersehen), statt eine weitere Runde zu starten.
+
+Was gilt als erledigt: Text, Regeln, Logik, Kanon, Spoiler, Hinweise, Stimmen, Klänge und fehlende Bilder müssen
+stimmen (Denny, 2026-11-01: „es soll schon möglichst fehlerfrei sein“). **Kosmetisches an Bildern** (ein Licht zu
+viel, ein Detail der Karte fehlt, eine leichte Naht) wird nach zwei Versuchen nicht mehr gejagt, sondern als `bleibt`
+gelistet: Bildmodelle haben Grenzen, und jedes Nachmalen bringt eigene neue Fehler (Ödland, Talsperre, 2026-11-01).
+Was am Ende offen bleibt, bekommt der Mensch als Liste.
 
 **Spielt der Mensch selbst mit, bleibt alles spoilerfrei:** Erbauer und Reviewer arbeiten in eigenen Agenten, Mängel
 stehen nur in den Dateien, und an den Menschen gehen nur Zahlen (Szenen, Orte, NPCs, Mängel je Bereich und Runde),
