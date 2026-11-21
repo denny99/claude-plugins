@@ -30,6 +30,8 @@ Prüfer prüft nach jeder Szene dieselben Punkte):
 8. **Wer redet, spricht selbst:** NPC-Rede in der Stimme des NPCs, nicht vom Erzähler (4).
 9. **Jeder kommt dran** (4a).
 10. **Helfer nach jeder Szene** im Hintergrund starten (Prüfer, Chronist, Vorbereiter), nie auf sie warten (4b).
+    Redet die Gruppe mit einem NPC, macht der Vorbereiter dessen wahrscheinlichste Antworten fertig; `table_state`
+    listet sie unter `prepared`. Passt eine, sag sie Wort für Wort (Stimme, `how`, Marken gleich): Sie kommt sofort.
 
 Die Regeln mit Datum und Zitat sind Lehren aus echten Spielabenden mit Denny; das Zitat sagt, warum die Regel gilt.
 Zitate sind Anlässe, nicht Vorlieben einer Person: Die Regeln gelten für jeden Tisch, sofern der Leitfaden der
