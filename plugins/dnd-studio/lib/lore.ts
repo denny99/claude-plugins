@@ -32,7 +32,7 @@ export const KINDS: { id: string; de: string; plural: string }[] = [
   { id: "rule", de: "Regel", plural: "Regeln" },
   { id: "theme", de: "Thema", plural: "Themen" },
   { id: "question", de: "Frage", plural: "Fragen" },
-  { id: "decision", de: "Entscheidungen", plural: "Entscheidungen" },
+  { id: "decision", de: "Entscheidung", plural: "Entscheidungen" },
   { id: "note", de: "Notiz", plural: "Notizen" },
 ];
 

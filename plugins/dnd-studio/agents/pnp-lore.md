@@ -27,8 +27,11 @@ keine, nimm ihren Namen als Welt und vermerke das.
    angepasst (Quelle `kanon:<Abend>`) und die Änderung im Protokoll vermerkt. Was am Tisch erfunden wurde und in der
    Welt fehlt, kommt dazu; was nur diese Kampagne betrifft (Schulden, wer was weiß), bleibt Kanon.
 5. Zeitleiste und „Namen und Aussprache“ nachziehen; beantwortete Fragen herausnehmen, neue als `question` anlegen.
-   Was der Mensch entschieden hat (im Auftrag mit seinen Worten), kommt ins Protokoll „Entscheidungen“ (G3); ohne seine
-   Worte schreibst du keinen Eintrag und nichts als `canon`.
+   Was der Mensch entschieden hat (im Auftrag mit seinen Worten), kommt ins Protokoll „Entscheidungen“ (G3), je
+   Entscheidung ein `lore decide` (`world`, `what`, `words`; die Nummer kommt zurück und wird die Quelle
+   `entscheidung:E-nnnn`), was die Spieler nicht wissen dürfen mit `secret: true`. Das Protokoll nie mit `lore write` neu
+   schreiben (gibt es `decide` nicht: erst lesen, dann ganz schreiben, nie zwei zugleich). Ohne seine Worte schreibst
+   du keinen Eintrag und nichts als `canon`.
 6. Nichts erfinden, was weder im Studio noch im Kanon steht.
 7. Zum Schluss `lore check` mit der Welt (G12; gibt es die Aktion nicht, die Prüfliste von G12 von Hand): Fehler
    beheben, Widersprüche nach G4 als Frage anlegen, die Zahlen ins Protokoll.

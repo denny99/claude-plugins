@@ -14,5 +14,6 @@
 
 ## Skills shared with D&D Studio
 
-`plugins/dnd-studio/skills/` (pnp-kampagne, pnp-spielleiter, pnp-lore, pnp-weltenbau) are the same skills as `skills/` in
-`denny99/dnd-character-creator`: a change goes into both repositories, else they drift apart.
+`plugins/dnd-studio/skills/pnp-kampagne` and `pnp-spielleiter` are copied into `skills/` of `denny99/dnd-character-creator`
+(the gm_guide tool's copy, taken from here with its `tools/sync_gm_guide.js`): after a change here, run the sync there,
+else they drift apart. pnp-lore and pnp-weltenbau live only in this plugin.

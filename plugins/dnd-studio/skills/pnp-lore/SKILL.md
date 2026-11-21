@@ -24,7 +24,8 @@ eine Radio-Kultur wie in den 1950ern.
 | `read`          | `title`, `world`: eine Notiz ganz, mit Links, Rückverweisen und Quellen.                               |
 | `write`         | `notes: [{title, world, kind, tags?, status?, body, sources?}]`: mehrere Notizen je Aufruf, neu oder geändert. `body` ersetzt den Text, `tags` und `sources` kommen dazu (`"-tag"` nimmt einen Tag weg). |
 | `delete`        | `title`, `world`: nimmt eine Notiz heraus (nur Überholtes, nie Kanon).                                 |
-| `check`         | `world`: prüft die Welt, ohne etwas zu ändern (Abschnitt G12): Quellen, Links ins Leere, doppelte Fakten, unverlinkte Fragen, Geheimes, das über Links durchsickert, fehlende Heimat-Notizen. |
+| `check`         | `world`: prüft die Welt, ohne etwas zu ändern (Abschnitt G12): Quellen, Links ins Leere, doppelte Fakten, unverlinkte Fragen, Geheimes, das über Links oder das Entscheidungsprotokoll durchsickert, fehlende Heimat-Notizen. |
+| `decide`        | `world`, `what`, `words`, optional `secret`: hängt **eine** Zeile an das Protokoll „Entscheidungen“ an (legt es an, wenn es fehlt), vergibt die nächste Nummer selbst und gibt sie zurück (`id`, z. B. `E-0012`); `secret: true` schreibt sie unter `## Geheim (Spielleitung)` (G3). |
 | `from_campaign` | `campaign`, `world`: legt die Lore einer Welt aus einer bestehenden Kampagne an (siehe unten).         |
 
 **Arten** (`kind`), eine je Notiz:
@@ -50,7 +51,7 @@ eine Radio-Kultur wie in den 1950ern.
 | `note`       | Was in keine Art passt (sparsam)                                 |                                             |
 
 `status`: `draft` (Entwurf, noch nicht abgesegnet), `canon` (gilt), `retired` (überholt, bleibt als Verweis). Ohne
-Angabe `draft`. `canon` nur mit einer Quelle, die die Entscheidung belegt (`entscheidung:E-0007` oder `kanon:<Abend>`, G3). Tags klein und wenige: `spoiler` für Spielleiterwissen, eine Region (`rostmark`), ein Kapitel (`kap-2`).
+Angabe `draft`. `canon` nur mit einer Quelle, die die Entscheidung belegt (`entscheidung:E-0007`, `kanon:<Abend>` oder `mensch`, G3). Tags klein und wenige: `spoiler` für Spielleiterwissen, eine Region (`rostmark`), ein Kapitel (`kap-2`).
 
 ## Die sechs Schritte und der Stand im Panel
 
@@ -102,7 +103,14 @@ Die Rangfolge steht in der `world`-Notiz, damit jede Sitzung sie findet.
 **G3. Ein Entscheidungsprotokoll.** Eine `decision`-Notiz „Entscheidungen“ je Welt, eine Zeile je Entscheidung:
 `E-0012 · 2026-11-21 · Wasser kostet in Kesselheim 3 Kronkorken je Liter · „drei kronkorken, das ist teuer genug“`
 – fortlaufende Nummer, Datum, was gilt, die Worte des Menschen **wörtlich**. Die Notiz, die den Fakt trägt, bekommt die
-Quelle `entscheidung:E-0012`. So weiß auch in einem Jahr jemand, warum etwas so ist. Wird etwas zurückgenommen oder
+Quelle `entscheidung:E-0012` (hat der Mensch es nur gesagt, ohne Protokollzeile, reicht für `canon` auch `mensch`).
+**Geschrieben wird nur mit `lore decide`** (`world`, `what`, `words`): eine Zeile wird angehängt, die Nummer vergibt das
+Studio und gibt sie zurück – nie die ganze Notiz mit `lore write` neu schreiben, denn `write` ersetzt den ganzen Text
+und zwei Schreibende überschreiben sich. Gibt es `decide` noch nicht: die Notiz erst lesen, dann ganz schreiben, und nie
+zwei solche Schreiber gleichzeitig. **Geheime Entscheidungen** (alles, was die Spieler noch nicht wissen dürfen: eine
+Wendung, ein Weltgeheimnis, was unter `## Geheim (Spielleitung)` oder in einer `spoiler`-Notiz steht) mit
+`secret: true`: sie stehen im Protokoll unter `## Geheim (Spielleitung)`, den deckt der spoilerfreie Modus ab; der
+öffentliche Teil des Protokolls ist für alle lesbar. `lore check` meldet eine öffentliche Zeile, die Geheimes zitiert. So weiß auch in einem Jahr jemand, warum etwas so ist. Wird etwas zurückgenommen oder
 geändert (Retcon), gibt es einen neuen Eintrag, der den alten nennt; der alte bleibt stehen. Nur diese Notiz darf
 Fakten anderer Notizen zitieren (sie ist das Protokoll der Änderung, G1).
 
@@ -154,13 +162,17 @@ Orte, an denen beide schreiben, sind zwei Wahrheiten.
 **G11. Spielt der Mensch selbst mit?** Dann entscheidet er die öffentliche Ebene und die Weltgeheimnisse (G6), aber das
 Geheime einer Kampagne (Wendungen, Absichten der NPCs, Geheimnisse der Helden) schreibt ein Agent, und du liest es ihm
 nie vor: in der Hauptsitzung nur Zahlen („3 Geheimnisse angelegt“), Inhalte nur in Agenten (`dnd-studio:pnp-lore`,
-Architekt, Texter). Das gehört in die `world`-Notiz (`Autor spielt mit: ja`), damit jede Sitzung es weiß.
+Architekt, Texter). Das gehört in die `world`-Notiz (`Autor spielt mit: ja`), damit jede Sitzung es weiß. Was der
+Agent dabei entscheiden lässt oder festhält, geht mit `lore decide` und `secret: true` ins Protokoll, nie in dessen
+öffentlichen Teil.
 
 **G12. Prüfen.** Nach jedem größeren Schreiben und am Ende jedes Schritts `lore check` mit der Welt. Fehler werden
 behoben oder (bei Widersprüchen) nach G4 zur Frage; Hinweise prüfst du mit Augenmaß. Gibt es `lore check` im Studio noch
 nicht, prüfst du dieselbe Liste von Hand mit `lore map`, `lore search` und der Liste `unlinked`, die `lore write`
 zurückgibt:
-- jede Notiz hat Art und Quelle; `canon` nur mit `entscheidung:`- oder `kanon:`-Quelle;
+- jede Notiz hat Art und Quelle; `canon` nur mit `entscheidung:`-, `kanon:`- oder `mensch`-Quelle;
+- der öffentliche Teil von „Entscheidungen“ zitiert nichts, was nur unter `## Geheim (Spielleitung)` oder in einer
+  `spoiler`-Notiz steht;
 - keine Links ins Leere (`unlinked` leer) und keine Anker auf fehlende Abschnitte;
 - kein Fakt in zwei Notizen (G1);
 - jede offene Frage ist von ihren Notizen aus verlinkt (G8);
@@ -263,7 +275,7 @@ Nach einem Bau (pnp-kampagne) und nach jedem Spielabend wird die Lore nachgezoge
 1. Was neu ist: die neuen Einträge der Kampagne (Bauplan, Bauprotokoll) bzw. der Kanon des Abends und die Session-Notizen.
 2. Je Thema `lore search`, dann ergänzen oder anlegen, alles in **einem** `lore write` mit allen Notizen.
 3. Zeitleiste und „Namen und Aussprache“ nachtragen, beantwortete Fragen herausnehmen, neue Fragen anlegen; was der
-   Mensch dabei entschieden hat, ins Protokoll „Entscheidungen“ (G3).
+   Mensch dabei entschieden hat, je Entscheidung ein `lore decide` (Geheimes mit `secret: true`, G3).
 4. `lore check` (G12) und das Gefundene beheben.
 5. Dem Menschen in zwei Sätzen sagen, was neu ist und welche Fragen offen sind (ohne Spoiler, wenn er mitspielt).
 

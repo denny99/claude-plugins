@@ -47,7 +47,9 @@ Je Runde: **drei bis fünf Fragen**, nicht mehr auf einmal. Zu jeder Frage zwei,
 offen lässt, wird eine `question`-Notiz. Am Ende jeder Runde: in drei Sätzen zusammenfassen, was jetzt gilt, und
 nach seinem Ja **alle Notizen der Runde in einem `lore write`** schreiben (Status `draft`; `canon` erst, wenn der
 Mensch sagt „so ist es“). Was er so bestätigt, bekommt eine Zeile im Entscheidungsprotokoll „Entscheidungen“ mit
-seinen Worten wörtlich (`pnp-lore` G3) und die Notiz die Quelle `entscheidung:E-nnnn`. Jeder Fakt kommt dabei in
+seinen Worten wörtlich (`lore decide` mit `what` und `words`, je Entscheidung ein Aufruf; ein Weltgeheimnis oder sonst
+Geheimes mit `secret: true`, `pnp-lore` G3) und die Notiz die Quelle `entscheidung:E-nnnn` (die Nummer gibt `decide`
+zurück). Jeder Fakt kommt dabei in
 **seine** Heimat-Notiz (`pnp-lore` G1): eine Entfernung in „Maße, Preise und Reisezeiten“, eine Jahreszahl in die
 „Zeitleiste“; die Orts- oder Fraktionsnotiz verlinkt nur. Dann `lore check` (`pnp-lore` G12) und fragen: nächster
 Schritt oder Pause?
@@ -111,7 +113,7 @@ später.
    frischem Kontext: Widersprüche (Jahreszahlen, Entfernungen, wer wen kennt), doppelte Fakten, Gerüchte, die wie
    Tatsachen dastehen, Lücken, die ein Abend sofort trifft, Namen, die sich zu ähnlich sind. Gefundenes dem Menschen in
    einer kurzen Liste vorlegen. Widersprüche nie selbst entscheiden: als „Widerspruch: …“-Frage mit beiden Stellen
-   (`pnp-lore` G4); nach seiner Entscheidung Eintrag in „Entscheidungen“, die eine Stelle richtig, die andere ein Link.
+   (`pnp-lore` G4); nach seiner Entscheidung ein `lore decide`, die eine Stelle richtig, die andere ein Link.
    Doppelte Fakten: in die Heimat-Notiz, sonst Links (`pnp-lore` G1). Spielt der Mensch mit (G11), meldet der Agent
    Geheimes nur als Zahl.
 
