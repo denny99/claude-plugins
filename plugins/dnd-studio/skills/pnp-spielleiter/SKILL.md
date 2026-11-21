@@ -302,7 +302,8 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
   - `weather`: `rain`, `snow`, `ash`, `fog` über dem Bild; bleibt, bis du es änderst (`none` nimmt es weg).
   - `effect` einmal beim Erscheinen: `shake` (ein Schlag, ein Beben, eine Tür fliegt auf), `flash` (Blitz, Zauber).
   - `overlay`: Spritzer wie auf der Linse: `blood` (ein Treffer, eine Wunde), `water` (eine Welle), `mud`, `cracks`
-    (Glas splittert, ein Schlag auf den Kopf), `frost` (Kälte); das nächste Bild nimmt es weg.
+    (Glas splittert, ein Schlag auf den Kopf), `frost` (Kälte); das nächste Bild nimmt es weg. Dazu die eigenen
+    Effekte der Kampagne mit ihrem Namen (`campaign` → `effects`, z. B. `strahlung` im Ödland), mit ihrem Klang.
   - Sparsam: ein Effekt, wenn die Geschichte ihn trägt, nicht bei jedem Bild. Ein Held fast am Boden (Leben ≤ 25 %)
     lässt den Rand von selbst rot pulsieren; ein Standbild zoomt von selbst langsam.
   - **Schleifen:** Hat eine Szene eine vorbereitete Schleife (`animate loop`, beim Bau), zeigst du sie statt des

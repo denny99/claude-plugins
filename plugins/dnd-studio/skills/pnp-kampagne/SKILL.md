@@ -296,6 +296,11 @@ einzeln (`jobs watch`: den Befehl mit Bash im Hintergrund starten, er weckt dich
   das Video neben der Stimme nicht auf die Karte. Die Schleife in die Notizen der Szene, damit die Spielleitung sie
   mit `show_players loop: true` zeigt.
 - **Tiefenkarten** für die Parallaxe im Spielerfenster macht `prepare_table` selbst (Abschnitt 2, `pnp-tischbereit`).
+- **Eigene Effekte der Welt** (Denny 2026-11-21: Strahlung im Ödland): was die Welt besonders macht, als Effekt über dem
+  Bild aus Bausteinen, ohne GPU: `set_campaign { effects: { strahlung: { tint: "#b8ff3a", glow: 0.6, grain: 0.5,
+  flicker: 0.4, aberration: 0.35, pulse: 0.6, particles: "glow", sound: <Geigerzähler> } } }` (`particles`: glow,
+  sparks, dust; alle Stärken 0–1). Die Spielleitung zeigt ihn mit `show_players overlay: "strahlung"`. In den Notizen
+  der Szenen vermerken, wo er passt; im Leitfaden, was er bedeutet.
 
 ## 4. Abnahme: Ist der Abend spielfertig?
 
