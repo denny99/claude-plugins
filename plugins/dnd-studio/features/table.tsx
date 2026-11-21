@@ -4,6 +4,7 @@
  * else only annotates.
  */
 import { noteProgressCall } from "./progress";
+import { prepJobOf } from "../lib/progress";
 import type { EngineInterface, On, RenderElement } from "claude-code";
 
 import {
@@ -466,7 +467,7 @@ export async function observe(
     case "prepare_table":
       if (typeof json.total === "number")
         await patchLive($, () => ({
-          prepared: `${String(json.made ?? json.done ?? "?")}/${String(json.total)}${json.failed ? `, ${Array.isArray(json.failed) ? json.failed.length : String(json.failed)} failed` : ""}`,
+          prepared: `${String(json.made ?? json.done ?? "?")}/${String(json.total)}${json.failed ? `, ${Array.isArray(json.failed) ? json.failed.length : String(json.failed)} failed` : ""}${prepJobOf(json) ? " läuft" : ""}`,
         }));
       break;
     case "profile": {

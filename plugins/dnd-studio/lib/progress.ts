@@ -6,7 +6,8 @@
  * - a step tool's answer (picture, picture_tool, paint_*, animate, make_3d, model_tool, make_sound): the job ids it
  *   queued; write_text answers at once, so its call is one finished job;
  * - `jobs wait`: which jobs are done (each job's `done`/results/error, or `finished` for all of them, or only a count);
- * - `prepare_table`: `made`/`total`/`failed` and `new` (lines made by this call) for the voices;
+ * - `prepare_table`: `made`/`total`/`failed` and `new` (lines made by this call) for the voices; a newer Studio answers
+ *   with one prepare job (`job_ids: ["prep-…"]`) whose `jobs wait` answers carry `progress[]` and, at the end, the counts;
  * - `studio_status`: the Studio's GPU queue; jobs it lists that the mod did not see start (the Studio's own window,
  *   another session) are waited for first;
  * - the mod tool `build_progress`: an agent says how many it will make in all (the maler's 60 pictures before it has
@@ -66,6 +67,10 @@ export const BATCH_GAP_MS = 10 * 60_000;
 export const JOB_TTL_MS = 3 * 3_600_000;
 /** prepare_table / build_progress / studio_status answers older than this no longer count. */
 export const REPORT_TTL_MS = 30 * 60_000;
+/** An open prepare job silent this long reads „läuft“ (its watch runs in Bash, the mod polls every VOICE_POLL_MS). */
+export const VOICE_QUIET_MS = 2 * 60_000;
+/** How often the mod asks the Studio about an open prepare job nobody else reported on. */
+export const VOICE_POLL_MS = 20_000;
 
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj =>
@@ -248,7 +253,29 @@ export function endedOf(
     .map((id) => ({ id }));
 }
 
-/** A prepare_table answer: voices made so far; `new` lines this call made take its time between them. */
+/** A list or a count of failed lines, as a count. */
+const failedCount = (v: unknown): number => (Array.isArray(v) ? v.length : (num(v) ?? 0));
+
+/** The prepare job a prepare_table answer started (`job_ids: ["prep-…"]`), undefined from an old Studio. */
+export function prepJobOf(json: Obj): string | undefined {
+  const ids = Array.isArray(json.job_ids) ? (json.job_ids as unknown[]).map(str).filter(Boolean) : [];
+  return ids.find((id) => id.startsWith("prep-")) ?? ids[0];
+}
+
+/** Moves the voice row to `made`, the lines made since the last report taking the time between them. */
+function voicesMade(s: ProgressState, made: number, base: number, now: number, fresh?: number): ProgressState {
+  const n = fresh ?? Math.max(0, made - (s.voices?.made ?? made));
+  if (n <= 0) return s;
+  const per = Math.max(0, now - Math.max(base, s.lastEndAt)) / n;
+  let out = s;
+  for (let i = 0; i < Math.min(n, MEAN_OF); i++) out = withDuration(out, "voice", per, now);
+  return out;
+}
+
+/**
+ * A prepare_table answer: voices made so far; `new` lines this call made take its time between them. A Studio that
+ * answers with a prepare job (`job_ids`) starts the row, `jobs wait` moves it on (noteVoiceJob).
+ */
 export function noteVoices(
   s: ProgressState,
   json: Obj,
@@ -258,20 +285,92 @@ export function noteVoices(
   const total = num(json.total);
   if (total === undefined) return s;
   const made = num(json.made) ?? num(json.done) ?? 0;
-  const failedRaw = json.failed;
-  const failed = Array.isArray(failedRaw) ? failedRaw.length : (num(failedRaw) ?? 0);
-  const fresh = num(json.new) ?? Math.max(0, made - (s.voices?.made ?? made));
-  const fresher = !s.voices || now - s.voices.at > REPORT_TTL_MS || made < s.voices.made;
-  let out: ProgressState = {
-    ...s,
-    voices: { made, total, failed, at: now, since: fresher ? callStart : s.voices!.since },
+  const failed = failedCount(json.failed);
+  const job = prepJobOf(json);
+  const fresher = !s.voices || now - s.voices.at > REPORT_TTL_MS || made < s.voices.made || !!job;
+  const scope = obj(json.scope);
+  const chapter = str(scope.chapter) || undefined;
+  const eta = num(json.eta_s);
+  const out = voicesMade(s, made, callStart, now, num(json.new) ?? (job ? 0 : undefined));
+  return {
+    ...out,
+    voices: {
+      made,
+      total,
+      failed,
+      at: now,
+      since: fresher ? callStart : s.voices!.since,
+      ...(job ? { job, chapter, etaMs: eta === undefined ? undefined : eta * 1000 } : {}),
+    },
   };
-  if (fresh > 0) {
-    const base = Math.max(callStart, s.lastEndAt);
-    const per = Math.max(0, now - base) / fresh;
-    for (let i = 0; i < Math.min(fresh, MEAN_OF); i++) out = withDuration(out, "voice", per, now);
+}
+
+/** The prepare job that runs now, if any. */
+export function openPrepJob(s: ProgressState): string | undefined {
+  const v = s.voices;
+  return v?.job && !v.ended ? v.job : undefined;
+}
+
+/**
+ * A `jobs` answer about the open prepare job: `progress[]` moves the voice row (made/total/failed/eta_s), `finished`
+ * (or the job listed done) ends it with the final counts, `cancel` ends it. Unchanged when it does not name the job.
+ */
+export function noteVoiceJob(s: ProgressState, input: Obj, data: Obj, now: number): ProgressState {
+  const v = s.voices;
+  const job = openPrepJob(s);
+  if (!v || !job) return s;
+  const asked = Array.isArray(input.job_ids) ? (input.job_ids as unknown[]).map(str) : [];
+  if (str(input.action) === "cancel")
+    return asked.includes(job) ? { ...s, voices: { ...v, at: now, job: undefined, ended: true } } : s;
+  const listed = Array.isArray(data.jobs) ? (data.jobs as unknown[]).map(obj) : [];
+  const entry = listed.find((j) => str(j.id ?? j.job_id) === job);
+  const over =
+    (data.finished === true && (asked.includes(job) || !asked.length)) ||
+    (!!entry && (entry.done === true || entry.finished === true || !!entry.error || /done|finished|complete|fail|error|cancel/i.test(str(entry.state ?? entry.status))));
+  if (over) {
+    const src = [entry && obj(entry.result), entry, obj(data.result), data].find(
+      (o) => o && num(o.total) !== undefined,
+    );
+    const made = num(src?.made) ?? v.made;
+    const out = voicesMade(s, made, v.at, now, num(src?.new) === undefined ? undefined : Math.max(0, made - v.made));
+    return {
+      ...out,
+      voices: {
+        ...v,
+        made,
+        total: num(src?.total) ?? v.total,
+        failed: src && src.failed !== undefined ? failedCount(src.failed) : v.failed,
+        at: now,
+        job: undefined,
+        etaMs: undefined,
+        ended: true,
+      },
+    };
   }
-  return out;
+  const progress = Array.isArray(data.progress) ? (data.progress as unknown[]).map(obj) : [];
+  const p = progress.find((x) => str(x.id ?? x.job_id) === job);
+  if (!p) return s;
+  const made = num(p.made) ?? v.made;
+  const eta = num(p.eta_s);
+  const out = voicesMade(s, made, v.at, now);
+  return {
+    ...out,
+    voices: {
+      ...v,
+      made,
+      total: num(p.total) ?? v.total,
+      failed: p.failed !== undefined ? failedCount(p.failed) : v.failed,
+      at: now,
+      etaMs: eta === undefined ? undefined : eta * 1000,
+    },
+  };
+}
+
+/** The acceptance row's words for the voices ("140/320", ", 2 failed", " läuft" while the job runs). */
+export function preparedText(s: ProgressState): string {
+  const v = s.voices;
+  if (!v) return "";
+  return `${v.made}/${v.total}${v.failed ? `, ${v.failed} failed` : ""}${openPrepJob(s) ? " läuft" : ""}`;
 }
 
 /** studio_status's jobs: those the mod does not know wait in the queue too. */
@@ -377,17 +476,24 @@ export function buildProgress(s: ProgressState, now: number): BuildProgress {
     });
   }
   const v = s.voices;
-  if (v && now - v.at < REPORT_TTL_MS && v.made + v.failed < v.total) {
+  const job = v && openPrepJob(s);
+  if (v && !v.ended && now - v.at < (job ? JOB_TTL_MS : REPORT_TTL_MS) && v.made + v.failed < v.total) {
     const mean = meanOf(s, "voice");
     const left = v.total - v.made - v.failed;
+    const quiet = job && now - v.at > VOICE_QUIET_MS;
     raw.push({
       key: "progress-voice",
       kind: "voice",
-      label: KIND_DE.voice,
+      label: `${KIND_DE.voice}${v.chapter ? ` Kap. ${v.chapter}` : ""}${quiet ? " (läuft)" : ""}`,
       done: v.made,
       total: v.total,
       leftMs: null,
-      ownMs: mean === undefined ? null : mean * left,
+      ownMs:
+        v.etaMs !== undefined
+          ? Math.max(0, v.etaMs - (now - v.at))
+          : mean === undefined
+            ? null
+            : mean * left,
       firstAt: v.since,
     });
   }

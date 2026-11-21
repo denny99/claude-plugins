@@ -875,15 +875,17 @@ function acceptanceRows(
   const m = /^(\d+|\?)\/(\d+)(?:, (\d+) failed)?/.exec(prepared);
   const failed = m?.[3] ? Number(m[3]) : 0;
   const short = m ? m[1] !== m[2] : false;
+  // a prepare job still running (" läuft"): not short yet, nothing to fix
+  const running = / läuft$/.test(prepared);
   out.push({
     key: "prepare",
     label: "Stimmen vorbereitet",
-    status: !prepared ? "idle" : failed || short ? "failed" : "ok",
+    status: !prepared ? "idle" : running ? "warning" : failed || short ? "failed" : "ok",
     counts: prepared
       ? prepared.replace(/(\d+) failed/, "$1 fehlgeschlagen")
       : "noch nicht gelaufen",
     detail: "",
-    fix: !prepared || failed || short ? "pnp-tischbereit" : "",
+    fix: running ? "" : !prepared || failed || short ? "pnp-tischbereit" : "",
   });
   return out;
 }
