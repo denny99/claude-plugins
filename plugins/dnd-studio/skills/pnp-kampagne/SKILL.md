@@ -232,8 +232,8 @@ Fäden, mit denen es beginnt, und den Ort, an dem der Abend anfängt.
 
 ## 3. Bilder, Karten, Klang (die langsamen Teile, gesammelt)
 
-Bilder belegen die GPU minutenlang. Deshalb erst wenn der Text steht, gebündelt, und mit `jobs wait` abwarten statt
-einzeln:
+Bilder belegen die GPU minutenlang. Deshalb erst wenn der Text steht, gebündelt, und gebündelt abwarten statt
+einzeln (`jobs watch`: den Befehl mit Bash im Hintergrund starten, er weckt dich, wenn alle fertig sind):
 - `paint_campaign`: ein Aufruf für alles, mit `items` (`[{kind, name}, …]`, Arten gemischt; je Art werden die Bildworte
   erst alle geschrieben, dann gemalt): NPC-Porträts, Orte, Szenen. Jede Szene braucht ein Bild, das die
   Spieler beim Vorlesen sehen. Jeder sprechende NPC braucht ein Porträt: Es erscheint im Spielerfenster, während er
@@ -286,6 +286,21 @@ einzeln:
   `say_line sound` am Tisch. Am Tisch hat jeder Klang einen Knopf, die Spielleitung – Mensch oder Claude – startet
   ihn, wenn er passt; im Studio geht dasselbe im Dialog der Szene unter „Klänge“. Ein Klang, der zu keiner Szene
   gehört (ein Wesen, das überall heult), in die Notizen des NPC.
+- **Musik nach Stimmung** (Denny 2026-11-21): Je Kampagne eine Musik für `explore`, `tense`, `fight`, `rest`
+  (`make_sound` mit `kind: "bgmusic"`, lange Schleifen), gebunden mit `set_campaign { mood_music: { explore: <Datei>,
+  fight: <Datei>, … } }`. Eine Szene mit eigener Musik je Stimmung: in ihren `sounds` den Klang mit `mood: "fight"`.
+  Am Tisch blendet die Musik dann mit der Stimmung über, ein Kampf schaltet von selbst um.
+- **Schleifen für die wichtigen Szenen** (Ankunft an einem Ort, der Höhepunkt, ein Ort mit Feuer, Nebel oder Wasser):
+  `animate { start: <Szenenbild>, loop: true, idea: "was sich bewegt: das Feuer flackert, Rauch zieht" }` macht ein
+  lebendes Standbild (Kamera und Personen still, ohne Ton, 5 s, nahtlos). Nur vor dem Abend: mit offenem Tisch passt
+  das Video neben der Stimme nicht auf die Karte. Die Schleife in die Notizen der Szene, damit die Spielleitung sie
+  mit `show_players loop: true` zeigt.
+- **Tiefenkarten** für die Parallaxe im Spielerfenster macht `prepare_table` selbst (Abschnitt 2, `pnp-tischbereit`).
+- **Eigene Effekte der Welt** (Denny 2026-11-21: Strahlung im Ödland): was die Welt besonders macht, als Effekt über dem
+  Bild aus Bausteinen, ohne GPU: `set_campaign { effects: { strahlung: { tint: "#b8ff3a", glow: 0.6, grain: 0.5,
+  flicker: 0.4, aberration: 0.35, pulse: 0.6, particles: "glow", sound: <Geigerzähler> } } }` (`particles`: glow,
+  sparks, dust; alle Stärken 0–1). Die Spielleitung zeigt ihn mit `show_players overlay: "strahlung"`. In den Notizen
+  der Szenen vermerken, wo er passt; im Leitfaden, was er bedeutet.
 
 ## 4. Abnahme: Ist der Abend spielfertig?
 
@@ -294,6 +309,8 @@ Gehe den Abend im Kopf einmal als Spielleitung durch und prüfe:
 - Es gibt eine Kampagnenkarte mit allen Orten als Marker, und jeder Ort, an dem eine Szene spielt, hat seine Karte.
 - Jeder sprechende NPC hat Porträt, Stimme (mit Stimmprobe), `sheet`, Standardsätze; jeder stumme hat Geräusche.
 - Jeder gebundene Klang ist eine Aufnahme, mit `check_sound` gegen das gehört, was er sein soll.
+- Die Kampagne hat Musik je Stimmung (`campaign` zeigt `moodMusic`: mindestens `explore` und `fight`), und die
+  wichtigen Szenen haben ihre Schleife (`animate loop`, in den Notizen der Szene).
 - Bei einem Kapitel einer Kampagne: `threads` und `party_at` gesetzt (`campaign` zeigt `threads` und `partyAt`).
 - Jede Szene auf einer Karte nennt in den Notizen die Startfelder von Helden und NPCs.
 - Jeder Held hat einen Weg, der zu seinem Bogen passt, und jeder Wurf nennt die Fertigkeit, die er auch hat.
@@ -345,8 +362,9 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
 - `campaign` erst mit `overview: true`, dann nur mit `only` und `names` lesen. Die ganze Kampagne ist die größte Antwort
   der Werkzeuge. `results list` mit `name` und `brief`, `settings` ohne `available`.
 - Viele Bilder ansehen: je 12–16 auf einen Kontaktbogen (`results sheet`), groß (`results get`) nur die Verdächtigen.
-- Jobs eines Stapels in einem `jobs wait` bündeln und zwischen den Wartezeiten nichts anderes lesen: Jede Runde schickt
-  den ganzen Kontext neu.
+- Jobs eines Stapels in einem `jobs watch` bündeln (im Hintergrund; ein Agent: `background: false`, im Vordergrund)
+  statt `jobs wait` alle 50 s, und zwischen den Wartezeiten nichts anderes lesen: Jede Runde schickt den ganzen Kontext
+  neu.
 - Vor einem langen Agenten mit einem Probeaufruf prüfen, ob sein Weg geht (ist die Ergebnisliste überhaupt gefüllt?).
 - **Jeden Eintrag einmal schreiben:** alles zu einem Eintrag sammeln, dann ein `set_campaign_entry` mit allen Feldern;
   viele Einträge in einem Aufruf mit `entries`. Jeder Aufruf ist eine volle Runde (ein Bau schrieb 190-mal, ein
@@ -355,7 +373,8 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
   pictures`, `set_voice voices`, `write_text texts`, `party set players`, `map plan patches`, `paint_map tiles`,
   `picture`/`picture_tool pictures`, `make_3d`/`model_tool models`, `make_sound sounds`, `add_file paths`, `results get
   ids`. Ein Feld neben der Liste gilt für jeden Eintrag; ein Fehler hält den Rest nicht auf (`failed`, je Eintrag
-  `error`). Job-Werkzeuge geben alle `job_ids` zurück: die in einem `jobs wait` abwarten.
+  `error`). Job-Werkzeuge geben alle `job_ids` zurück: die in einem `jobs watch` abwarten. Braucht ein Aufruf
+  länger als 25 s zum Vorbereiten, kommt statt der Jobs eine Aufruf-ID (`call-…`): sie steht für alle seine Jobs.
 - Karten-Plan lesen ohne Bilder: `map list` mit `map` und `pictures: false`.
 - **Lange Agenten geben ab:** Die Bau-Agenten (Texter, Maler, Klang, Nachbesserer) hören nach etwa 60
   Werkzeugaufrufen oder bei großem Kontext auf, schreiben ihr Protokoll vollständig (fertig, offen, welche Einträge)
