@@ -32,8 +32,13 @@ keine, nimm ihren Namen als Welt und vermerke das.
    `entscheidung:E-nnnn`), was die Spieler nicht wissen dürfen mit `secret: true`. Das Protokoll nie mit `lore write` neu
    schreiben (gibt es `decide` nicht: erst lesen, dann ganz schreiben, nie zwei zugleich). Ohne seine Worte schreibst
    du keinen Eintrag und nichts als `canon`.
-6. Nichts erfinden, was weder im Studio noch im Kanon steht.
-7. Zum Schluss `lore check` mit der Welt (G12; gibt es die Aktion nicht, die Prüfliste von G12 von Hand): Fehler
+6. **Aussprache:** Die Notiz „Namen und Aussprache“ der Welt ist die Quelle des Wörterbuchs (gm_guide `sprechen`).
+   Was dort neu oder anders ist, mit **einem** `campaign set pronunciations` ins Studio (nur die geänderten Wörter,
+   `""` nimmt eines heraus); im Studio stehende Wörter, die inzwischen gespielt sind und in der Notiz fehlen, in die
+   Notiz. Ungespielte Namen bleiben nur im Studio. Nach einer Änderung im Protokoll vermerken: `prepare_table` neu
+   laufen lassen.
+7. Nichts erfinden, was weder im Studio noch im Kanon steht.
+8. Zum Schluss `lore check` mit der Welt (G12; gibt es die Aktion nicht, die Prüfliste von G12 von Hand): Fehler
    beheben, Widersprüche nach G4 als Frage anlegen, die Zahlen ins Protokoll.
 
 **Stand melden** (nur Anzeige im Tab Lore des Panels; gibt es `mcp__dnd-studio__lore_progress` nicht, überspringen):

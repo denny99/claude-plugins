@@ -26,34 +26,59 @@ Discord-Bot (`speech_markup.js`), im Sitzungsprotokoll (`table_core.py shown`). 
 
 ## Regeln für einen Vorlesetext
 
-1. **Ruhig sprechen lassen.** Vorlesetexte mit `how: "say:calm:slow"` (oder ohne `how`). Spannung kommt aus dem Text:
-   kurze Sätze, Pausen, Betonung. Mit `tense` blieb die Stimme am Satzende oben. `slow` macht kaum langsamer (etwa
-   145 Wörter je Minute statt 150).
-2. **Kurze Sätze statt Kommaketten.** Am Komma bleibt die Stimme oben, am Punkt geht sie runter. Eine Aufzählung wird
-   zu eigenen Sätzen, der Inhalt bleibt gleich:
-   - statt „die meisten in Gelb, manche in Rot, und darunter blinkt geduldig ein Cursor“
-   - „Die meisten in [emphasis] Gelb. Manche in [emphasis] Rot. … Und darunter blinkt [emphasis] geduldig ein Cursor.“
-3. **Etwa eine Betonung je Satz,** mit `[emphasis]` direkt vor dem Wort, auf dem das Bild liegt (das Ding, die Zahl,
-   das Gefühl), nicht auf Füllwörtern. Mehr klingt überladen. Großbuchstaben (`REISENDEN`) wirken auch, sind aber im
-   Spielerfenster zu sehen: `[emphasis]` nehmen.
-4. **`…` vor dem Wort, das wirken soll:** „ein Felsbrocken … groß wie eine [emphasis] Stadt“, „und fragt nach eurem
-   [emphasis] Namen“. Auch zwischen zwei Gedanken.
-5. **Eine Pause, die man hören muss** (nach einer Aufzählung, vor der Pointe): den Satz mit einem Punkt beenden und
-   `…` dahinter. `[pause]` mitten im Satz hat S2-Pro im Test überhört, und ein in Stücke geteilter Satz mit eingefügter
-   Stille klang schlechter:
-   - „… blitzt etwas [emphasis] Gerades. … [emphasis] Metallisches. … [emphasis] Viel zu gerade … für einen Felsen.“
-6. **Nichts am Inhalt ändern.** Die Marken und die Satzteilung sind für die Stimme; was gesagt wird, bleibt.
+Die Regeln kommen aus Hörtests mit dem Autor (Korath, 2026-11-20). Die erste Fassung (eine Betonung je Satz, `…` vor
+jeder Pointe, Aufzählungen in Einzelsätze zerlegt) klang beim Erzähler zerhackt, „als würde ein Dreijähriger
+sprechen“, und Betonungen auf Füllwörtern („da seid ihr [emphasis] ja“) waren ganz daneben. Weniger ist mehr:
 
-Ein ganzer Text nach diesen Regeln (der Autor: „das ist perfekt“):
+1. **Der Text, wie er geschrieben ist.** Eine gute Erzählerstimme setzt an Komma und Punkt selbst die richtigen
+   Pausen. Sätze nur teilen, wo sie wirklich lang sind (ein Semikolon, eine Kette aus drei, vier „und“); Kommas
+   innerhalb eines Satzes bleiben.
+2. **Die Art des Textes entscheidet:**
 
-> Draußen tobt der Sturm weiter … gedämpft durch die Hülle wie ein [emphasis] fernes Meer. Auf dem Bildschirm des
-> Bordcomputers stehen die Systeme untereinander. Die meisten in [emphasis] Gelb. Manche in [emphasis] Rot. … Und
-> darunter blinkt [emphasis] geduldig ein Cursor. … Durch die Lüftung rieselt feiner Staub. Der Boden ist
-> [emphasis] kalt. Und eure Kleidung riecht nach [emphasis] Rauch … aus dem Kessel. … [emphasis] Niemand weiß, wie
-> lange der Sturm noch hält. … Und niemand weiß, wer [emphasis] kommt … wenn er vorbei ist.
+   | Art | Sätze | `[emphasis]` | `…` |
+   |---|---|---|---|
+   | Beschreibung (Ort, Ankunft) | normal lang, am Ende ein, zwei kurze Sätze für den Haken | etwa eine je drei, vier Sätze | keine |
+   | Stiller, menschlicher Moment | normal lang | höchstens eine | keine |
+   | Spannung (Flug, Gefahr, Eile) | kurz, auch knapp abgehackt | etwa eine je Satz | sparsam, vor dem einen Wort, das zuschlägt |
+   | NPC-Worte, Standardsätze | wie Menschen reden, Satzzeichen wie geschrieben | höchstens eine, nur auf dem Wort, das die Figur selbst betont (eine Warnung, eine Bedingung) | höchstens eine |
 
-Das gilt auch für Standardsätze, erste Worte der NPCs und was die Spielleitung am Tisch frei spricht: Wer `say_line`
-schreibt, darf `[emphasis]` und `…` setzen.
+3. **`[emphasis]` nur auf dem Wort, das das Bild trägt** (das Ding, die Zahl, das Gefühl), nie auf Füllwörtern
+   („ja“, „doch“, „mal“), nie zwei in einem Satz. Großbuchstaben wirken auch, sind aber im Spielerfenster zu sehen.
+4. **`…` und Kommas zusammen werden zu lang.** Im Test brachte die entworfene Stimme an Komma plus `…` Pausen bis
+   0,8 s. Ohne `…` blieben sie unter 0,6 s und klangen am natürlichsten. `[pause]` mitten im Satz überhört S2-Pro.
+5. **Das `how`:** beim Erzähler `say:` (ohne `slow`, das macht kaum langsamer; `tense` lässt die Stimme am Satzende
+   oben). Beim Erzähler war zwischen `say:`, `say:calm:slow` und `say:curiosity` kaum ein Unterschied zu hören:
+   Lebendigkeit kommt aus dem Text. Bei NPCs zählt das `how` dagegen: je Zeile eine Stimmung, die zur ganzen Zeile
+   passt (im Test Rosa, eine müde Überlebende, mit `say:relief`). Eine Betonung im NPC-Satz half nur dort, wo die
+   Figur selbst etwas einschärft: „Und eins merkt ihr euch, [emphasis] Kehrwieder nennt ihr nie über Funk.“ Eine
+   Pause, die die Figur macht, ist ein `…` („Vierzig jetzt … und wenn's nicht ankommt, reden wir über achtzig.“). Ein gespeicherter Text hat nur ein `how`; braucht
+   eine Zeile zwei Stimmungen, wird sie zu zwei Texten.
+6. **Nichts am Inhalt ändern.** Marken und Satzteilung sind für die Stimme; was gesagt wird, bleibt.
+
+Ein Beispiel, Beschreibung (der Autor: „am natürlichsten“):
+
+> Unten in der Zisterne stellt jemand die Lampe in die Mitte, und einer nach dem anderen rückt heran. Die Kinder auf
+> Decken, die Alten auf Kisten, Matti am Fuß der Leiter, als wolle er gleich wieder hinauf. So viele Menschen und ein
+> Schiff, das für [emphasis] sechs gebaut ist. Laut hat es niemand gesagt, aber jeder hat es ausgerechnet. Nur die
+> Tropfen fallen in die Stille. Dann klopft Rosa mit dem Löffel gegen ihre leere Kanne und schaut euch an.
+
+Ein Beispiel, Spannung (hier wirkte die knappe Fassung besser als die ruhige):
+
+> Nach drei Tagen Flug wächst der [emphasis] Mars im Fenster. Rostrot … und still. Mit ihm wächst die Lichterkette der
+> [emphasis] Kontrollgrenze. Im Cockpit wird es [emphasis] eng. Alle wollen sehen. Und keiner will etwas sagen. Nur
+> die Instrumente ticken … und der Kurs zeigt mitten [emphasis] durch die Kette.
+
+**Die Stimme entscheidet mit.** Wie lang eine Pause an Komma und `…` wird und wie stark `[emphasis]` wirkt, hängt von
+der Stimme ab. Bekommt eine Kampagne einen neuen Erzähler, vor dem Bauen drei kurze Texte (Beschreibung, Spannung,
+NPC) in ihr sprechen lassen und den Menschen hören lassen. Geht es im Test um die Stimme, denselben Text in beiden
+Stimmen, sonst denselben Text in Varianten (A, B, C), und die Pausen messen (`ffmpeg -af silencedetect`).
+
+**Eine Erzählerstimme aus Worten** (`set_voice from description`) war im Test besser als eine geklonte Aufnahme des
+Autors. Eine Beschreibung, die zu einer Referenz passen soll: deren Tonhöhe messen (im Test 94 Hz Median) und
+„medium-pitched“, „light baritone“ oder „deep“ danach wählen. „low baritone“ ergab 72 Hz und klang zu tief. Jede
+Erzeugung klingt anders: die gehörte Datei übernehmen (`set_voice from file`), nicht neu aus der Beschreibung machen.
+
+Das gilt auch für Standardsätze, erste Worte der NPCs und was die Spielleitung am Tisch frei spricht.
 
 ## Aussprache der eigenen Wörter: `campaign set pronunciations`
 
@@ -99,7 +124,11 @@ vorn, damit man sie auseinanderhält). Was im Test half:
 - **pnp-texter** schreibt Vorlesetexte gleich nach den Regeln oben und legt für jeden erfundenen Namen, der vorkommt,
   einen Eintrag in `pronunciations` an oder meldet ihn, wenn er die Aussprache nicht kennt.
 - **pnp-tischbereit** ruft danach `prepare_table`, bis alles gemacht ist.
-- **Reviewer** prüfen: Sätze kurz, Betonung sparsam, keine Umschreibungen im Text selbst (die gehören ins Wörterbuch),
+- **Reviewer** prüfen: Schreibweise passt zur Art des Textes, Betonung sparsam und nie auf Füllwörtern, keine Umschreibungen im Text selbst (die gehören ins Wörterbuch),
   jeder erfundene Name im Wörterbuch.
-- Eine Kampagne, deren Notizen außerhalb des Studios liegen (ein Obsidian-Vault, Markdown-Dateien): die Texte dort
-  dürfen die Marken auch tragen, das Wörterbuch aber gehört in die Kampagne des Studios, denn nur dort wirkt es.
+- **Mit einem Vault ist der Vault die Quelle des Wörterbuchs** (Korath, 2026-11-20): eine eigene Notiz (im
+  Wissens-Vault des Studios die Notiz „Namen und Aussprache“ der Welt, Skill `pnp-lore`; Wort, so gesprochen, seit wann), versioniert und beim Neubau einer Studio-Kampagne wieder da. Das Studio hält eine Kopie,
+  denn nur dort wirkt sie; abgeglichen wird in **eine** Richtung, vom Vault ins Studio (`campaign set
+  pronunciations`, nur die geänderten Wörter), nie im Studio zuerst ändern. In eine Notiz, die Spieler lesen dürfen,
+  kommt ein Name erst, wenn er am Tisch gefallen ist; bis dahin steht seine Aussprache nur im Studio. Ohne Vault
+  bleibt das Wörterbuch allein im Studio. Die Texte im Vault dürfen die Marken auch tragen.
