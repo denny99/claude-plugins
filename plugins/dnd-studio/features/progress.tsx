@@ -11,19 +11,24 @@ import {
   endedOf,
   etaText,
   isRefusal,
+  JOB_TTL_MS,
   kindOfCall,
   noteEnded,
   noteEntry,
   notePlanned,
   noteQueue,
   noteStarted,
+  noteVoiceJob,
   noteVoices,
+  openPrepJob,
+  preparedText,
   startedIds,
   STEP_KIND,
+  VOICE_POLL_MS,
 } from "../lib/progress";
-import type { BuildProgress } from "../lib/progress";
-import { jsonOf, textOf } from "../lib/studio";
-import { patchProgress, readProgress, readRuns } from "../lib/state";
+import type { BuildProgress, ProgressState } from "../lib/progress";
+import { jsonOf, SERVER_KEY, textOf } from "../lib/studio";
+import { patchLive, patchProgress, readProgress, readRuns } from "../lib/state";
 import { Card, ProgressBlock } from "../lib/ui";
 import type { Kit, StatusInfo } from "../lib/ui";
 
@@ -71,15 +76,15 @@ export async function noteProgressCall(
       if (isRefusal(text)) return;
       const ids = startedIds(text);
       await patchProgress($, (p) => noteStarted(p, kind, ids, callStart, now));
+      followJobs($);
       return;
     }
     if (tool === "jobs") {
-      const p = await readProgress($);
-      const ended = endedOf(input, text, p);
-      if (ended.length) await patchProgress($, (q) => noteEnded(q, ended, now));
+      await noteJobsAnswer($, input, text, now);
     } else if (tool === "prepare_table") {
       const json = jsonOf(text);
       if (json) await patchProgress($, (p) => noteVoices(p, json, callStart, now));
+      followJobs($);
     } else if (tool === "studio_status") {
       const json = jsonOf(text);
       if (json) await patchProgress($, (p) => noteQueue(p, json, now));
@@ -96,6 +101,67 @@ export async function noteProgressCall(
     }
   } catch {
     // progress never stalls a Studio call
+  }
+}
+
+/** A `jobs` answer (Claude's call or the mod's own poll): finished jobs end, the prepare job's row moves on. */
+async function noteJobsAnswer($: EngineInterface, input: Obj, text: string, now: number): Promise<void> {
+  const p = await readProgress($);
+  const ended = endedOf(input, text, p);
+  const data = jsonOf(text) ?? {};
+  const hadJob = openPrepJob(p);
+  let next = p;
+  await patchProgress($, (q) => (next = noteVoiceJob(ended.length ? noteEnded(q, ended, now) : q, input, data, now)));
+  // the acceptance row follows the job as the old prepare_table answer did (lib/model.ts reads `prepared`)
+  if (hadJob && next.voices !== p.voices) await patchLive($, () => ({ prepared: preparedText(next) }));
+}
+
+/** The Studio jobs the mod still waits for: GPU jobs it saw queued and the open prepare job. */
+export function openJobIds(p: ProgressState, now: number): string[] {
+  // an end that never reaches the Studio's answer (a vanished job) stops being asked after JOB_TTL_MS
+  const ids = p.jobs
+    .filter((j) => j.endedAt === undefined && !j.id.startsWith("sync-") && now - j.startedAt < JOB_TTL_MS)
+    .map((j) => j.id);
+  const prep = p.voices && now - p.voices.at < JOB_TTL_MS ? openPrepJob(p) : undefined;
+  return prep && !ids.includes(prep) ? [...ids, prep] : ids;
+}
+
+let followAt = 0;
+
+/**
+ * While the mod tracks open Studio jobs it asks the Studio itself every VOICE_POLL_MS (`jobs wait`, 1 s), so the bars
+ * move without Claude's calls (its `jobs watch` runs in Bash, out of the mod's sight). One chain at a time; it stops
+ * once nothing is open, a failed call only skips a round.
+ */
+export function followJobs($: EngineInterface): void {
+  void (async () => {
+    const now = await $.clock.now();
+    if (followAt > now) return;
+    if (!openJobIds(await readProgress($), now).length) return;
+    followAt = now + VOICE_POLL_MS;
+    $.clock.after(VOICE_POLL_MS, () => {
+      followAt = 0;
+      void pollJobs($).finally(() => followJobs($));
+    });
+  })().catch(() => undefined);
+}
+
+/** One poll: `jobs wait` for the open jobs, its raw text (answerOf would drop a bare array) noted like Claude's call. */
+export async function pollJobs($: EngineInterface): Promise<void> {
+  try {
+    const ids = openJobIds(await readProgress($), await $.clock.now());
+    if (!ids.length) return;
+    const link = await $.mcp.connect(SERVER_KEY);
+    if (!link.isConnected) return;
+    const input = { action: "wait", job_ids: ids, timeout_seconds: 1 };
+    const res = await $.mcp.call(link.server, "jobs", input);
+    if (res.isError) return;
+    const blocks = Array.isArray(res.content) ? res.content : [];
+    const first = blocks.find((b): b is { text: unknown } => !!b && typeof b === "object" && "text" in b);
+    const text = first ? String(first.text) : textOf(res.content);
+    await noteJobsAnswer($, input, text, await $.clock.now());
+  } catch {
+    // the next round tries again
   }
 }
 
@@ -131,6 +197,7 @@ export async function progressTool($: EngineInterface, e: Obj): Promise<string> 
 
 /** What runs now (Build tab, band). */
 export async function readBuildProgress($: EngineInterface): Promise<BuildProgress> {
+  followJobs($); // after a reload the chain starts again with the first look
   return buildProgress(await readProgress($), await $.clock.now());
 }
 
