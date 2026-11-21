@@ -61,7 +61,9 @@ Aufbau: 1 Vor dem Abend · 2 Tisch aufbauen · 3 Ablauf · 4 Antworten · 4a Nic
    abdecken, nicht nur die erste Szene: Wer am Anfang verängstigt ist, ist am Ende erleichtert; ein Brummbär taut auf.
    Was in welche Art gehört, mit Beispielen: `../pnp-kampagne/references/standardsaetze.md` (mit dem Zuhörer auch die
    Brücken `approach`, `look` und `act` des Erzählers).
-3. **`prepare_table`** aufrufen, so oft bis `done: true`. Es erzeugt alle Standardsätze, Szenen- und Vorlesetexte
+3. **`prepare_table`** einmal aufrufen (Kapitel oder Abend des Abends: `chapter`, `evening`; sonst das Kapitel, an dem
+   der Tisch steht). Es kommt sofort mit `job_ids` zurück und arbeitet als ein Job; warten mit `jobs watch` (im
+   Hintergrund, er weckt dich), nie ein zweites Mal aufrufen, solange er läuft. Es erzeugt alle Standardsätze, Szenen- und Vorlesetexte
    dauerhaft, jeden Vorlesetext in der Stimme, die er beim Bau bekommen hat (`voice` des Textes, sonst der Erzähler).
    Weitere feste Zeilen, die du sicher sagen wirst, als `lines` mitgeben: `{text, voice: "Hanna Distelbrunn", how}`. Vorbereitetes kommt am Tisch sofort, **wenn es Wort für Wort
    in derselben Stimme und mit demselben how gesagt wird.** Es macht auch die Tiefenkarten der Szenen- und Ortsbilder

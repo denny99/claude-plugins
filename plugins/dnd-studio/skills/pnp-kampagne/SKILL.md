@@ -322,7 +322,7 @@ Gehe den Abend im Kopf einmal als Spielleitung durch und prüfe:
 - Jeder Hinweis, ohne den es nicht weitergeht, ist auf drei Wegen zu finden; jeder Gegner hat Werte und Moral.
 - Begrüßung, bei neuer Kampagne Prolog, bei vorgefertigten Helden ihre Vorstellung, Kapitelanfang und -ende und
   Leitfaden (mit Rahmen, Plan des Gegners und Vorrat) sind da; `brokenReferences` ist leer.
-- `prepare_table` über `dnd-studio:pnp-tischbereit`, damit am Abend alles sofort klingt (nach den Bildern, nicht gleichzeitig).
+- `prepare_table` über `dnd-studio:pnp-tischbereit` (ein Job je Kapitel oder Abend, nicht die ganze Kampagne), damit am Abend alles sofort klingt (nach den Bildern, nicht gleichzeitig).
 
 ## 5. Review: drei Prüfer, bis es sitzt
 
@@ -404,7 +404,10 @@ startet. Für Weitergabe: `campaign export`.
 Denny, 2026-11-08: „token effizienz“; Bilder prüfen und eine Stunde Ausbau kosteten rund 3 Millionen. Das gilt für
 dich und jeden Agenten des Baus:
 - `campaign` erst mit `overview: true`, dann nur mit `only` und `names` lesen. Die ganze Kampagne ist die größte Antwort
-  der Werkzeuge. `results list` mit `name` und `brief`, `settings` ohne `available`.
+  der Werkzeuge. Bei einer großen Kampagne (mehrere Kapitel, viele NPCs) die Übersicht mit `chapter` (und `evening`)
+  auf das Kapitel begrenzen, an dem gebaut wird: Sonst zählt sie die großen Listen nur (`truncated`), und die Zeilen
+  fehlen. Abende heißen mit ihrer Nummer über die ganze Kampagne („Abend 4“); die alten Bezeichnungen (A, B) gehen
+  weiter. `results list` mit `name` und `brief`, `settings` ohne `available`.
 - Viele Bilder ansehen: je 12–16 auf einen Kontaktbogen (`results sheet`), groß (`results get`) nur die Verdächtigen.
 - Jobs eines Stapels in einem `jobs watch` bündeln (im Hintergrund; ein Agent: `background: false`, im Vordergrund)
   statt `jobs wait` alle 50 s, und zwischen den Wartezeiten nichts anderes lesen: Jede Runde schickt den ganzen Kontext
