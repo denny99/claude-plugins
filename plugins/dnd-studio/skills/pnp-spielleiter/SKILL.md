@@ -261,8 +261,9 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
   schon zur Sache gehört („Der Wirt hebt eine Braue.“, „Die Tür gibt nach … fast.“). Er klingt, während du den Rest
   schreibst. Erst danach `campaign`, `roll_dice`, Bilder und die übrigen Sätze in einem zweiten `say_line`. Nichts
   nachschlagen, bevor der erste Satz läuft, außer der Satz hinge davon ab.
-- **Zum Sprechen schreiben:** Punkt statt Komma, wo die Stimme runtergehen soll; `[emphasis]` vor dem einen Wort, das
-  trägt; `…` vor einer Pointe. Die Spieler sehen die Marken nicht, die Aussprache der Namen kommt aus
+- **Zum Sprechen schreiben:** so, wie man redet; NPC-Worte höchstens mit einer Betonung, die die Figur selbst
+  setzt, beim Erzähler höchstens ein `[emphasis]` vor dem Wort, das trägt, in Spannung kurze Sätze. Nie auf
+  Füllwörtern. Die Spieler sehen die Marken nicht, die Aussprache der Namen kommt aus
   `pronunciations` von selbst (gm_guide `sprechen`). Vorgefertigte Vorlesetexte wortgleich sagen, sonst sind sie
   nicht vorbereitet.
 - **NPC-Antworten selbst schreiben** aus dem Bogen des NPCs und mit `say_line` in seiner Stimme sprechen.

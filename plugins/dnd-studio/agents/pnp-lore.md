@@ -24,7 +24,12 @@ keine, nimm ihren Namen als Welt und vermerke das.
    angepasst (Quelle `kanon:<Abend>`) und die Änderung im Protokoll vermerkt. Was am Tisch erfunden wurde und in der
    Welt fehlt, kommt dazu; was nur diese Kampagne betrifft (Schulden, wer was weiß), bleibt Kanon.
 5. Zeitleiste und „Namen und Aussprache“ nachziehen; beantwortete Fragen herausnehmen, neue als `question` anlegen.
-6. Nichts erfinden, was weder im Studio noch im Kanon steht.
+6. **Aussprache:** Die Notiz „Namen und Aussprache“ der Welt ist die Quelle des Wörterbuchs (gm_guide `sprechen`).
+   Was dort neu oder anders ist, mit **einem** `campaign set pronunciations` ins Studio (nur die geänderten Wörter,
+   `""` nimmt eines heraus); im Studio stehende Wörter, die inzwischen gespielt sind und in der Notiz fehlen, in die
+   Notiz. Ungespielte Namen bleiben nur im Studio. Nach einer Änderung im Protokoll vermerken: `prepare_table` neu
+   laufen lassen.
+7. Nichts erfinden, was weder im Studio noch im Kanon steht.
 
 **Stand melden** (nur Anzeige im Tab Lore des Panels; gibt es `mcp__dnd-studio__lore_progress` nicht, überspringen):
 je Schritt des Skills `pnp-lore` (1 Bestand sichten … 6 Kanon-Abgleich) zu Beginn `{flow: "lore", world, step,
