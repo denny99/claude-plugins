@@ -296,7 +296,9 @@ const material = (n: number): string => `Material vorhanden (${n})`;
  * The state of each step. Only a `lore_progress` report sets a step's state (a ✓ needs its done report): notes in
  * the vault say nothing about whether the step was worked through (a world seeded by `from_campaign` has many), so
  * their counts only show as „Material vorhanden (n)“. One exception: Lore step 1 (Bestand sichten) is done when the
- * world's notes come from `from_campaign` (their sources name the campaign's NPCs, places, threads).
+ * world's notes come from `from_campaign` (their sources name the campaign's NPCs, places, threads); an older
+ * „active“ report does not undo it. And a world taken over from a campaign (seeded, no Welt report yet) shows its
+ * Welt steps that have notes as done, „aus der Kampagne übernommen (n)“: it was never built step by step.
  */
 export function stepViews(
   flow: Flow,
@@ -312,23 +314,33 @@ export function stepViews(
     ? Object.values(map.kinds).reduce((n, l) => n + l.filter((e) => e.tags.includes("spoiler")).length, 0)
     : 0;
   const seeded = fromCampaignCount(full);
+  // a world taken over from a campaign (from_campaign) was never built step by step: its steps with notes count as done
+  // until the person works on the world with pnp-weltenbau (then its reports decide)
+  const takenOver = flow === "welt" && seeded > 0 && Object.keys(reports).length === 0;
   return stepsOf(flow).map((s, i) => {
     const r = reports[String(i + 1)];
     let state: StepState = "todo";
     let count = "";
+    // a state read from the data (taken over from the campaign) is not undone by an older „begonnen“ report
+    let fromData = false;
     if (flow === "welt" && s.kinds) {
       const n = countOf(s.kinds, map, world);
-      if (n) count = s.kinds.includes("question") ? `${n} offen` : material(n);
+      if (n && takenOver && !s.kinds.includes("question")) {
+        state = "done";
+        fromData = true;
+        count = `aus der Kampagne übernommen (${n})`;
+      } else if (n) count = s.kinds.includes("question") ? `${n} offen` : material(n);
     } else if (flow === "lore") {
       if (i === 0 && seeded) {
         state = "done";
+        fromData = true;
         count = `aus der Kampagne übernommen (${seeded})`;
       } else if (i === 0 && total) count = material(total);
       if (i === 1 && total) count = material(total);
       if (i === 3 && spoilers) count = material(spoilers);
       if (i === 4 && questions) count = `${questions} offen`;
     }
-    if (r) state = r.state;
+    if (r && !(fromData && (r.state === "active" || r.state === "todo"))) state = r.state;
     const detail = [s.who, r?.note || count || (r?.state === "active" ? "begonnen" : "")]
       .filter(Boolean)
       .join(" · ");

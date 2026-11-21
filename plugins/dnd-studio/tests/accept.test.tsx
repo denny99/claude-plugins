@@ -75,6 +75,26 @@ test("pure: the §4 checklist names what is missing and who fixes it", () => {
   });
   expect(noStart.find((i) => i.key === "prepare")?.status).toBe("ok");
 
+  // the scene's markers field counts as its start squares (no free text needed)
+  const withMarkers = acceptanceOf(
+    {
+      ...CAMPAIGN,
+      scenes: [
+        {
+          title: "Das Tor",
+          place: "Bree",
+          text: "t",
+          notes: "Rezept",
+          picture: "p",
+          markers: [{ who: "Helden", at: "4,14" }],
+        },
+      ],
+    },
+    MAPS,
+    "12/12",
+  );
+  expect(withMarkers.find((i) => i.key === "start")?.status).toBe("ok");
+
   expect(gpuOf(STATUS, 1)).toMatchObject({
     running: 1,
     queued: 1,
