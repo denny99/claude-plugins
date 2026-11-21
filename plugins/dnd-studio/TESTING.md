@@ -14,7 +14,7 @@ Grundregel: **nichts im Studio ändern**, außer der Schritt sagt es. Profil vor
 ## 1. Zustand
 
 1. Tab **Zustand**: Kopf mit Houndsridge-Logo (nicht abgeschnitten), Studio-Farben (Filz/Messing).
-2. Karte Zustand: Studio-App ✓ mit Version und Port 37641, Verbindung zu Claude ✓ „Token gesetzt“, Plugin `dnd-studio 0.11.0`, Discord-Bot, Alter Studio-Server „keiner im Weg“.
+2. Karte Zustand: Studio-App ✓ mit Version und Port 37641, Verbindung zu Claude ✓ „Token gesetzt“, Plugin `dnd-studio 0.11.1`, Discord-Bot, Alter Studio-Server „keiner im Weg“.
 3. **Neu laden** (Kopf) aktualisiert die Uhrzeit oben rechts.
 4. Es gibt keinen Token-Knopf mehr.
 5. Karten **Hintergründe** und **Regeln am Tisch**: Schalter mit Name + Satz darunter verständlich? Schalten **nicht** nötig.
