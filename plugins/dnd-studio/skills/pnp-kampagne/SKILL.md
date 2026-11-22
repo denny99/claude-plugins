@@ -250,6 +250,13 @@ einzeln (`jobs watch`: den Befehl mit Bash im Hintergrund starten, er weckt dich
   früheren Kapitel), entsteht jedes neue Bild von ihm als Edit mit diesem Bild als Basis (`picture` mit dem alten
   Bild, FLUX Klein): nur Tageszeit, Licht, Wetter, Figuren oder Blickwinkel ändern. Neu aus Text nur, was noch nie
   gezeigt wurde. Danach Alt und Neu nebeneinander ansehen: Bauten, Formen und Farben müssen dieselben sein.
+- **Neue Motive, die Klein schlecht kennt** (Monster, fremde Kreaturen, Sci-Fi-Maschinen, seltsame Bauten): das
+  Ausgangsbild mit `picture` ohne Basis und `advanced_create: true` (Krea 2, nur aus Worten), dann mit diesem Ergebnis
+  als Basis normal weiter (Klein: Helden hinein, Licht, Blickwinkel; oder `advanced_edit`). Krea sieht keine Bilder:
+  kein `person`, keine Helden mit Foto in der Idee, keine `references`, keine `pose`; NSCs nur über ihr Aussehen in
+  Worten. Für viele solche Bilder (`paint_campaign`) `options set kreaCreate: true`, danach wieder `false`: solange es an
+  ist, verweigern `paint_player` und `paint_map`. Fehlt Krea, meldet der Aufruf „models missing“ (`models install
+  missing: true`, ~13 GB).
 - **Karten gehören dazu, nicht nur Bilder.** Die Spieler wollen wissen, wo sie sind und wohin es geht; die Spielleitung
   zeigt sie am Tisch. Zwei Ebenen:
   1. **Kampagnenkarte** (die Gegend, alle Orte darauf): `paint_campaign` mit der Weltkarte (Kind world / Weltkarte),
