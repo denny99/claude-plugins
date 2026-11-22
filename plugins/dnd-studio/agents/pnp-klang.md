@@ -30,7 +30,7 @@ stehen im Skill `pnp-kampagne`, Abschnitt 3.
    `entries`. **Nie einen Klang ersetzen oder weglassen, den der Mensch nach Gehör abgenommen hat.** Ein Klang eines
    Wesens, das überall auftaucht, gehört an den NPC.
 5. Eine Datei, die schon im Studio liegt (frühere Kapitel), wiederverwenden statt neu laden.
-6. **Zum Prüfen ablegen:** jeden neuen Klang mit `mcp__dnd-studio__review` (fehlt es, überspringen wie oben; `action: add`, `items`: `name` = wofür, ohne
+6. **Zum Prüfen ablegen, nur Kritisches** (Denny 2026-11-22: 34 Einträge in der Abnahme waren „bescheuert“): nur Klänge, die `check_sound` grenzwertig lässt (nicht vorn oder unter etwa 0,3 `cos`, eine naheliegende Verwechslung vorn) oder die nach zwei Versuchen zweifelhaft bleiben, meist 0–3 je Lauf, nie Spoiler im Namen; mit `mcp__dnd-studio__review` (fehlt es, überspringen wie oben; `action: add`, `items`: `name` = wofür, ohne
    Szene, `kind: sound`, `source` = Studio-Datei oder URL aus `results`, `meta` z. B. „Geräusch · 4 s, Schleife“,
    `agent: pnp-klang`). Der Mensch hört sie im D&D-Panel (Tab Abnahme) an; „nochmal machen“ kommt mit seiner Notiz
    als neuer Auftrag zurück.

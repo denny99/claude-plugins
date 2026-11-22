@@ -62,7 +62,7 @@ Ist ein neues Bild, eine Schleife oder ein Klang gebunden, kommen die verworfene
 `results trash` (`ids`) in den Papierkorb, sofern nichts anderes sie nennt (kein Eintrag, keine Notiz, keine
 Vault-Notiz). Testjobs ebenso. Im Zweifel behalten; ins Protokoll, was weggeräumt ist.
 
-Neue Bilder legt der Maler zum Prüfen ab: `mcp__dnd-studio__review` (fehlt es, überspringen wie oben) mit `action: add`, je Bild `name` (wofür, ohne
+Nur kritische Bilder legt der Maler zum Prüfen ab (Denny 2026-11-22: 34 Einträge in der Abnahme waren „bescheuert“; nur, was du selbst nicht sicher abnehmen kannst: nach zwei Versuchen noch zweifelhaft, eine Grenze knapp, ein Wesen, dessen Wirkung nur der Mensch beurteilt; meist 0–3 je Lauf, nie Spoiler im Namen): `mcp__dnd-studio__review` (fehlt es, überspringen wie oben) mit `action: add`, je Bild `name` (wofür, ohne
 Spoiler), `kind: image`, `source` (Datei oder URL aus `results`), `scene`, `agent: pnp-maler`. Das Panel zeigt sie
 verdeckt, bis der Mensch sie aufdeckt.
 
