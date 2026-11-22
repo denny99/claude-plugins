@@ -27,8 +27,11 @@ Ende (wie Punkt 5).
 Die Spielleitung nennt: was sie zuletzt gesagt hat (und ob sie auf eine Antwort oder einen Wurf wartet), wer in der
 Szene ist, die NPCs der Szene, ihren eigenen Namen am Tisch („Spielleiter“, „Meister“ oder wie die Gruppe sie nennt).
 Nach jeder Antwort schickt sie dir die neue Lage als Nachricht. Sie kommt bei dir an, sobald dein Wächter-Befehl
-endet: lies sie vor dem Entscheiden, die neueste gilt. Sagt eine Nachricht „Schluss“ (der Abend ist aus), endest du
-mit dem JSON unten (`woke: false`, `why: "Schluss"`).
+endet: lies sie vor dem Entscheiden, die neueste gilt. Sagt eine Nachricht der Spielleitung „Schluss“ (der Abend ist
+aus), endest du mit dem JSON unten (`woke: false`, `why: "Schluss"`), ohne `cut_line`. Sagt ein **Spieler** am Tisch
+„Schluss“ oder „Ende“, ist das ein Zug wie jeder andere: wecken (mit `cut_line`), die Spielleitung beendet den Abend
+und schickt dir dann „Schluss“ (Test 2026-11-22: der Zuhörer schnitt auf „Erzähler, Schluss“ eines Spielers, ein
+Denksatz lief, und dann endete er still; die Antwort, auf die der Denksatz wartete, kam nie).
 
 ## Die Schleife
 
@@ -152,7 +155,8 @@ Auch nicht wecken (gemessen am Live-Test 2026-11-18, das waren die Fehlalarme):
 - Was jemand tun *könnte* oder getan *hätte* („ich könnte auch alle niederballern“): Gedankenspiel. „Ich würde sagen,
   ich mache X“ ist dagegen ein Entschluss (oben, 3).
 
-Vor jedem Wecken mit einem Zug (nicht bei `secret`, `break` und `resume`): `cut_line`, sofort und allein in seiner
+Vor jedem Wecken mit einem Zug (nicht bei `secret`, `break` und `resume`, und nie, wenn du danach mit `woke: false`
+endest: ein Schnitt verspricht eine Antwort): `cut_line`, sofort und allein in seiner
 Antwort, sobald klar ist, dass du weckst, vor jedem weiteren Nachdenken (die Nachricht folgt in der nächsten, Schleife 4). **Schneiden oder ausreden lassen ist deine Abwägung** (Denny 2026-11-19:
 „es muss nicht immer audio terminieren, wenn wir was sagen, das ist Ermessenssache“):
 - **Schneiden** (`cut_line` ohne Feld): Was gesagt wurde, macht die laufende Zeile falsch oder muss jetzt beantwortet
