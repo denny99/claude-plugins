@@ -1,0 +1,7 @@
+{
+  "name": "dnd-studio",
+  "private": true,
+  "scripts": {
+    "release": "semantic-release --extends ../../config/semantic-config.js semantic-release-monorepo"
+  }
+}
