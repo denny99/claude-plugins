@@ -233,8 +233,7 @@ export function renderHealth(
       ],
     }),
   );
-  // One card per group of switches, each switch a row (name, state, what it does). The listener is switched at the
-  // table only, so it has no row here.
+  // One card per group of switches, each switch a row (name, state, what it does).
   const relook = (key: keyof Rules) => () =>
     void toggleRule($, key).then(() => applyLook($));
   out.push(

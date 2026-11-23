@@ -83,7 +83,7 @@ export function DndHeader(
 }
 
 /**
- * An on/off switch in its own card: one native button, pressable as a whole ("● Zuhörer · an"), one sentence below.
+ * An on/off switch in its own card: one native button, pressable as a whole ("● Pause · an"), one sentence below.
  * Terminal: `[x] Title` as a plain button.
  */
 export function Switch(
@@ -177,7 +177,7 @@ export function toggleSvg(k: Kit, on: boolean): string {
   return svgDocument(`<svg viewBox="0 0 ${w} ${h}">${track}${dot}</svg>`);
 }
 
-/** The switch button's text, e.g. "◉ Zuhörer · an". */
+/** The switch button's text, e.g. "◉ Pause · an". */
 export function switchText(title: string, on: boolean): string {
   return `${on ? SWITCH_ON : SWITCH_OFF} ${sanitize(title)} · ${on ? "an" : "aus"}`;
 }

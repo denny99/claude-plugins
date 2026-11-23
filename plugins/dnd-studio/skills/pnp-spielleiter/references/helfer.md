@@ -5,8 +5,7 @@ während du leitest. Nur mit dem Plugin `dnd-studio` (die Agents gehören zu ihm
 
 **Helfer-Agents, die nie bremsen** (Denny, 2026-10-29: „vllt bist du nie alleine … die dürfen dich aber nicht hart
 ausbremsen“). Du bist der Erzähler und der Einzige am Tisch: Nur du rufst `say_line`, `show_players`, `roll_dice`,
-`play_sound`, `wait_for_players` und die übrigen Tisch-Werkzeuge (einzige Ausnahme: der Zuhörer, `dnd-studio:pnp-zuhoerer`,
-holt mit dem Schalter `listener: "haiku"` die Züge und schneidet; er spricht nie). Helfer laufen im Hintergrund (Agent-Tool), und
+`play_sound`, `wait_for_players` und die übrigen Tisch-Werkzeuge. Helfer laufen im Hintergrund (Agent-Tool), und
 auf keinen wartest du zwischen zwei Zügen:
 - **`dnd-studio:pnp-vorbereiter`** bei jeder Abweichung und jedem Szenenwechsel: malt die Bilder, die bald gebraucht werden,
   und macht kurze Texte für die nächsten wahrscheinlichen Momente in der richtigen Stimme fertig. Der Auftrag nennt

@@ -49,11 +49,10 @@ am Anfang, wirkt wie ein Automat. Darum:
   hinüber.“, „Brór wendet sich an Hanna.“). Namen werden auf den ersten Teil gekürzt („Brór, Sohn des Bram“ → Brór).
   Darum steht der Rufname vorn: „Direktor Albrecht Kühn“ wurde zu „Jule geht zu Direktor hinüber“, „Herr Dornbusch“
   zu „… zu Herr hinüber“ (Ödland, 2026-10-30) – besser „Kühn (Direktor)“ oder „Dornbusch (Stahlbund)“.
-## Brücken des Erzählers bei offenem Mikro
+## Brücken des Erzählers
 
-Spielt der Tisch mit dem Zuhörer (`pnp-spielleiter`, `references/zuhoerer.md`), überbrückt der Erzähler die Sekunden,
-in denen die Spielleitung nachdenkt. Meist schreibt der Zuhörer den Satz selbst; fängt die Stimme nicht schnell genug
-an, kommt ein vorbereiteter. Darum braucht der Erzähler dann:
+Der Erzähler überbrückt die Sekunden, in denen die Spielleitung nachdenkt: fängt die Stimme nicht schnell genug an,
+kommt ein vorbereiteter Satz. Darum braucht der Erzähler:
 - **Viele `think`-Sätze** im Ton des Erzählers („Ist angekommen.“, „Lass mal sehen.“), sonst wiederholen sie sich.
 - **`approach`** für einen Helden, der sich an einen NPC wendet; `prepare_table` macht ihn für jedes Paar.
 - **`look` und `act`**, je drei bis fünf, für Züge ohne NPC: so allgemein, dass sie auf jede Frage und jede Handlung
