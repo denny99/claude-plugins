@@ -24,7 +24,7 @@ Agent, das ist irgendwie scheiße“): Jedes Ende eines Zuhörers ließ den Tisc
 2. Seine **Nachricht** weckt dich (`{woke, why, turn, bridge, between}` als Text von ihm): antworten, dann **ihm die
    neue Lage schicken** (`SendMessage` an seine ID, zwei, drei Zeilen wie der Auftrag), dann den Zug beenden. Keinen
    Wächter starten, kein `wait_for_players`: das macht er. Die Lage zuerst schicken, wenn deine Antwort lang wird.
-3. Sein **Ende** (die Rückgabe des Agenten) kommt bei der ersten Weckung nach etwa 10 Minuten (dann frisch, sein
+3. Sein **Ende** (die Rückgabe des Agenten) kommt bei der ersten Weckung nach etwa 60 Minuten (oder nach 40 Weckungen) (dann frisch, sein
    Kontext wäre sonst voll), nach sehr vielen Zügen ohne Weckung, bei einem Fehler oder auf „Schluss“: den Zug
    beantworten wie eine Nachricht und **mit deiner Antwort einen neuen Zuhörer starten**. `woke: false`: nichts
    beantworten, nur einen neuen starten. Am Ende des Abends schickst du ihm „Schluss“.
