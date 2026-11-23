@@ -30,8 +30,8 @@ test("pure: the §4 checklist names what is missing and who fixes it", () => {
   // The mute dog needs no voice; Bartel lacks his sheet.
   expect(by.npcs).toMatchObject({
     status: "failed",
-    counts: "1/2",
-    detail: "Bartel (Werte)",
+    counts: "1/2 · 1 stumm",
+    detail: "Bartel (Werte); stumm (gewollt, ohne Stimme und Sätze): Hund",
     fix: "pnp-texter",
   });
   expect(by.start).toMatchObject({ status: "ok", counts: "1/1" });
@@ -551,4 +551,33 @@ test("Build: a big campaign's compact overview (lists only counted) is read chap
   expect(await findShown(ui, /Szenen mit Bild/)).toBeDefined();
   expect(await rowShown(ui, "Szenen mit Bild, Vorlesetext und Ablauf", "2/3")).toBe(true);
   await ui.unmount();
+});
+
+test("pure: gaps left open on purpose count as done but say so (gathering scenes, mute NPCs)", () => {
+  const items = acceptanceOf(
+    {
+      open: "X",
+      threads: ["t"],
+      partyAt: "A",
+      scenes: [
+        { title: "Anfang", picture: "p", notes: "n", cues: [{ text: "Prolog 1" }, { note: "Wahl" }] },
+        { title: "Leer", picture: "p", notes: "n", cues: [{ note: "nur Notiz" }] },
+      ],
+      npcs: [
+        { name: "Wesen", portrait: "p", sheet: "s", notes: "Sprechen nicht selbst, nur Klang." },
+        { name: "Ding", portrait: "p", sheet: "Spricht nie selbst." },
+        { name: "Bob", portrait: "p", sheet: "s", voice: "v", stock: { greet: ["Hallo"] } },
+      ],
+    },
+    { maps: [] },
+    "",
+  );
+  const by = Object.fromEntries(items.map((i) => [i.key, i]));
+  expect(by.scenes.status).toBe("failed");
+  expect(by.scenes.detail).toContain("Leer (Vorlesetext)");
+  expect(by.scenes.counts).toBe("1/2 · 1 Sammelszenen");
+  expect(by.scenes.detail).toContain("Sammelszenen (gewollt, Vorlesetexte in den Cues): Anfang");
+  expect(by.npcs.status).toBe("ok");
+  expect(by.npcs.counts).toBe("1/1 · 2 stumm");
+  expect(by.npcs.detail).toBe("stumm (gewollt, ohne Stimme und Sätze): Wesen, Ding");
 });
