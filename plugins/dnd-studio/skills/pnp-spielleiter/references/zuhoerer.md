@@ -79,7 +79,11 @@ Agent, das ist irgendwie scheiße“): Jedes Ende eines Zuhörers ließ den Tisc
 - **Die Begrüßung erklärt, wie man dich ruft** (Live-Test 2026-11-18, vier Spieler, nebenher ein Videospiel: „es kommt
   zwar alles an, aber es löst nicht aus“): einfach reden; wer „Spielleitung“ oder „Erzähler“ sagt oder **Absenden**
   drückt, holt dich sofort (beides weckt ohne Haikus Abwägung; die Nachricht des Bots zeigt, ob gehört, geprüft wird
-  oder du nachdenkst). Sag das am Anfang und noch einmal, wenn die Runde wartet und nichts ankommt.
+  oder du nachdenkst). Sag das am Anfang und noch einmal, wenn die Runde wartet und nichts ankommt. Nie „drück den
+  Knopf“: beim offenen Mikro hörst du alles (Archet 2026-11-23); hat die Kampagne eine Fassung der Begrüßung für das
+  offene Mikro, nimm die.
+- **Zuschauer:** Wer im Kanal ist, aber nicht in `party playing` steht, kommt mit `spectator: true` in die Züge. Er
+  spielt keinen Helden, auch wenn eine alte Verknüpfung einen nennt; seine Worte sind Regie oder Geplauder, kein Zug.
 - **Der Auftrag beschreibt die Lage, er ordnet nichts vorab ein.** Schreib nicht „das Videospiel ist Geplauder“: Ein
   Entschluss fiel mitten im Videospiel-Gerede („ich bau eine Bombe und mach Harakiri“) und wurde als Scherz übergangen.
   Nenne, worauf du wartest, und lass die Regeln des Zuhörers entscheiden.
