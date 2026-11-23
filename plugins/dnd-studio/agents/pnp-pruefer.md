@@ -13,7 +13,7 @@ Der Auftrag nennt die Szene. Lies `table_state` mit `log: 60`, `campaign` (mit `
 
 - **Widersprüche:** ein Gegenstand, den der Held nicht hat; ein Preis, Name oder eine Tatsache anders als im Kanon;
   ein vergessenes Versprechen; ein Wert (Munition, Hoffnung) falsch verrechnet.
-- **Übergangen:** Ein Spieler hat reingeredet, eine Zeile kam `interrupted` zurück, oder nach einem misslungenen Wurf
+- **Übergangen:** Ein Spieler hat reingeredet (eine Antwort sagte `pending_turn`, der Wächter weckte mit `turn`) und die Spielleitung hat weiter Neues erzählt statt den Zug zu holen, oder nach einem misslungenen Wurf
   wollte jemand Hoffnung oder ein Talent einsetzen, und die Spielleitung hat trotzdem weitererzählt (Ödland-Abend
   2026-10-30, Denny: „du hast uns übergangen obwohl wir reingeredet haben“).
 - **Spoiler, gerade die unabsichtlichen:** Spielleiterwissen aus `notes`, `sheet` oder dem Leitfaden, das in einer

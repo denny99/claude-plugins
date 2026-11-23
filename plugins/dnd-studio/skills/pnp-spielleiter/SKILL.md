@@ -18,8 +18,9 @@ Prüfer prüft nach jeder Szene dieselben Punkte):
 1. **Tempo:** kurz antworten, mit Fertigem anfangen; der erste Aufruf ist ein `say_line` mit einem kurzen Satz (Bild
    und Wurf im selben Schritt daneben), erst danach nachschlagen und den Rest sprechen (4); mehr als 12 s bis zum nächsten Ton, dann zuerst ein
    Füller (4).
-2. **Reinreden geht vor:** `interrupted` oder `held` heißt sofort `wait_for_players`; Ungehörtes danach
-   knapp nachliefern (4a).
+2. **Reinreden geht vor:** Ein Sprechknopf schneidet nichts, deine Zeile läuft zu Ende. Danach kommt sofort ihr Zug
+   (`pending_turn` in einer Antwort, Wächter `turn`), die erste Zeile ist ein kurzer, improvisierter Einzeiler zum Zug
+   (4, „Brücke zum Zug“). Schneiden nur, wenn du es willst (`interrupt`), Ungehörtes dann knapp nachliefern (4a).
 3. **Ball zurück:** Jede Erzählung endet mit einer offenen Übergabe; nach einem Wurf erst das Ergebnis, dann warten,
    ob sie Hoffnung oder ein Talent einsetzen (4a).
 4. **Die Spieler entscheiden:** einmal warnen, dann machen; keine Köder, keine Zufälle, die zurücklenken; ein Haken
@@ -122,6 +123,10 @@ Minuten waren zwölf davon. Stattdessen:
    Text an den Menschen außer bei Bedarf einer Zeile.
 2. Der Befehl endet, sobald die Spieler etwas haben, und Claude Code weckt dich. Seine Ausgabe sagt `ready`:
    - `turn`: `wait_for_players` holt den Zug sofort, dann antworten.
+   - `partial`: Ein Spieler ist fertig, andere reden noch (`partial.lines` bisher, `holders` wer noch spricht).
+     Nicht antworten, vordenken: wahrscheinliche Antworten mit `say_line prepare: true` vorbereiten, dann gleich
+     einen neuen Wächter. Der ganze Zug kommt als `turn`, wenn alle still sind (Denny 2026-11-23: „endet die tonspur
+     von jemandem sofort text prozessen und dir schicken damit du schon mal denken kannst“).
    - `secret` (`/geheim`): sofort holen und per `discord whisper` antworten, auch wenn die anderen gerade reden; das
      Flüstern wartet nicht auf sie. Wie schnell, steht in 4c („Ein Spieler sagt dir etwas heimlich“).
    - `break`: die Spieler machen Pause: vorbereiten (unten), dann einen neuen Wächter.
@@ -189,8 +194,9 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
   Bild, eine Karte oder einen Wurf, stehen `show_players` oder `roll_dice` **im selben Schritt** neben dem ersten
   `say_line` (mehrere Aufrufe in einer Antwort, `show_players` zuerst), nie in einem eigenen Schritt davor. Bei einem
   Wurf sagt die erste Zeile nur, was der Held versucht und dass gewürfelt wird (noch kein Ausgang); der Ausgang folgt
-  im nächsten Schritt. Schneiden die Spieler die Ansage, lehnt `roll_dice` den Wurf ab: erst ihren Zug holen, dann
-  würfeln (Archet 2026-11-23: „stopp, ich will die Lichtung noch erkunden“).
+  im nächsten Schritt. Sagt die Antwort `pending_turn`, hat jemand während der Ansage gedrückt: den Wurf nicht schon
+  erzählen, erst ihren Zug holen; will der Spieler etwas anderes, gilt der Wurf nicht (Archet 2026-11-23: „stopp, ich
+  will die Lichtung noch erkunden“). Abgelehnt wird nichts mehr.
 - **Jeder Ortswechsel beginnt mit dem Bild** (Archet 2026-11-23, zweimal vergessen, Denny: „das war schlecht“):
   `show_players` mit Bild, Karte und Effekt im selben Schritt wie die erste Zeile am neuen Ort, auch bei einem Ort
   abseits vom Rezept. `say_line` warnt, wenn Szene oder `party_at` gewechselt haben, das Bild aber nicht: dann sofort
@@ -311,16 +317,30 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
     kommt gestreamt nach einer halben Sekunde ohnehin.
   - **Mehr als 12 Sekunden bis zum nächsten Ton: zuerst ein Füller** (Denny, zweiter Laterne-Abend 2026-10-29: „wenn
     du erwartest länger als 12s was zu machen muss ein füller kommen“). Das ist der Fall bei einer Kampfrunde, mehreren
-    Würfen hintereinander, Regeln nachschlagen, Werte nachrechnen und dem Ende des Abends. Der Erzähler denkt hörbar,
-    `say_line { voice: "narrator", opener: "think", text: "" }` spielt nur den Standardsatz (ohne fertigen think-Satz
-    gibt es einen Fehler, dann die Brücke), oder eine kurze Brücke („Der Graue umkreist dich …“). Erst danach würfeln
-    und rechnen. Kurze Züge (eine Antwort, ein Wurf) brauchen keinen.
+    Würfen hintereinander, Regeln nachschlagen, Werte nachrechnen und dem Ende des Abends. Dann eine kurze Brücke
+    („Der Graue umkreist dich …“), mit `wait: false`, und währenddessen würfeln und rechnen. Kurze Züge (eine
+    Antwort, ein Wurf) brauchen keinen.
+  - **Brücke zum Zug** (Ödland Kapitel 3, 2026-11-23): Kommt ein Zug, ist die erste Zeile ein kurzer, improvisierter
+    Einzeiler, der genau diesen Zug aufnimmt („Marta stemmt sich gegen das Tor – es knirscht.“, „Brór, du willst
+    also zurück zum Laster?“), in der Stimme, die gleich weiterspricht. Keine Standard-`think`-Sätze des Erzählers
+    („Hm, lasst mich überlegen …“): die klingen jedes Mal gleich und sagen nichts zum Zug. Mit `wait: false`
+    abschicken, dann den Rest der Antwort erarbeiten und anhängen.
   - Passt kein Füller, oder hat die Figur keine eigene Stimmprobe: **keiner**. Stille ist besser als ein falscher Satz.
     Standardsätze gibt es ohnehin nur für Stimmen mit eigener Stimmprobe.
 - `say_line` antwortet spätestens nach 50 s (`playing` / `making`): einfach weitermachen, die nächste Zeile wartet.
-  `interrupted`: die Spieler reden dazwischen, der Rest der Zeile ist weg (`unheard` nennt ihn), und bis zum
-  nächsten `wait_for_players` lehnt der Server die Tisch-Werkzeuge ab; was dann zu tun ist: 4a, „Reinreden geht vor“
-  und „Was nicht gehört wurde, kommt nach“.
+- **`say_line wait: false`** (Denny 2026-11-23: „während say_line läuft … kannst theoretisch auch weiter lines
+  queuen“): Die Zeile wird eingereiht, der Aufruf kommt sofort zurück (`queued`). Weitere Zeilen hängen sich in
+  Reihenfolge an. Der übliche Ablauf bei einem Zug: Brücke mit `wait: false`, nachdenken, nachschlagen, dann die
+  eigentliche Antwort, ebenfalls mit `wait: false` oder als letzte Zeile ohne. Wie die Zeile lief, steht in der
+  Antwort des nächsten `say_line` unter `before` (`interrupted`, `unheard`, `error`) und in `table_state` unter
+  `last_line`.
+- **Ein Sprechknopf schneidet nichts:** Drückt jemand, läuft deine Zeile (und was dahinter eingereiht ist) zu Ende;
+  eine neue Zeile wartet, bis sie loslassen. Nichts wird abgelehnt, die Antworten der Tisch-Werkzeuge sagen dann
+  `pending_turn` (`talking`, `transcribing`, `waiting`): den Zug als Nächstes holen und beantworten.
+- **Schneiden nur, wenn du willst:** `say_line interrupt: true` stoppt die laufende Zeile und alles Eingereihte, dann
+  spielt die neue (ohne `text`: nur der Schnitt). Sinnvoll, wenn ein Einwurf deine Erzählung überholt („stopp, wir
+  rennen weg“). Die geschnittene Zeile meldet `interrupted` mit `unheard`; was dann zu tun ist: 4a, „Was nicht gehört
+  wurde, kommt nach“.
 - Ein Lauf darf dauern, eine Antwort nicht: lieber jetzt ein kurzer Satz und später mehr.
 
 ## 4a. Den Spielern nicht vorgreifen
@@ -330,18 +350,20 @@ weitergezogen: Der Held hatte sich noch nicht verabschiedet und war schon im Wal
 Spieler „ich brauch nix“ gesagt hatte – es wirkte, als hätte er gebettelt.
 
 - **Reinreden geht vor** (Denny, Ödland-Abend 2026-10-30: „wenn wir reinreden musst du anhalten und das auswerten
-  und dann deinen kurs ändern“; dreimal an einem Abend hat die Spielleitung die Spieler übergangen). Kommt ein
-  `say_line` mit `interrupted` oder `held` zurück, oder meldet `table_state` einen wartenden Zug: kein weiterer
-  Wurf, keine Erzählung, kein Bild, sondern sofort `wait_for_players`, lesen, was sie wollten, und den Kurs danach
-  ändern. Was schon vorbereitet war, ist dann eben nicht mehr dran.
+  und dann deinen kurs ändern“; dreimal an einem Abend hat die Spielleitung die Spieler übergangen). Seit Ödland
+  Kapitel 3 (2026-11-23) schneidet ein Knopfdruck die Zeile nicht mehr („ein button press muss nicht sofort alles
+  canceln weil es ggfs nur ein zusatz ist“), aber ihr Zug geht vor allem Neuen: Sagt eine Antwort `pending_turn`,
+  kommt `say_line` mit `held` zurück oder weckt der Wächter mit `turn`, dann keine weitere Erzählung, kein neuer Wurf,
+  sondern den Zug holen, lesen, was sie wollten, und den Kurs danach ändern. Was schon vorbereitet war, ist dann eben
+  nicht mehr dran. Überholt ihr Einwurf die laufende Zeile, schneidest du selbst (`interrupt`).
 - **Was nicht gehört wurde, kommt nach** (Denny, Ödland Kapitel 2, Abend 1, 2026-11-01: wir haben dich unterbrochen,
   „auch wenn unsere aussage nichts geändert hat an der story, weils nur ne frage war. und dann fehlten uns manchmal
   infos weil der text nicht zu ende gelesen wurde“). Eine Unterbrechung ist oft nur eine Frage oder ein Witz.
   Dann zuerst die Frage beantworten und danach den Rest, den die Spieler nicht mehr gehört haben, sprechen, wenn er
   noch stimmt (ohne „wie gesagt“, einfach weiter). Den ungehörten Rest nennt die Antwort von `say_line` als
   `unheard` (bei `parts` eine Liste `{voice, text, how}` der Teile, die nicht oder nur angespielt liefen); kam
-  `say_line` nach 50 s schon zurück und die Spieler reden erst danach dazwischen, steht er in `table_state` unter
-  `last_unheard`. Der Tisch weiß nur, welche Stücke zu Ende liefen: Das unterbrochene Stück zählt ganz als ungehört,
+  `say_line` nach 50 s (oder mit `wait: false`) schon zurück, steht er in `table_state` unter `last_unheard` bzw.
+  `last_line`. Der Tisch weiß nur, welche Stücke zu Ende liefen: Das unterbrochene Stück zählt ganz als ungehört,
   bei einer gestreamten Zeile also die ganze Zeile. Dann nicht Wort für Wort wiederholen: Was vor der Frage schon
   lief, haben sie meist gehört, das Wichtige daraus knapp und den Rest ganz. Ältere Studio-Versionen
   ohne das Feld: `table_state` mit `log` zeigt, welche Teile schon liefen. Nur wenn

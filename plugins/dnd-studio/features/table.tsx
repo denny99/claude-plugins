@@ -332,7 +332,8 @@ export async function observe(
     case "say_line": {
       await patchLive($, () => ({ saidAt: now, ...touch(input.from) }));
       // The Studio nests the cut under `table` (say_line's table part); older answers had it on top.
-      const cut = { ...json, ...obj(json.table) };
+      // a line said with wait: false reports how it went in the next say_line's before (Ödland chapter 3, 2026-11-23)
+      const cut = { ...json, ...obj(json.table), ...(json.before && typeof json.before === "object" && !obj(json.table).interrupted ? obj(json.before) : {}) };
       const unheardRaw = cut.unheard;
       const unheard =
         typeof unheardRaw === "string"
@@ -346,12 +347,18 @@ export async function observe(
                 .filter(Boolean)
                 .join(" ")
             : "";
-      if (cut.interrupted === true || cut.held === true || unheardRaw) {
+      // a talk button cuts nothing since 2026-11-23: a line is only cut by the game master (interrupt); held means the
+      // players talk and it plays when they let go
+      if (cut.held === true)
         notes.push(
-          `**The players cut in** — answer them first; deliver later what they did not hear${unheard ? `: "${truncate(unheard, 160)}"` : ""}.`,
+          "**The players are talking** — the line plays when they let go; take their turn next and answer it.",
+        );
+      if (cut.interrupted === true || unheardRaw) {
+        notes.push(
+          `**Line cut** — deliver later what they did not hear${unheard ? `: "${truncate(unheard, 160)}"` : ""}, if it still holds.`,
         );
         await patchLive($, () => ({
-          warning: "players cut in: deliver the rest later",
+          warning: "line cut: deliver the rest later",
         }));
       }
       if (json.sounds_not_played || json.sound_note)
