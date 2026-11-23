@@ -660,10 +660,27 @@ export function gpuOf(status: Obj, now: number): GpuState {
 
 const START_RE =
   /start(feld|felder|squares?|positions?|platz)|\b[A-Z]\d{1,2}\b/i;
-const SILENT_RE = /\b(stumm|silent|mute|spricht nicht)\b/i;
+// an NPC that never speaks with a voice of its own (a creature, a voice-thief): no voice and no lines wanted. Meile 47,
+// 2026-11-23: "Sprechen nicht selbst", "Spricht nie selbst" stayed red although the notes said so
+const SILENT_RE =
+  /\b(stumm|silent|mute|spricht nicht|sprechen nicht|spricht nie|sprechen nie|nur geräusche|keine stimme|no voice|never speaks|does not speak)\b/i;
 
 function names(list: string[]): string {
   return list.join(", ");
+}
+
+/**
+ * Gaps left open on purpose (Denny 2026-11-23: "wenn du das absichtlich offen lässt muss das klar sein"): they count as
+ * done, but the counts say how many and the detail names them with why, so nobody takes them for forgotten.
+ */
+function withIntended(it: AcceptItem, intended: string[], what: string, why: string): AcceptItem {
+  if (!intended.length) return it;
+  const note = `${what} (gewollt, ${why}): ${names(intended)}`;
+  return {
+    ...it,
+    counts: `${it.counts} · ${intended.length} ${what}`,
+    detail: it.detail ? `${it.detail}; ${note}` : note,
+  };
 }
 
 function item(
@@ -737,10 +754,15 @@ function acceptanceRows(
   // Scenes: picture, read-aloud text and the recipe in the notes.
   const sceneGaps: string[] = [];
   const sceneFix = new Set<string>();
+  // a gathering scene (welcome, prologue, heroes; the ending's variants) reads its texts as cues, no text of its own:
+  // a text in the scene would be read twice
+  const gathering: string[] = [];
   for (const s of scenes) {
+    const cueText = arr(s.cues).some((c) => !!str(obj(c).text));
+    if (!str(s.text) && cueText) gathering.push(str(s.title));
     const lack = [
       str(s.picture) ? "" : "Bild",
-      str(s.text) ? "" : "Vorlesetext",
+      str(s.text) || cueText ? "" : "Vorlesetext",
       str(s.notes) ? "" : "Ablauf",
     ].filter(Boolean);
     if (lack.length) sceneGaps.push(`${str(s.title)} (${lack.join("/")})`);
@@ -749,13 +771,18 @@ function acceptanceRows(
       sceneFix.add("pnp-texter");
   }
   out.push(
-    item(
-      "scenes",
-      "Szenen mit Bild, Vorlesetext und Ablauf",
-      scenes.length,
-      sceneGaps,
-      [...sceneFix].join(", ") || "pnp-texter",
-      "failed",
+    withIntended(
+      item(
+        "scenes",
+        "Szenen mit Bild, Vorlesetext und Ablauf",
+        scenes.length,
+        sceneGaps,
+        [...sceneFix].join(", ") || "pnp-texter",
+        "failed",
+      ),
+      gathering,
+      "Sammelszenen",
+      "Vorlesetexte in den Cues",
     ),
   );
 
@@ -811,9 +838,9 @@ function acceptanceRows(
   );
 
   // Talking NPCs: portrait, voice, sheet, stock lines.
-  const talking = npcs.filter(
-    (n) => !SILENT_RE.test(`${str(n.notes)} ${str(n.looks)}`),
-  );
+  const silent = (n: Obj) => SILENT_RE.test(`${str(n.notes)} ${str(n.sheet)} ${str(n.looks)}`);
+  const talking = npcs.filter((n) => !silent(n));
+  const mute = npcs.filter(silent).map((n) => str(n.name));
   const npcGaps: string[] = [];
   const npcFix = new Set<string>();
   for (const n of talking) {
@@ -832,12 +859,17 @@ function acceptanceRows(
       npcFix.add("pnp-texter");
   }
   out.push(
-    item(
-      "npcs",
-      "Sprechende NPCs mit Bild, Stimme, Werten und Sätzen",
-      talking.length,
-      npcGaps,
-      [...npcFix].join(", "),
+    withIntended(
+      item(
+        "npcs",
+        "Sprechende NPCs mit Bild, Stimme, Werten und Sätzen",
+        talking.length,
+        npcGaps,
+        [...npcFix].join(", "),
+      ),
+      mute,
+      "stumm",
+      "ohne Stimme und Sätze",
     ),
   );
 
