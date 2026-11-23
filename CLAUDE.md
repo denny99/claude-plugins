@@ -11,6 +11,11 @@
   otherwise; say so and open the pull request against `develop` instead.
 - A pull request that already targets `main`: change its base to `develop` (`gh pr edit <n> --base develop`), do not
   merge it.
+- **Versions come from semantic-release** on `main` (see README, Releases): never set or bump a version in
+  `plugin.json` or `.claude-plugin/marketplace.json`. The commit type decides (`fix` patch, `feat`/`imp` minor,
+  `BREAKING CHANGE:` major), so write it with the plugin as scope, e.g. `fix(dnd-studio): …`.
+- `develop`'s marketplace is named `denny99-latest`, `main`'s `denny99`: never change that line, never merge `main`
+  into `develop`.
 
 ## Skills shared with D&D Studio
 
