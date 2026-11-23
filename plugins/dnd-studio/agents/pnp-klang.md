@@ -17,7 +17,9 @@ stehen im Skill `pnp-kampagne`, Abschnitt 3.
    `bgmusic` für Hintergrundmusik ohne festen Ablauf, `music` für ein Stück mit Ablauf (Titelthema, Finale). Die Worte
    nennen jede Quelle, jedes Instrument und den Raum (eine Schleife: gleichmäßig, ohne Anfang und Ende); ein
    ausführlicher englischer Prompt geht unverändert durch. `jobs wait`, dann die Datei aus `results`. Alle Klänge eines Auftrags in **einem** Aufruf: `sounds: [{name, kind, idea, seconds}, …]`, dazu je Kampagne eine Musik je Stimmung (`explore`, `tense`, `fight`, `rest`), gebunden mit `set_campaign
-   mood_music`; dann alle `job_ids` auf einmal abwarten (`jobs watch` mit `background: false` (alle IDs auf einmal) und den Befehl, den es zurückgibt, mit Bash im Vordergrund laufen lassen: er endet, wenn alle fertig sind (bis 9 min), ein Aufruf statt eines `jobs wait` alle 50 s); mehrere Dateien mit `add_file paths`.
+   mood_music`, als Rückfall; **jede Szene bekommt eigene Musik** in ihren `sounds` mit `mood`, jeder Kampfort eine
+   eigene Kampfmusik (`mood: "fight"`), die zum Gegner passt, meist düsterer (Archet 2026-11-23: 20 Minuten dieselbe
+   Gitarre, am Turm schneller Folk mit Fiedel gegen Wölfe); dann alle `job_ids` auf einmal abwarten (`jobs watch` mit `background: false` (alle IDs auf einmal) und den Befehl, den es zurückgibt, mit Bash im Vordergrund laufen lassen: er endet, wenn alle fertig sind (bis 9 min), ein Aufruf statt eines `jobs wait` alle 50 s); mehrere Dateien mit `add_file paths`.
 2. **Hören mit `check_sound`** vor dem Binden: was der Klang sein soll und zwei, drei Verwechslungen, die am Tisch
    stören würden. Liegt das Gewollte nicht vorn oder unter etwa 0,3 `cos`, ein zweiter Versuch mit genaueren Worten
    (anderer Seed). Bleibt auch der knapp, binden und im Protokoll als **„grenzwertig, Mensch hört“** markieren.
