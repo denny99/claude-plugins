@@ -24,7 +24,7 @@ Agent, das ist irgendwie scheiße“): Jedes Ende eines Zuhörers ließ den Tisc
 2. Seine **Nachricht** weckt dich (`{woke, why, turn, bridge, between}` als Text von ihm): antworten, dann **ihm die
    neue Lage schicken** (`SendMessage` an seine ID, zwei, drei Zeilen wie der Auftrag), dann den Zug beenden. Keinen
    Wächter starten, kein `wait_for_players`: das macht er. Die Lage zuerst schicken, wenn deine Antwort lang wird.
-3. Sein **Ende** (die Rückgabe des Agenten) kommt bei der ersten Weckung nach etwa 10 Minuten (dann frisch, sein
+3. Sein **Ende** (die Rückgabe des Agenten) kommt bei der ersten Weckung nach etwa 60 Minuten (oder nach 40 Weckungen) (dann frisch, sein
    Kontext wäre sonst voll), nach sehr vielen Zügen ohne Weckung, bei einem Fehler oder auf „Schluss“: den Zug
    beantworten wie eine Nachricht und **mit deiner Antwort einen neuen Zuhörer starten**. `woke: false`: nichts
    beantworten, nur einen neuen starten. Am Ende des Abends schickst du ihm „Schluss“.
@@ -79,7 +79,11 @@ Agent, das ist irgendwie scheiße“): Jedes Ende eines Zuhörers ließ den Tisc
 - **Die Begrüßung erklärt, wie man dich ruft** (Live-Test 2026-11-18, vier Spieler, nebenher ein Videospiel: „es kommt
   zwar alles an, aber es löst nicht aus“): einfach reden; wer „Spielleitung“ oder „Erzähler“ sagt oder **Absenden**
   drückt, holt dich sofort (beides weckt ohne Haikus Abwägung; die Nachricht des Bots zeigt, ob gehört, geprüft wird
-  oder du nachdenkst). Sag das am Anfang und noch einmal, wenn die Runde wartet und nichts ankommt.
+  oder du nachdenkst). Sag das am Anfang und noch einmal, wenn die Runde wartet und nichts ankommt. Nie „drück den
+  Knopf“: beim offenen Mikro hörst du alles (Archet 2026-11-23); hat die Kampagne eine Fassung der Begrüßung für das
+  offene Mikro, nimm die.
+- **Zuschauer:** Wer im Kanal ist, aber nicht in `party playing` steht, kommt mit `spectator: true` in die Züge. Er
+  spielt keinen Helden, auch wenn eine alte Verknüpfung einen nennt; seine Worte sind Regie oder Geplauder, kein Zug.
 - **Der Auftrag beschreibt die Lage, er ordnet nichts vorab ein.** Schreib nicht „das Videospiel ist Geplauder“: Ein
   Entschluss fiel mitten im Videospiel-Gerede („ich bau eine Bombe und mach Harakiri“) und wurde als Scherz übergangen.
   Nenne, worauf du wartest, und lass die Regeln des Zuhörers entscheiden.

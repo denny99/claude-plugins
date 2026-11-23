@@ -128,6 +128,10 @@ Rahmen), dann wird nach dem Plan gebaut.
      Hinterhalt, eine Bestie), wie Ton und Rahmen verlangen (Ödland: zwei, drei je Abend, weil die Gruppe in Kapitel 2
      fast jeden Kampf umging), und bei den übrigen, was Ausweichen kostet (ein Wurf, Zeit, ein Gegenstand, ein
      Verbündeter).
+   - **Kämpfe sind gefährlich** (Archet 2026-11-23, Denny: „beim Kampf sei gemein, mach es spannend“): Gegner brechen
+     nicht beim ersten Erfolg (der Anführer hat Mut für mehrere, das Rudel weicht erst beim zweiten), und was danach
+     kommt (der Rückweg mit Verfolgern, ein zweiter Angriff), geschieht auch, wenn der Anführer gewichen ist. Im
+     Leitfaden nicht „großzügig, sie weichen beim ersten Erfolg“.
    - **Haken der Helden:** Jeder Held bekommt irgendwo einen Haken aus seinem Hintergrund (eine Bekannte, ein altes
      Versprechen, sein Volk), nicht nur einen Wurf, der zu seinen Fertigkeiten passt.
 5. **Vorlesetexte** (`kind text`, auch die Szenentexte): zwei, drei konkrete Sinnesdetails (Geruch, Geräusch, ein
@@ -137,7 +141,9 @@ Rahmen), dann wird nach dem Plan gebaut.
    in kurzen Sätzen; NPC-Worte höchstens mit einer Betonung, die die Figur selbst setzt. Die Spieler sehen die Marken nicht. Jeder
    erfundene Name kommt mit seiner Aussprache in `campaign set pronunciations`, nie als Umschreibung in den Text. Anfang und Ende
    sind Szenen, kein Pflichtprogramm (Denny 2026-11-13: „Intros und Outros bissel flach“), darum gehören hinein:
-   - **Begrüßung** („Willkommen (zu Beginn)“): kurz, nur Organisatorisches.
+   - **Begrüßung** („Willkommen (zu Beginn)“): kurz, nur Organisatorisches. Was zur Bedienung gesagt wird, gibt es
+     als `variants` je Tisch: mit offenem Mikro (Zuhörer) „einfach reden, ‚Spielleitung‘ ruft mich“, nie „drück den
+     Knopf“ (Archet 2026-11-23); mit Knopf oder Push-to-Talk die Fassung dafür.
    - **Prolog** bei einer neuen Kampagne oder einer Welt, die die Spieler nicht kennen („bei neuen Kampagnen fehlt
      fast immer ein Prolog“): sechs bis zehn Vorlesetexte („Prolog 1: Die Welt“ …), zusammen bis zu zehn Minuten (Denny 2026-11-13:
      „Prolog ruhig 10 min“; etwa 1200–1400 Wörter), jeder
@@ -250,9 +256,10 @@ einzeln (`jobs watch`: den Befehl mit Bash im Hintergrund starten, er weckt dich
   früheren Kapitel), entsteht jedes neue Bild von ihm als Edit mit diesem Bild als Basis (`picture` mit dem alten
   Bild, FLUX Klein): nur Tageszeit, Licht, Wetter, Figuren oder Blickwinkel ändern. Neu aus Text nur, was noch nie
   gezeigt wurde. Danach Alt und Neu nebeneinander ansehen: Bauten, Formen und Farben müssen dieselben sein.
-- **Neue Motive, die Klein schlecht kennt** (Monster, fremde Kreaturen, Sci-Fi-Maschinen, seltsame Bauten): das
-  Ausgangsbild mit `picture` ohne Basis und `advanced_create: true` (Krea 2, nur aus Worten), dann mit diesem Ergebnis
-  als Basis normal weiter (Klein: Helden hinein, Licht, Blickwinkel; oder `advanced_edit`). Krea sieht keine Bilder:
+- **Jedes neue Motiv entsteht mit Krea 2** (Denny 2026-11-23): Alles aus Worten ohne Referenz (Ort, Szene, NSC,
+  Wesen, Gegenstand) mit `picture` ohne Basis und `advanced_create: true`. FLUX Klein oder ein Referenzbild erst
+  danach und nur, wenn es nötig ist: mit dem Ergebnis als Basis Helden hineinsetzen, Licht, Blickwinkel, ein Detail
+  ändern (oder `advanced_edit`). Krea sieht keine Bilder:
   kein `person`, keine Helden mit Foto in der Idee, keine `references`, keine `pose`; NSCs nur über ihr Aussehen in
   Worten. Für viele solche Bilder (`paint_campaign`) `options set kreaCreate: true`, danach wieder `false`: solange es an
   ist, verweigern `paint_player` und `paint_map`. Fehlt Krea, meldet der Aufruf „models missing“ (`models install
@@ -299,8 +306,11 @@ einzeln (`jobs watch`: den Befehl mit Bash im Hintergrund starten, er weckt dich
   gehört (ein Wesen, das überall heult), in die Notizen des NPC.
 - **Musik nach Stimmung** (Denny 2026-11-21): Je Kampagne eine Musik für `explore`, `tense`, `fight`, `rest`
   (`make_sound` mit `kind: "bgmusic"`, lange Schleifen), gebunden mit `campaign set` und `mood_music: { explore: <Datei>,
-  fight: <Datei>, … }`. Eine Szene mit eigener Musik je Stimmung: in ihren `sounds` den Klang mit `mood: "fight"`.
-  Am Tisch blendet die Musik dann mit der Stimmung über, ein Kampf schaltet von selbst um.
+  fight: <Datei>, … }`. Das ist nur der Rückfall: **Jede Szene bekommt eigene Musik** in ihren `sounds` mit `mood`
+  (Archet 2026-11-23: Vorspann, Szene 1 und 2 auf derselben `explore`-Musik, 20 Minuten dieselbe Gitarre). Jeder Ort,
+  an dem gekämpft wird, seine eigene Kampfmusik (`mood: "fight"`), die zum Gegner passt und meist düsterer ist als
+  die der Kampagne (am Turm lief schneller Folk mit Fiedel gegen die Wölfe). Am Tisch blendet die Musik dann mit der
+  Stimmung über, ein Kampf schaltet von selbst um.
 - **Schleifen für die wichtigen Szenen** (Ankunft an einem Ort, der Höhepunkt, ein Ort mit Feuer, Nebel oder Wasser):
   `animate { start: <Szenenbild>, loop: true, idea: "was sich bewegt: das Feuer flackert, Rauch zieht" }` macht ein
   lebendes Standbild (Kamera und Personen still, ohne Ton, 5 s, nahtlos). Nur vor dem Abend: mit offenem Tisch passt
@@ -321,8 +331,8 @@ Gehe den Abend im Kopf einmal als Spielleitung durch und prüfe:
 - Jeder sprechende NPC hat Porträt, Stimme (mit Stimmprobe), `sheet`, Standardsätze; jeder stumme hat Geräusche.
 - Jeder gebundene Klang ist da (mit `make_sound` gemacht, eine Aufnahme nur als Ausweg) und mit `check_sound` gegen
   das gehört, was er sein soll.
-- Die Kampagne hat Musik je Stimmung (`campaign` zeigt `moodMusic`: mindestens `explore` und `fight`), und die
-  wichtigen Szenen haben ihre Schleife (`animate loop`, in den Notizen der Szene).
+- Die Kampagne hat Musik je Stimmung (`campaign` zeigt `moodMusic`: mindestens `explore` und `fight`), jede Szene
+  ihre eigene mit `mood`, jeder Kampfort seine Kampfmusik, und die wichtigen Szenen haben ihre Schleife (`animate loop`, in den Notizen der Szene).
 - Bei einem Kapitel einer Kampagne: `threads` und `party_at` gesetzt (`campaign` zeigt `threads` und `partyAt`).
 - Jede Szene auf einer Karte hat ihre Startfelder in `markers`, und `brokenReferences` ist leer.
 - Jeder Held hat einen Weg, der zu seinem Bogen passt, und jeder Wurf nennt die Fertigkeit, die er auch hat.

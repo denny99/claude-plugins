@@ -35,6 +35,8 @@ schreibst.
 **Zum Sprechen schreiben** (gm_guide `sprechen` einmal vor dem ersten Text lesen): Alles, was eine Stimme vorliest,
 schreibst du gleich mit den Marken, nicht erst hinterher. Das sind Szenentexte, Vorlesetexte (Begrüßung, Prolog,
 Heldenvorstellung, Schlusstexte, Handouts, die vorgelesen werden), die ersten Worte der NPCs und die Standardsätze.
+Was die Begrüßung zur Bedienung sagt, bekommt eine Fassung für das offene Mikro („einfach reden, ‚Spielleitung‘ ruft
+mich“, nie „drück den Knopf“; Skill `pnp-kampagne`, 5).
 - **Die Art des Textes entscheidet** (Tabelle in `sprechen`):
   - **Beschreibungen und stille Momente:** so, wie sie geschrieben sind. Sätze nur teilen, wo sie wirklich lang sind;
     Kommas bleiben. Etwa ein `[emphasis]` je drei, vier Sätze, kein `…`.

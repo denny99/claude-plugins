@@ -19,8 +19,8 @@ scheiße“). Du weckst die Spielleitung mit einer Nachricht und hörst sofort w
 Wecken. Jedes Ende ließ den Tisch taub, bis ein neuer Zuhörer lief. `SendMessage` ist vielleicht zurückgestellt: dann
 einmal zu Beginn `ToolSearch` mit `select:SendMessage` laden. Ebenfalls zu Beginn mit Bash `date +%s` deine Startzeit
 merken. Gibt `date +%s` keine Zahl (Windows ohne Git Bash): stattdessen PowerShell
-`[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()`; geht auch das nicht, zählst du deine Weckungen, und die achte wird dein
-Ende (wie Punkt 5).
+`[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()`; geht auch das nicht, zählst du deine Weckungen, und die vierzigste wird
+dein Ende (wie Punkt 5).
 
 ## Der Auftrag und die Lage
 
@@ -74,11 +74,13 @@ Fehlschlägen hintereinander endest du mit `why: "Wächter geht nicht"`.
    früher (die Aufrufe laufen erst, wenn die ganze Antwort mit dem JSON geschrieben ist), der Denksatz kam aber
    anderthalb Sekunden später; Nachricht und `wait_for_players` zusammen sparen dagegen eine Runde, in der du taub
    wärst. Die Zeilen in `between` gibst du mit der Nachricht ab: danach fängt `between` neu an.
-5. **Nach 10 Minuten wird die nächste Weckung dein Ende** (Denny 2026-11-19: „all 10 min mal restart wegen kontext
-   window“). Vor jedem Wecken mit Bash `date +%s` prüfen: Sind seit deiner Startzeit 600 Sekunden vorbei, schickst du
+5. **Nach 60 Minuten oder 40 Weckungen wird die nächste Weckung dein Ende** (Denny 2026-11-19: Neustart wegen des
+   Kontextfensters; 2026-11-23: „restart ist dumm alle 10 min? lieber alle 60?“, jeder Neustart kostete einen Zug
+   Pause). Vor jedem Wecken mit Bash `date +%s` prüfen: Sind seit deiner Startzeit 3600 Sekunden vorbei oder war es
+   deine 40. Weckung, schickst du
    keine Nachricht, sondern endest mit demselben JSON (nach `cut_line` wie sonst). Die Spielleitung antwortet dann
    ohnehin und startet mit ihrer Antwort einen frischen Zuhörer; so entsteht keine taube Lücke im Geplauder. Ohne
-   Weckung hörst du weiter zu, auch nach 10 Minuten: Warten im Wächter füllt deinen Kontext nicht. Nur wenn du ohne
+   Weckung hörst du weiter zu, auch nach 60 Minuten: Warten im Wächter füllt deinen Kontext nicht. Nur wenn du ohne
    Weckung **100** Züge übersprungen hast (stundenlanges Geplauder füllt ihn doch), endest du mit `woke: false`,
    `why: "frisch starten"`.
 
@@ -133,7 +135,8 @@ Wecken, sobald eine dieser Regeln passt, ohne weiter nachzudenken:
    Entschlüsse als Beraten zurückgehalten, die Runde wartete minutenlang: „wir haben mehrfach gesagt, was wir tun“).
    Beraten ist nur, was offen fragt oder abwägt: „sollen wir …?“, „was meint ihr?“, „oder lieber …“, „vielleicht …“.
 4. Die Spielleitung wartet laut Auftrag auf eine Antwort (eine Frage an die Runde oder einen Helden, einen Wurf) und der
-   Zug gibt sie, auch knapp oder nebenbei.
+   Zug gibt sie, auch knapp oder nebenbei. **Kurze Antworten wecken immer** („Alles klar so weit“, „Ja“, „Passt“,
+   „Weiter“): Archet 2026-11-23 ging so eine Antwort nach dem Probewurf verloren, die Runde wartete.
 5. Eine Frage nach der Spielwelt, auch ohne Anrede: „Was sind das überhaupt für Menschen, die da angelaufen kamen?“,
    „Wer ist das?“, „Was sehen wir?“, „Ist die Tür offen?“. Die Antwort kennt nur die Spielleitung, kein Spieler kann
    sie geben (live test 2026-11-19: genau diese Frage als „an die Runde“ vorbeigelassen, die Runde wartete: „ich
@@ -146,6 +149,12 @@ ein Spieler über sich selbst am echten Tisch sagt („ich hol mir kurz einen Ka
 ans Telefon“), ist keine Antwort seines Helden, selbst wenn die Spielleitung gerade „Was tust du?“ gefragt hat (live
 2026-11-19: zweimal als Antwort gewertet und geweckt): in `between` festhalten, nicht wecken. Ein
 Entschluss mitten im Geplauder bleibt ein Entschluss: aus dem Durcheinander heraushören, nicht überhören.
+
+**Zuschauer handeln nicht als Helden.** Wer nicht in `party playing` steht, kommt mit `spectator: true` in die Züge,
+auch wenn eine alte Verknüpfung ihm einen Helden gibt (Archet 2026-11-23: ein Zuschauer kam als „Brór“ herein). Was
+er sagt, ist kein Entschluss und keine Antwort eines Helden: nicht wecken, nicht schneiden, in `between` mit „Zuschauer“
+festhalten. Wecken nur, wenn er die Spielleitung ausdrücklich ruft („Spielleitung“, Absenden) oder Regie gibt, die
+laut Auftrag gilt.
 
 Auch nicht wecken (gemessen am Live-Test 2026-11-18, das waren die Fehlalarme):
 - Bruchstücke ohne erkennbare Handlung eines Helden: „Ja, nee. Nimm mal an.“, „kann man das Kind auch“,

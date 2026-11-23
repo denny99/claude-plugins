@@ -199,7 +199,14 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
   Bild, eine Karte oder einen Wurf, stehen `show_players` oder `roll_dice` **im selben Schritt** neben dem ersten
   `say_line` (mehrere Aufrufe in einer Antwort, `show_players` zuerst), nie in einem eigenen Schritt davor. Bei einem
   Wurf sagt die erste Zeile nur, was der Held versucht und dass gewürfelt wird (noch kein Ausgang); der Ausgang folgt
-  im nächsten Schritt. Gemessen 2026-11-19 mit Opus an „Die Laterne von Archet“: Vom letzten Wort bis zur Antwort
+  im nächsten Schritt. **Mit dem Zuhörer nie würfeln im selben Schritt wie eine Ansage, die er schneiden kann:**
+  erst ansagen, auf den Spieler warten, dann würfeln (Archet 2026-11-23: zweimal lief der Wurf sichtbar, obwohl die
+  Ansage geschnitten war, „stopp, ich will die Lichtung noch erkunden“; `roll_dice` wird nach einer geschnittenen
+  Zeile jetzt abgelehnt).
+- **Jeder Ortswechsel beginnt mit dem Bild** (Archet 2026-11-23, zweimal vergessen, Denny: „das war schlecht“):
+  `show_players` mit Bild, Karte und Effekt im selben Schritt wie die erste Zeile am neuen Ort, auch bei einem Ort
+  abseits vom Rezept. `say_line` warnt, wenn Szene oder `party_at` gewechselt haben, das Bild aber nicht: dann sofort
+  nachholen. Gemessen 2026-11-19 mit Opus an „Die Laterne von Archet“: Vom letzten Wort bis zur Antwort
   vergingen 12 bis 15 s, mit einem eigenen Schritt vor der ersten Zeile 18 bis 20 s; mit dieser Regel gab es keinen
   Zug über 15,3 s. Dein eigenes Nachdenken waren nur 2 bis 4 s, jeder Schritt vor dem Sprechen 4 bis 7.
 - **Zum Sprechen schreiben:** so, wie man redet; NPC-Worte höchstens mit einer Betonung, die die Figur selbst
@@ -355,7 +362,9 @@ Spieler „ich brauch nix“ gesagt hatte – es wirkte, als hätte er gebettelt
   daneben, wie viel fehlt) und warte: Der Spieler darf Hoffnung ausgeben, ein Talent nutzen (Silberzunge, Zähes
   Fleisch …) oder es lassen. Erst danach die Folge erzählen. Wurf, Folge und neue Gegner nie in einem Rutsch
   (Ödland-Abend: Marta wollte nach dem Wurf an der Mauer Hoffnung ausgeben, die Spielleitung hatte schon Kampf,
-  Gegner und Dynamit erzählt – Denny: „du gehst zu weit“).
+  Gegner und Dynamit erzählt – Denny: „du gehst zu weit“). Hängt die Stimme hinterher, kommt seine Antwort erst
+  nach deiner nächsten Zeile: darum nach einem knappen Fehlwurf ausdrücklich fragen („Hoffnung?“) und auf die Antwort
+  warten, nie „dann ohne Hoffnung“ vorwegnehmen (Archet 2026-11-23).
 - **Antworte auf das, was gesagt wurde, und hör dann auf.** Ein Ortswechsel, ein Abschied, ein Aufbruch gehört den
   Spielern. Endet ihr Zug mitten im Gespräch, antwortet der NPC und das Gespräch bleibt offen. Erst wenn sie gehen,
   verabschiedet sich der NPC (`opener: "bye"`), dann der Weg.
@@ -452,7 +461,9 @@ Die Spieler tun oft etwas, das kein Szenen-Rezept vorsieht. Das ist gut so.
   Steht im Leitfaden ein Vorrat an Namen, Gerüchten und Begegnungen, nimm zuerst daraus.
 - **Im Hintergrund nachziehen, wenn es vom Pfad abweicht** (Denny, dritter Laterne-Abend 2026-10-29: „während
   spieler grad bespaßt werden im hintergrund dinge preppen“). Erfinden die Spieler einen Ort, holen einen NPC ins
-  Spiel, der kein Bild hat, oder steuert die Geschichte auf eine Szene zu, die es nicht gibt: das Bild (`picture`)
+  Spiel, der kein Bild hat, oder steuert die Geschichte auf eine Szene zu, die es nicht gibt: das Bild (`picture`;
+  ein neues Motiv mit Krea 2, ohne Basis und mit `advanced_create: true`, Klein mit Basis erst danach und nur für
+  Helden, Licht, Blickwinkel oder ein Detail; ein bekannter Ort als Edit seines Bildes)
   oder feste Zeilen (`say_line prepare`) gleich anstoßen, solange am Tisch noch etwas anderes läuft. Bildjobs kehren
   sofort mit ihrer Job-ID zurück; wenn sie fertig sind (`jobs wait` mit kurzer Wartezeit; ein Clip oder 3D: `jobs watch`, den Befehl im Hintergrund, er weckt dich), zeigst du das Bild
   bei passender Gelegenheit. Stimme und Bilder teilen sich die Grafikkarte; solange eine neue Zeile gestreamt
@@ -488,6 +499,8 @@ lies es vor dem ersten `aside`, `split` oder `move` eines Abends und wenn ein Fl
   `handout: "<Titel>"` schickt einen Handout-Text der Kampagne 1:1, `text` und `picture` etwas Eigenes. Wofür:
   - **Bögen mit Geheimnis:** gleich nachdem die Spieler gewählt haben, jedem seinen Bogen flüstern (`sheet: true`,
     das PDF mit Geheimnis und Ziel). Am Tisch nur: „Jeder hat seinen Bogen per Discord bekommen, lest ihn für euch.“
+    Nie öffentlich andeuten, dass darin etwas Besonderes steht („lies besonders, was ganz unten steht“ verrät das
+    Geheimnis, Archet 2026-11-23); ein Hinweis darauf gehört ins Flüstern selbst.
   - **Was nur ein Held bemerkt** (er steht am Fenster, er hat die Wahrnehmung, er kennt die Sprache): flüstern, und am
     Tisch höchstens „Tobi, du bemerkst etwas, schau in deine Nachrichten.“
   - **Ein NPC vertraut einem Helden etwas an**, das die anderen nicht hören.
@@ -634,7 +647,9 @@ sagen die Orts-Pins (`pin_place`, beim Bau gesetzt) und die Marker der Helden.
   der der Text ihn nennt,** nie an den Anfang eines langen Satzes oder Teils (Spieltest 2026-11-02, Denny: „zu früh
   meistens bevor im text kommt das man die ziege oder heulen hört“): `sound_at` mit den Worten, bei denen er beginnt
   (`sound_at: "ein langes, dünnes Heulen"`, auch je Teil in `parts`); der Klang startet, wenn die Stimme dort
-  ankommt. `sound_after: true` spielt ihn nach der Zeile oder dem Teil („… meckert Flocke.“ am Ende). Steht
+  ankommt. Bei gestreamten Zeilen steht ein `sound_at` am besten früh im ersten Teil, oder der Satz mit dem Klang ist
+  ein eigener Teil (Archet 2026-11-23: „Heulen fern“ kam 25 s nach seinem Stichwort im langen ersten Teil).
+  `sound_after: true` spielt ihn nach der Zeile oder dem Teil („… meckert Flocke.“ am Ende). Steht
   `sound_note` in der Antwort, kamen die Worte in der Zeile nicht vor und der Klang lief am Anfang. Einen Effekt,
   den der Text nur ankündigt („In der Ferne hörst du …“), spielst du danach mit `play_sound`. Nennt die Antwort von `say_line`
   `sounds_not_played`, hast du einen Klang des Textes vergessen: den passenden sofort nachholen, wenn er noch passt.

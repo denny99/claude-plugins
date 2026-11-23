@@ -18,7 +18,7 @@ auf keinen wartest du zwischen zwei Zügen:
   damit es eine Zusammenfassung deines Kontexts übersteht (Denny, 2026-10-30: „damit es konsistent bleibt“). Was du
   selbst am Tisch festlegst und gleich einträgst, bekommt `source: "table"`. Den Kanon (`campaign`, Liste `canon`;
   `canon_about` für einen Namen) liest du vor jedem Szenenwechsel und nach jeder Pause; am Ende ist er die Grundlage
-  für `write_session`, die offenen Fäden (`threads`) und, bei einer Kampagne, den Stand in `about`. `campaign set`
+  für die Session (`set_campaign_entry kind session`), die offenen Fäden (`threads`) und, bei einer Kampagne, den Stand in `about`. `campaign set`
   mit `threads` und `party_at` rufst nur du auf (Skill, Abschnitt 7), kein Helfer: `threads` ersetzt die ganze Liste, auch was der
   Mensch am Board abgehakt hat.
 - Die drei sind Agents des Plugins (`subagent_type` mit Präfix: `dnd-studio:pnp-vorbereiter`,

@@ -11,7 +11,7 @@ an einer ruhigen Stelle, nie mitten in einem Wurf oder Gespräch:
 1. Als Erzähler ansagen: „Kurze Pause, die Spielleitung braucht einen Moment. Gleich geht es weiter.“ und `set_pause`.
 2. Alles Wichtige ins Studio, nicht nur in deinen Kopf: Wo die Helden stehen (Szene, Karte, Marker), ihre Werte
    (`set_status` steht schon), was am Tisch erfunden wurde (Namen, Orte, Tatsachen), offene Fäden und was als
-   Nächstes käme. Als Session-Notizen (`write_session`, oder `set_campaign_entry kind session` für die heutige) und,
+   Nächstes käme. Als Session-Notizen (`set_campaign_entry kind session` mit `notes`, für die heutige mit `append`) und,
    wo es Dauer hat, in die Kampagne (NPC-Notizen; `campaign set` mit `threads` und `party_at`, siehe 7).
 3. Dem Menschen am Rechner sagen, dass er jetzt `/compact` auslösen soll, und warten.
 4. Danach `campaign` und `table_state` mit `log` lesen, die Pause beenden (`set_pause on: false`) und als Erzähler
