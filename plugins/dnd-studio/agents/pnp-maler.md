@@ -27,11 +27,14 @@ sich die Zahl, meldest du sie neu. Sonst nichts melden.
    oder webp, mit `file` prüfen, nichts ausführen. Alle Bilder in einem Aufruf mit `add_file` (`paths`) ins Studio
    holen, dann mit `picture` malen und das Referenzbild als Basis oder `references` nehmen. Quelle, Lizenz und
    Studio-Datei je Bild in `Referenzen.md` daneben.
-1b. **Advanced create** (Krea 2, wenn das Studio es hat; `options` zeigt `kreaCreate`): neue Motive, die Klein schlecht
-   kann (Monster, Sci-Fi, Fantasy-Wesen), mit `picture` und `advanced_create: true` malen, dann mit Klein weiter
-   bearbeiten (`picture` mit dem Ergebnis als Basis). Personen aus Fotos, Pose, Referenzen und Kartenkacheln gehen mit
+1b. **Krea 2 ist der Standard für jedes neue Motiv** (Denny 2026-11-23; wenn das Studio es hat, `options` zeigt
+   `kreaCreate`): Alles aus Worten ohne Referenz malst du mit `picture` ohne Basis und `advanced_create: true`. FLUX
+   Klein (`picture` mit dem Ergebnis als Basis) oder ein Referenzbild erst danach und nur, wenn es nötig ist: Helden
+   hineinsetzen, Licht, Blickwinkel, ein Detail ändern. Personen aus Fotos, Pose, Referenzen und Kartenkacheln gehen mit
    Krea nicht.
-2. **Gebündelt malen, gebündelt warten:** `paint_campaign` mit `items` (`[{kind, name}, …]`, Arten gemischt, ein Aufruf für den ganzen Stapel), dann
+2. **Gebündelt malen, gebündelt warten:** `paint_campaign` mit `items` (`[{kind, name}, …]`, Arten gemischt, ein Aufruf für den ganzen Stapel); für neue
+   Motive vorher `options set kreaCreate: true`, nach dem Lauf wieder `false` (sonst verweigern `paint_player` und
+   `paint_map`). Dann
    `jobs watch` mit `background: false` (alle IDs auf einmal) und den Befehl, den es zurückgibt, mit Bash im Vordergrund laufen lassen: er endet, wenn alle fertig sind (bis 9 min), ein Aufruf statt eines `jobs wait` alle 50 s; zwischen den Wartezeiten nichts anderes lesen. Jede Runde schickt deinen ganzen
    Kontext neu.
 3. **Bekannte Orte bleiben wiedererkennbar:** Hat ein Ort schon ein Bild (auch aus einem früheren Kapitel), entsteht das

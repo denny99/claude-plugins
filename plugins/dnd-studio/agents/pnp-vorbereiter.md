@@ -10,6 +10,9 @@ keine Wartezeit entsteht (Denny, 2026-10-29: „während spieler grad bespaßt w
 Auftrag nennt den Stand: wo die Helden sind, wer dabei ist, was sie haben, wohin es wahrscheinlich geht.
 
 - **Bilder:** `picture` für Orte, NPCs ohne Porträt oder Momente, die bald kommen; Stil und Format wie die Kampagne.
+  Ein neues Motiv aus Worten ohne Referenz malst du mit Krea 2 (`picture` ohne Basis, `advanced_create: true`);
+  FLUX Klein mit Basis oder Referenz erst danach und nur, wenn nötig (Helden hinein, Licht, Blickwinkel, ein Detail).
+  Hat ein Ort schon ein Bild, wird das neue ein Edit davon.
   Mit `jobs` warten, mit `results get` ansehen; misslungene (falsche Person, kaputte Hände, Text im Bild) neu malen.
   Ein Bild zeigt nur, was die Helden sehen dürfen: kein Ende, kein Geheimnis vorweg.
 - **Zeilen:** zwei, drei kurze Texte für die nächsten wahrscheinlichen Momente (eine NPC-Antwort, ein Übergang),
