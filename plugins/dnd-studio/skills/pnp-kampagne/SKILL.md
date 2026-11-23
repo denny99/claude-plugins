@@ -142,8 +142,7 @@ Rahmen), dann wird nach dem Plan gebaut.
    erfundene Name kommt mit seiner Aussprache in `campaign set pronunciations`, nie als Umschreibung in den Text. Anfang und Ende
    sind Szenen, kein Pflichtprogramm (Denny 2026-11-13: „Intros und Outros bissel flach“), darum gehören hinein:
    - **Begrüßung** („Willkommen (zu Beginn)“): kurz, nur Organisatorisches. Was zur Bedienung gesagt wird, gibt es
-     als `variants` je Tisch: mit offenem Mikro (Zuhörer) „einfach reden, ‚Spielleitung‘ ruft mich“, nie „drück den
-     Knopf“ (Archet 2026-11-23); mit Knopf oder Push-to-Talk die Fassung dafür.
+     als `variants` je Tisch: mit Sprechknopf und mit Push-to-Talk je die Fassung dafür.
    - **Prolog** bei einer neuen Kampagne oder einer Welt, die die Spieler nicht kennen („bei neuen Kampagnen fehlt
      fast immer ein Prolog“): sechs bis zehn Vorlesetexte („Prolog 1: Die Welt“ …), zusammen bis zu zehn Minuten (Denny 2026-11-13:
      „Prolog ruhig 10 min“; etwa 1200–1400 Wörter), jeder
@@ -237,8 +236,8 @@ Fäden, mit denen es beginnt, und den Ort, an dem der Abend anfängt.
 - **Standardsätze** (`set_campaign_entry stock`, Erzähler: `campaign set narrator_stock`): NPCs `greet`, `bye`,
   `think`, `yes`, `no`, `gesture`, der Erzähler dieselben mit `approach` statt `gesture`. Sie machen den Abend schnell,
   weil sie vorab erzeugt werden und am Tisch sofort kommen. Wie viele, in welcher Art und über welche Stimmungen:
-  `references/standardsaetze.md` (die Quelle dafür). Spielt der Tisch mit offenem Mikro (Zuhörer), braucht der
-  Erzähler außerdem die Brücken `look` und `act` und viele `think`-Sätze (ebenda).
+  `references/standardsaetze.md` (die Quelle dafür). Für die Sekunden, in denen die
+  Spielleitung nachdenkt, braucht der Erzähler außerdem die Brücken `look` und `act` und viele `think`-Sätze (ebenda).
 
 ## 3. Bilder, Karten, Klang (die langsamen Teile, gesammelt)
 

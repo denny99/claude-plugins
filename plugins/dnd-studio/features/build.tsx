@@ -6,9 +6,6 @@ import { readBuildProgress, renderProgress } from "./progress";
 import type { EngineInterface, On, RenderElement } from "claude-code";
 
 import {
-  LISTENER_AGENT,
-  noteListenerEnd,
-  noteListenerSpawn,
   noteStudioStatus,
   noteTurnEnd,
   personAsk,
@@ -631,10 +628,7 @@ export function registerBuild(on: On): void {
     const r = await next(e);
     try {
       if (!("deny" in r && r.deny)) {
-        // The listener runs at every answer of the evening: the evening tracks it, not the build.
-        if (pnpAgentOf(e.subagentType) === LISTENER_AGENT)
-          await noteListenerSpawn($, r.agentId);
-        else await recordSpawn($, e.subagentType, r.agentId, e.prompt);
+        await recordSpawn($, e.subagentType, r.agentId, e.prompt);
       }
     } catch {
       // tracking never blocks an agent
@@ -644,17 +638,7 @@ export function registerBuild(on: On): void {
   on("turn.complete", async ($, e, next) => {
     const r = await next(e);
     try {
-      if (
-        e.agentId &&
-        (await noteListenerEnd(
-          $,
-          e.agentId,
-          e.answer,
-          e.reason === "error" || e.reason === "aborted",
-        ))
-      ) {
-        // the listener's return is read; it is no build run
-      } else if (e.agentId) {
+      if (e.agentId) {
         const ended = await recordEnd(
           $,
           e.agentId,

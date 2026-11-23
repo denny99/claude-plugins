@@ -36,7 +36,7 @@ Grundregel: **nichts im Studio ändern**, außer der Schritt sagt es. Profil vor
 ## 4. Tisch (nur ansehen, wenn kein Abend läuft)
 
 1. Tab **Tisch** ohne laufenden Tisch: ruhiger Leer-Zustand, keine Fehler. `/dnd abnahme` öffnet den Tab Abnahme.
-2. Optional mit Testkampagne: Denny sagt „starte einen kurzen Testtisch“ → Panel öffnet von selbst auf Tisch, Karte **Tisch**, Szenenkarte, Klänge als Zeilen mit **Abspielen** (nur auf Druck) und ein **Klang stoppen**, Startreihenfolge im Feld **Reihenfolge** + **Starten** (oder via `initiative`). NPC-Zeilen mit **Sprechen**, **Gruppe übernehmen**, Discord **Beitreten**. Karten **Zuhörer** (Schalter **Offenes Mikro**, Ausschalten ohne Rückfrage), **Pause** · **Abendende** · **Einwürfe**; nur ansehen.
+2. Optional mit Testkampagne: Denny sagt „starte einen kurzen Testtisch“ → Panel öffnet von selbst auf Tisch, Karte **Tisch**, Szenenkarte, Klänge als Zeilen mit **Abspielen** (nur auf Druck) und ein **Klang stoppen**, Startreihenfolge im Feld **Reihenfolge** + **Starten** (oder via `initiative`). NPC-Zeilen mit **Sprechen**, **Gruppe übernehmen**, Discord **Beitreten**. Karten **Pause** · **Abendende** · **Einwürfe**; nur ansehen.
 3. Launcher-Zeile zeigt Tischzustand („… · Runde 1 · X ist dran“), Klick öffnet Tisch.
 4. Tisch-Hintergrund: am laufenden Tisch steht der Pixel-Spieltisch (Kerze flackert, ab und zu rollt ein Würfel), hell und dunkel; nach Ende kommt das normale Theme zurück.
 

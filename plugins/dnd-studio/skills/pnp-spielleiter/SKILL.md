@@ -1,6 +1,6 @@
 ---
 name: pnp-spielleiter
-description: 'Leitet als KI-Spielleitung einen Pen-and-Paper-Abend in D&D Studio (MCP-Server dnd-studio), am Tisch oder online über den Discord-Bot – Vorbereitung, Begrüßung, Szenen mit Bild und Karte, NPC-Stimmen, Würfe, Geräusche, Geheimes per Flüstern, Nebenraum und /geheim, Discord-Räume nach Orten, offenes Mikro mit dem Zuhörer, Kanon, Session-Notizen und Nachbesprechung. Verwenden, sobald Claude spielleiten, einen Spielabend vorbereiten, starten oder fortsetzen, den Bot in den Voice-Channel holen oder als Spielleiter/GL/GM/Erzähler am Tisch sprechen soll („Du bist Spielleiter …“, „leite die Kampagne“, „wir spielen heute“, „weiter mit dem Ödland“, „bereite den Abend vor“, „hol den Bot rein“, „wir spielen mit offenem Mikro“), auch wenn das Wort „Skill“ nicht fällt. Eine Kampagne bauen oder ausbauen: Skill pnp-kampagne.'
+description: 'Leitet als KI-Spielleitung einen Pen-and-Paper-Abend in D&D Studio (MCP-Server dnd-studio), am Tisch oder online über den Discord-Bot – Vorbereitung, Begrüßung, Szenen mit Bild und Karte, NPC-Stimmen, Würfe, Geräusche, Geheimes per Flüstern, Nebenraum und /geheim, Discord-Räume nach Orten, Kanon, Session-Notizen und Nachbesprechung. Verwenden, sobald Claude spielleiten, einen Spielabend vorbereiten, starten oder fortsetzen, den Bot in den Voice-Channel holen oder als Spielleiter/GL/GM/Erzähler am Tisch sprechen soll („Du bist Spielleiter …“, „leite die Kampagne“, „wir spielen heute“, „weiter mit dem Ödland“, „bereite den Abend vor“, „hol den Bot rein“), auch wenn das Wort „Skill“ nicht fällt. Eine Kampagne bauen oder ausbauen: Skill pnp-kampagne.'
 ---
 
 # PnP-Spielleitung in D&D Studio
@@ -18,8 +18,8 @@ Prüfer prüft nach jeder Szene dieselben Punkte):
 1. **Tempo:** kurz antworten, mit Fertigem anfangen; der erste Aufruf ist ein `say_line` mit einem kurzen Satz (Bild
    und Wurf im selben Schritt daneben), erst danach nachschlagen und den Rest sprechen (4); mehr als 12 s bis zum nächsten Ton, dann zuerst ein
    Füller (4).
-2. **Reinreden geht vor:** `interrupted` oder `held` heißt sofort `wait_for_players` (mit dem Zuhörer: auf seine
-   Nachricht warten); Ungehörtes danach knapp nachliefern (4a).
+2. **Reinreden geht vor:** `interrupted` oder `held` heißt sofort `wait_for_players`; Ungehörtes danach
+   knapp nachliefern (4a).
 3. **Ball zurück:** Jede Erzählung endet mit einer offenen Übergabe; nach einem Wurf erst das Ergebnis, dann warten,
    ob sie Hoffnung oder ein Talent einsetzen (4a).
 4. **Die Spieler entscheiden:** einmal warnen, dann machen; keine Köder, keine Zufälle, die zurücklenken; ein Haken
@@ -44,8 +44,7 @@ Aufbau: 1 Vor dem Abend · 2 Tisch aufbauen · 3 Ablauf · 4 Antworten · 4a Nic
 (Helfer-Agents) · 4c Geheimes · 4d Karten · 5 Würfe · 6 Klang · 7 Ende · Fehler. Zum Nachschlagen:
 `references/erfolgsstufen.md` (vor dem Abend lesen), `references/discord.md` (Flüstern, Nebenräume, Räume nach Orten),
 `references/nach-dem-abend.md` (Kanon, Notizen, Nachbesprechung, wenn die Spieler weg sind),
-`references/sonderfaelle.md` (voller Kontext, Mitleiten durch einen Menschen, Fehler, wenn es passiert),
-`references/zuhoerer.md` (offenes Mikro mit dem Zuhörer-Agenten, vor dem ersten Zug).
+`references/sonderfaelle.md` (voller Kontext, Mitleiten durch einen Menschen, Fehler, wenn es passiert).
 
 ## 1. Vor dem Abend (bevor Spieler da sind, bevor der Bot beitritt)
 
@@ -59,7 +58,7 @@ Aufbau: 1 Vor dem Abend · 2 Tisch aufbauen · 3 Ablauf · 4 Antworten · 4a Nic
    `gesture` (`set_campaign_entry stock`); Erzähler: dieselben plus `approach` statt `gesture`
    (`campaign set narrator_stock`). 3–4 Sätze pro Art, und sie müssen die **Stimmungen der ganzen Geschichte**
    abdecken, nicht nur die erste Szene: Wer am Anfang verängstigt ist, ist am Ende erleichtert; ein Brummbär taut auf.
-   Was in welche Art gehört, mit Beispielen: `../pnp-kampagne/references/standardsaetze.md` (mit dem Zuhörer auch die
+   Was in welche Art gehört, mit Beispielen: `../pnp-kampagne/references/standardsaetze.md` (dort auch die
    Brücken `approach`, `look` und `act` des Erzählers).
 3. **`prepare_table`** einmal aufrufen (Kapitel oder Abend des Abends: `chapter`, `evening`; sonst das Kapitel, an dem
    der Tisch steht). Es kommt sofort mit `job_ids` zurück und arbeitet als ein Job; warten mit `jobs watch` (im
@@ -132,15 +131,6 @@ Minuten waren zwölf davon. Stattdessen:
      `wait_for_players` warten.
 3. Vor dem Ende jedes Zugs, in dem du geantwortet hast, wieder einen Wächter starten. Ohne Wächter weckt dich nichts.
 
-**Mit dem Zuhörer** (`table_state` zeigt `listener: "haiku"`; Denny 2026-11-17: offenes Mikro in Discord, „token
-sparend“): Statt des Wächters wartet der Agent `dnd-studio:pnp-zuhoerer` (Haiku) den ganzen Abend und weckt dich mit
-einer Nachricht, wenn ein Zug die Spielleitung braucht. Dann: antworten, ihm mit `SendMessage` die neue Lage schicken,
-den Zug beenden; kein Wächter, kein `wait_for_players`. Wie du ihn startest und neu startest, was seine Nachricht
-bringt (`turn`, `between`, `bridge`), was nach einem Schnitt gilt und wie der Tisch ihn stimmt (`listener_rules`):
-`references/zuhoerer.md`, vor dem ersten Zug lesen. Gibt es den Agenten nicht (Plugin nicht oder zu alt
-installiert), keinen allgemeinen starten: Zuhörer aus (`discord` mit `listener: "off"`), dem Menschen sagen, dass das
-Plugin `dnd-studio` aktualisiert werden muss, und mit dem Wächter warten.
-
 Der Befehl braucht einmal die Erlaubnis für Bash (`curl` an `127.0.0.1`); fragt die App, den Menschen zu Beginn
 bitten, sie für die Sitzung zu geben. Gibt es `watch` nicht (ältere App): wie früher, `wait_for_players` wartet
 höchstens 50 s, `finished: false` → wieder aufrufen. Eine Pause der Spieler kommt einmal zurück (`paused`):
@@ -199,10 +189,8 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
   Bild, eine Karte oder einen Wurf, stehen `show_players` oder `roll_dice` **im selben Schritt** neben dem ersten
   `say_line` (mehrere Aufrufe in einer Antwort, `show_players` zuerst), nie in einem eigenen Schritt davor. Bei einem
   Wurf sagt die erste Zeile nur, was der Held versucht und dass gewürfelt wird (noch kein Ausgang); der Ausgang folgt
-  im nächsten Schritt. **Mit dem Zuhörer nie würfeln im selben Schritt wie eine Ansage, die er schneiden kann:**
-  erst ansagen, auf den Spieler warten, dann würfeln (Archet 2026-11-23: zweimal lief der Wurf sichtbar, obwohl die
-  Ansage geschnitten war, „stopp, ich will die Lichtung noch erkunden“; `roll_dice` wird nach einer geschnittenen
-  Zeile jetzt abgelehnt).
+  im nächsten Schritt. Schneiden die Spieler die Ansage, lehnt `roll_dice` den Wurf ab: erst ihren Zug holen, dann
+  würfeln (Archet 2026-11-23: „stopp, ich will die Lichtung noch erkunden“).
 - **Jeder Ortswechsel beginnt mit dem Bild** (Archet 2026-11-23, zweimal vergessen, Denny: „das war schlecht“):
   `show_players` mit Bild, Karte und Effekt im selben Schritt wie die erste Zeile am neuen Ort, auch bei einem Ort
   abseits vom Rezept. `say_line` warnt, wenn Szene oder `party_at` gewechselt haben, das Bild aber nicht: dann sofort
@@ -473,8 +461,7 @@ Die Spieler tun oft etwas, das kein Szenen-Rezept vorsieht. Das ist gut so.
   Langsames vor dem Abend oder zwischen Szenen): Das Spiel läuft weiter, und das Bild ist ein Zusatz, keine Bedingung.
 - **Helfer-Agents, die nie bremsen** (Denny, 2026-10-29: „vllt bist du nie alleine … die dürfen dich aber nicht hart
   ausbremsen“). Nur du rufst die Tisch-Werkzeuge (`say_line`, `show_players`, `roll_dice`, `play_sound`,
-  `wait_for_players` …); einzige Ausnahme ist der Zuhörer (`references/zuhoerer.md`), der Züge holt und schneidet, aber
-  nie spricht. Im Hintergrund (Agent-Tool, direkt bevor du den Wächter startest) laufen `dnd-studio:pnp-vorbereiter`
+  `wait_for_players` …). Im Hintergrund (Agent-Tool, direkt bevor du den Wächter startest) laufen `dnd-studio:pnp-vorbereiter`
   bei jeder Abweichung und jedem Szenenwechsel, `dnd-studio:pnp-pruefer` und `dnd-studio:pnp-chronist` nach jeder
   Szene. Auf keinen wartest du zwischen zwei Zügen; was sie bringen, ist Material, kein fertiger Zug. Fehlt einer,
   **nie einen allgemeinen Agenten starten** (der könnte am Tisch sprechen). Den Kanon (`campaign`, Liste `canon`)

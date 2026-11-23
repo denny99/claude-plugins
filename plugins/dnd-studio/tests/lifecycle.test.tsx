@@ -23,16 +23,16 @@ test("pure: times are the person's local clock, not UTC", () => {
   expect(localDateTime(at)).toBe("2026-11-18 12:10");
 });
 
-test("pure: an open window or a connected bot alone is no evening; a shown scene, a fight or the listener is", () => {
+test("pure: an open window or a connected bot alone is no evening; a shown scene or a fight is", () => {
   expect(isLive(view({ players_window: true }), IDLE)).toBe(false);
-  expect(isLive(view({ discord: true, listener: "off" }), IDLE)).toBe(false);
+  expect(isLive(view({ discord: true }), IDLE)).toBe(false);
   expect(
     isLive(view({ players_window: true, scene: { kind: "clear" } }), IDLE),
   ).toBe(false);
   expect(
     isLive(view({ players_window: true, scene: { kind: "show", title: "Das Tor" } }), IDLE),
   ).toBe(true);
-  expect(isLive(view({ discord: true, listener: "haiku" }), IDLE)).toBe(true);
+  expect(isLive(view({ discord: true, turns_waiting: 1 }), IDLE)).toBe(true);
   // a scene left on a window that is closed: the evening ended
   expect(isLive(view({ scene: { title: "Das Tor" } }), IDLE)).toBe(false);
   expect(isLive(view({}), { ...IDLE, isActive: true })).toBe(true);
@@ -41,8 +41,8 @@ test("pure: an open window or a connected bot alone is no evening; a shown scene
 test("pure: turns that wait with nobody listening are stranded", () => {
   expect(strandedTurns(view({ turns_waiting: 2 }), IDLE, false)).toBe(2);
   expect(
-    strandedTurns(view({ discord: true, turns_waiting: 2, listener: "haiku" }), IDLE, false),
-  ).toBe(0);
+    strandedTurns(view({ discord: true, turns_waiting: 2 }), IDLE, false),
+  ).toBe(2);
   expect(
     strandedTurns(view({ discord: true, turns_waiting: 1, scene: { title: "x" } }), IDLE, true),
   ).toBe(0);
@@ -90,7 +90,7 @@ test("stranded turns show with a button that takes them through wait_for_players
   await ui.press({ key: "turns-drop" });
   const takes = w.calls.filter((c) => c.tool === "wait_for_players");
   expect(takes.length).toBe(2);
-  expect(takes[0]!.args).toEqual({ quiet: true, timeout_seconds: 1 });
+  expect(takes[0]!.args).toEqual({ timeout_seconds: 1 });
   await ui.unmount();
 });
 

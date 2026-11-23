@@ -9,7 +9,6 @@ import type {
   EveningState,
   GpuState,
   WhisperInfo,
-  ListenerState,
   Hero,
   Initiative,
   Npc,
@@ -201,39 +200,34 @@ export function toTableView(state: Obj, campaign: Obj, now: number): TableView {
     unheard,
     turnsWaiting:
       typeof state.turns_waiting === "number" ? state.turns_waiting : 0,
-    listener: str(state.listener),
   };
 }
 
 /**
  * A table is live when an evening really runs: a fight, or the players' window or the Discord bot there AND
- * something of an evening on it (a scene shown, the players talking, a break, a spotlight, the listener on, turns
- * waiting). An open window or a connected bot alone (a test, a build) is no evening.
+ * something of an evening on it (a scene shown, the players talking, a break, a spotlight, turns waiting). An open window or a connected bot alone (a test, a build) is no evening.
  */
 export function isLive(view: TableView | null, ini: Initiative): boolean {
   if (ini.isActive) return true;
   if (!view || (!view.playersWindow && !view.discord)) return false;
-  const listener = !!view.listener && view.listener !== "off";
   return (
     !!view.shown ||
     view.listening ||
     view.paused ||
     !!view.spotlight ||
-    listener ||
     view.turnsWaiting > 0
   );
 }
 
-/** Turns the players gave that nobody will take: they wait, and no evening (or no watcher, no listener) is there. */
+/** Turns the players gave that nobody will take: they wait, and no evening (or no watcher) is there. */
 export function strandedTurns(
   view: TableView | null,
   ini: Initiative,
   watcherRunning: boolean,
 ): number {
   if (!view || view.turnsWaiting <= 0) return 0;
-  const listener = !!view.listener && view.listener !== "off";
   const heard = view.discord || view.playersWindow;
-  return !isLive(view, ini) || !heard || (!listener && !watcherRunning)
+  return !isLive(view, ini) || !heard || !watcherRunning
     ? view.turnsWaiting
     : 0;
 }
@@ -349,7 +343,6 @@ export const AGENT_LABEL: Record<string, string> = {
   "pnp-pruefer": "Prüfer",
   "pnp-chronist": "Chronist",
   "pnp-vorbereiter": "Vorbereiter",
-  "pnp-zuhoerer": "Zuhörer",
   "pnp-review-technik": "Prüfer Technik",
   "pnp-review-konsistenz": "Prüfer Stimmigkeit",
   "pnp-review-spielbarkeit": "Prüfer Spielbarkeit",
@@ -425,22 +418,7 @@ export function buildPhase(runs: AgentRun[]): string {
   return stage;
 }
 
-export const EMPTY_LISTENER: ListenerState = {
-  running: [],
-  startedAt: 0,
-  endedAt: 0,
-  returned: false,
-  woke: false,
-  why: "",
-  turn: [],
-  sent: false,
-  secret: false,
-  between: [],
-  error: "",
-};
-
 export const EMPTY_EVENING: EveningState = {
-  listener: EMPTY_LISTENER,
   watcher: {
     state: "none",
     watchId: "",
@@ -456,7 +434,6 @@ export const EMPTY_EVENING: EveningState = {
   versionNow: "",
   stale: "",
   remindPending: false,
-  remindListener: false,
 };
 
 export const EMPTY_CHECK: BuildCheck = {
@@ -472,78 +449,6 @@ export const EMPTY_CHECK: BuildCheck = {
 /** A Bash command that runs the Studio's watch URL (`curl -s -m 1900 http://127.0.0.1:<port>/watch/<id>`). */
 export function isWatchCommand(command: string): boolean {
   return /\/watch\/[0-9a-z]{6,}/i.test(command);
-}
-
-/** Listener mode: the table's switch says "haiku" (open mic, pnp-zuhoerer waits for the GM). */
-export function isListenerMode(view: TableView | null): boolean {
-  return view?.listener === "haiku";
-}
-
-export type ListenerReturn = {
-  woke: boolean;
-  why: string;
-  lines: { who: string; text: string; secret: boolean }[];
-  sent: boolean;
-  secret: boolean;
-  between: string[];
-};
-
-/**
- * The listener's answer `{woke, why, turn, between}` (pnp-zuhoerer returns exactly that JSON; a code fence or a word
- * around it is tolerated). Undefined when no such object is in the text.
- */
-export function listenerReturnOf(answer: string): ListenerReturn | undefined {
-  const o = listenerJsonOf(answer);
-  if (!o) return undefined;
-  const turn = obj(o.turn);
-  const lines = arr(turn.lines)
-    .map(obj)
-    .map((l) => ({
-      who: str(l.who),
-      text: str(l.text),
-      secret: l.secret === true,
-    }))
-    .filter((l) => l.who || l.text);
-  return {
-    woke: o.woke === true,
-    why: str(o.why),
-    lines,
-    sent: turn.sent === true,
-    secret: turn.secret === true || lines.some((l) => l.secret),
-    between: arr(o.between)
-      .map((b) => str(b))
-      .filter(Boolean),
-  };
-}
-
-/** The listener's JSON object (with a boolean `woke`): a fenced ```json block first, then each `{` in the text. */
-function listenerJsonOf(answer: string): Obj | undefined {
-  const parse = (text: string): Obj | undefined => {
-    try {
-      const o = obj(JSON.parse(text));
-      return typeof o.woke === "boolean" ? o : undefined;
-    } catch {
-      return undefined;
-    }
-  };
-  for (const m of answer.matchAll(/```(?:json)?[ \t]*\n([\s\S]*?)```/gi)) {
-    const o = parse((m[1] ?? "").trim());
-    if (o) return o;
-  }
-  const ends: number[] = [];
-  for (let i = answer.length - 1; i >= 0; i--)
-    if (answer[i] === "}") ends.push(i);
-  for (
-    let start = answer.indexOf("{");
-    start >= 0;
-    start = answer.indexOf("{", start + 1)
-  )
-    for (const end of ends) {
-      if (end <= start) break;
-      const o = parse(answer.slice(start, end + 1));
-      if (o) return o;
-    }
-  return undefined;
 }
 
 /** The id in a watch URL (`…/watch/<id>`), or "". */

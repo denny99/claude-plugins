@@ -100,19 +100,3 @@ oben, und `move` antwortet nur, dass er aus ist.
 Nebenräume, Gruppen und Ortsräume brauchen die Rechte `Manage Channels` und `Move Members`. Fehlen sie, nennt die
 Antwort sie: dem Menschen sagen, er soll den Bot neu einladen (Studio: Einstellungen → Discord-Bot) oder der Rolle die
 Rechte geben. Bis dahin am Tisch weiterspielen und Geheimes flüstern.
-
-## Offenes Mikro mit dem Zuhörer (`listener`)
-
-Denny, 2026-11-17. Schalter am Tisch (`discord` mit `listener: "haiku" | "off"`), Standard aus; `table_state`
-zeigt ihn als `listener`. Ist er an:
-
-- Unter der Nachricht des Bots stehen nur **Absenden** und **Pause/Weiter**, dazu die Wählen-Knöpfe, solange jemand im
-  Kanal noch keinen Helden hat. Push-to-Talk und die Sprechknöpfe sind weg; jeder redet einfach.
-- Ein Zug endet nach 1,5 s Stille aller, auch wenn einer lange erzählt und andere dazwischen reden (gekappt wird nur
-  Dauergerede nach 60 s, ein einzelner Redner nach 90 s). Was jeder sagt, kommt schon während des Zugs Stück für Stück
-  beim Zuhörer an. Er ist weich: deine Zeile läuft weiter, nichts wird gesperrt. Ob er für dich ist,
-  entscheidet der Zuhörer (Agent `dnd-studio:pnp-zuhoerer`; wie die Spielleitung mit ihm arbeitet:
-  `zuhoerer.md` neben dieser Datei, nur mit dem Plugin).
-- Absenden schickt den Zug sofort, schneidet deine Zeile und weckt dich ohne Prüfung (`sent: true`). Ohne laufenden
-  Zug heißt es: „Wir sind fertig mit Beraten“.
-- Die Nachricht sagt klein, dass der Bot mithört und alles auf deinem Rechner bleibt.

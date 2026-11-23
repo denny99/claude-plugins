@@ -12,33 +12,24 @@ test("kit v3: buttons are native with their glyph in front (if the action has on
   await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
   await $.command.run({ command: "dnd", args: "table" } as never);
   let ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
-  // the listener switch is the kit's Toggle: the deed as a text action, the state as a pill (never in the label)
-  expect((await ui.find({ type: "Button", key: "listener" }))?.text).toBe(
-    "Einschalten",
-  );
   // the Discord card does not repeat the header's „Neu laden“
   expect(
     await ui.find({ type: "Button", key: "discord-status" }),
   ).toBeUndefined();
-  // nothing graphical inside or beside a button: the engine drops a Svg in a Button
-  expect(
-    JSON.stringify(await ui.find({ type: "Button", key: "listener" })),
-  ).not.toContain("Svg");
   await ui.unmount();
 
   await $.command.run({ command: "dnd", args: "health" } as never);
   ui = await $.ui.mount({ ...pane(90, 60), surface: "desktop" });
-  // one place for the listener switch (Table tab): the health tab neither holds it nor points to it
-  expect(
-    await ui.find({ type: "Button", key: "switch-listener" }),
-  ).toBeUndefined();
-  expect(await findShown(ui, /Zuhörer/)).toBeUndefined();
   // every setting is a kit Toggle row: the name, its state as a pill, the deed as a text action (never the state
   // in a button label)
   expect(await findShown(ui, "Bau-Hintergründe")).toBeDefined();
   expect(
     (await ui.find({ type: "Button", key: "rule-buildLooks" }))?.text,
   ).toMatch(/^(Einschalten|Ausschalten)$/);
+  // nothing graphical inside or beside a button: the engine drops a Svg in a Button
+  expect(
+    JSON.stringify(await ui.find({ type: "Button", key: "rule-buildLooks" })),
+  ).not.toContain("Svg");
   const toggles = (await ui.findAll({ type: "Svg" })).filter((s) =>
     /^(an|aus)$/.test(String(s.props.alt)),
   );
@@ -46,11 +37,11 @@ test("kit v3: buttons are native with their glyph in front (if the action has on
   // the health card has no second reload: the header's „Neu laden“ probes
   expect(await ui.find({ type: "Button", key: "probe" })).toBeUndefined();
   await ui.unmount();
-  await $.command.run({ command: "dnd", args: "table" } as never);
+  await $.command.run({ command: "dnd", args: "health" } as never);
   const term = await $.ui.mount({ ...pane(90, 60), surface: "terminal" });
-  expect((await term.find({ type: "Button", key: "listener" }))?.text).toBe(
-    "Einschalten",
-  );
+  expect(
+    (await term.find({ type: "Button", key: "rule-buildLooks" }))?.text,
+  ).toMatch(/^(Einschalten|Ausschalten)$/);
   await term.unmount();
 });
 
