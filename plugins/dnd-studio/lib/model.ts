@@ -15,7 +15,6 @@ import type {
   Roll,
   SceneSound,
   Secret,
-  StockLine,
   TableLive,
   TableView,
 } from "../types";
@@ -113,21 +112,6 @@ export function secretsOf(log: unknown[]): Secret[] {
     }));
 }
 
-function stockOf(v: unknown): StockLine[] {
-  const out: StockLine[] = [];
-  for (const [kind, lines] of Object.entries(obj(v)))
-    for (const l of arr(lines)) {
-      const text = typeof l === "string" ? l : str(obj(l).text);
-      if (text)
-        out.push({
-          kind,
-          text,
-          how: typeof l === "string" ? "" : str(obj(l).how),
-        });
-    }
-  return out;
-}
-
 function soundsOf(v: unknown): SceneSound[] {
   return arr(v)
     .map(obj)
@@ -166,7 +150,6 @@ export function toTableView(state: Obj, campaign: Obj, now: number): TableView {
     .map((n) => ({
       name: str(n.name),
       place: str(n.place),
-      stock: stockOf(n.stock),
     }))
     .filter((n) => n.name);
   const here = place ? npcs.filter((n) => n.place === place) : [];
@@ -742,39 +725,36 @@ function acceptanceRows(
     ),
   );
 
-  // Talking NPCs: portrait, voice, sheet, stock lines.
+  // Talking NPCs: portrait, voice, sheet (stock lines are gone: the Discord test of 2026-11-25).
   const silent = (n: Obj) => SILENT_RE.test(`${str(n.notes)} ${str(n.sheet)} ${str(n.looks)}`);
   const talking = npcs.filter((n) => !silent(n));
   const mute = npcs.filter(silent).map((n) => str(n.name));
   const npcGaps: string[] = [];
   const npcFix = new Set<string>();
   for (const n of talking) {
-    const stock = obj(n.stock);
     const lack = [
       str(n.portrait) ? "" : "Bild",
       str(n.voice) || n.ownVoice === true ? "" : "Stimme",
       str(n.sheet) ? "" : "Werte",
-      Object.values(stock).some((l) => arr(l).length) ? "" : "Sätze",
     ].filter(Boolean);
     if (!lack.length) continue;
     npcGaps.push(`${str(n.name)} (${lack.join("/")})`);
     if (lack.includes("Bild")) npcFix.add("pnp-maler");
     if (lack.includes("Stimme")) npcFix.add("pnp-nachbesserer");
-    if (lack.includes("Werte") || lack.includes("Sätze"))
-      npcFix.add("pnp-texter");
+    if (lack.includes("Werte")) npcFix.add("pnp-texter");
   }
   out.push(
     withIntended(
       item(
         "npcs",
-        "Sprechende NPCs mit Bild, Stimme, Werten und Sätzen",
+        "Sprechende NPCs mit Bild, Stimme und Werten",
         talking.length,
         npcGaps,
         [...npcFix].join(", "),
       ),
       mute,
       "stumm",
-      "ohne Stimme und Sätze",
+      "ohne Stimme",
     ),
   );
 

@@ -381,7 +381,15 @@ export async function observe(
       break;
     }
     case "show_players": {
-      if (input.map && !(Array.isArray(input.markers) && input.markers.length))
+      // only places, fog, an overlay or the weather on the map shown: its markers stay (the Discord test of
+      // 2026-11-25 was told off for a reveal_places)
+      const mapUpdate =
+        !input.picture &&
+        !input.title &&
+        ["reveal_places", "hide_places", "reveal", "hide", "fog", "places", "overlay", "weather", "effect", "big"].some(
+          (k) => input[k] !== undefined,
+        );
+      if (input.map && !mapUpdate && !(Array.isArray(input.markers) && input.markers.length))
         notes.push(
           "A map without markers: nobody knows where they are — add markers for the heroes (and what they see).",
         );
@@ -1200,55 +1208,6 @@ export function renderTable(
       ),
     }),
   );
-
-  // NPCs: stock lines in their voice, picked by hand; a line is a row (the text wraps), the deed is „Sprechen“
-  for (const n of view.npcs)
-    out.push(
-      Card(k, {
-        key: `npc-card-${n.name}`,
-        title: {
-          icon: "chat",
-          title: n.place ? `${n.name} · ${n.place}` : n.name,
-        },
-        empty: "Keine vorbereiteten Sätze.",
-        children: n.stock.map((l, i) =>
-          ListRow(k, {
-            key: `npc-line-${n.name}-${i}`,
-            title: `„${l.text}“`,
-            meta: l.how,
-            wrap: true,
-            actions: [
-              {
-                key: `npc-${n.name}-${i}`,
-                label: "Sprechen",
-                variant: "secondary",
-                onPress: () =>
-                  void tableAction($, `${n.name}: ${l.text}`, "say_line", {
-                    voice: n.name,
-                    text: l.text,
-                    ...(l.how ? { how: l.how } : {}),
-                  }),
-              },
-            ],
-          }),
-        ),
-        actions: n.stock.length
-          ? []
-          : [
-              {
-                key: `npc-${n.name}-greet`,
-                label: "Begrüßen",
-                variant: "secondary",
-                onPress: () =>
-                  void tableAction($, `${n.name} grüßt`, "say_line", {
-                    voice: n.name,
-                    text: "",
-                    opener: "greet",
-                  }),
-              },
-            ],
-      }),
-    );
 
   // Dice and secrets: drawn only when there is something (R8)
   const rolls = view.rolls.slice(-5);

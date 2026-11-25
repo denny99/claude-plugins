@@ -54,16 +54,13 @@ Aufbau: 1 Vor dem Abend · 2 Tisch aufbauen · 3 Ablauf · 4 Antworten · 4a Nic
    nachlesen. Bei einer Fortsetzung auch den
    Kanon (Liste `canon`), die offenen Fäden (`threads`) und wo die Gruppe steht (`partyAt`): Was frühere Abende
    festgelegt haben, gilt.
-2. **Standardsätze prüfen.** Jeder NPC mit eigener Stimme und der Erzähler brauchen sie, weil sie vorab erzeugt
-   werden und am Tisch sofort kommen, während der Rest der Antwort entsteht. NPC: `greet`, `bye`, `think`, `yes`, `no`,
-   `gesture` (`set_campaign_entry stock`); Erzähler: dieselben plus `approach` statt `gesture`
-   (`campaign set narrator_stock`). 3–4 Sätze pro Art, und sie müssen die **Stimmungen der ganzen Geschichte**
-   abdecken, nicht nur die erste Szene: Wer am Anfang verängstigt ist, ist am Ende erleichtert; ein Brummbär taut auf.
-   Was in welche Art gehört, mit Beispielen: `../pnp-kampagne/references/standardsaetze.md` (dort auch die
-   Brücken `approach`, `look` und `act` des Erzählers).
+2. **Keine Standardsätze** (Denny, Tischtest Archet 2026-11-25: „braucht man fast nie, wenn schon Impro-Brücken“,
+   „bauen wir alles wieder aus dann“; den ganzen Abend wurde keiner gebraucht). Das Studio macht und spielt keine
+   mehr: Die ersten Worte jeder Antwort improvisierst du kurz zum Zug (4, „Brücke zum Zug“), vorbereitet werden nur
+   Szenen- und Vorlesetexte und was du als `lines` mitgibst.
 3. **`prepare_table`** einmal aufrufen (Kapitel oder Abend des Abends: `chapter`, `evening`; sonst das Kapitel, an dem
    der Tisch steht). Es kommt sofort mit `job_ids` zurück und arbeitet als ein Job; warten mit `jobs watch` (im
-   Hintergrund, er weckt dich), nie ein zweites Mal aufrufen, solange er läuft. Es erzeugt alle Standardsätze, Szenen- und Vorlesetexte
+   Hintergrund, er weckt dich), nie ein zweites Mal aufrufen, solange er läuft. Es erzeugt alle Szenen- und Vorlesetexte
    dauerhaft, jeden Vorlesetext in der Stimme, die er beim Bau bekommen hat (`voice` des Textes, sonst der Erzähler).
    Weitere feste Zeilen, die du sicher sagen wirst, als `lines` mitgeben: `{text, voice: "Hanna Distelbrunn", how}`. Vorbereitetes kommt am Tisch sofort, **wenn es Wort für Wort
    in derselben Stimme und mit demselben how gesagt wird.** Es macht auch die Tiefenkarten der Szenen- und Ortsbilder
@@ -201,7 +198,7 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
   Wort bis zum ersten Ton 6 s, davon 1,5 s Stille, gut 3 s deine Runde, 1,3 s die Stimme; jeder Schritt vor dem
   ersten `say_line` kostete 2 bis 5 s mehr. Erst danach `campaign` und Bilder; nichts
   nachschlagen, bevor der erste Satz läuft, außer der Satz hinge davon ab. Ein vorbereiteter Text
-  (Szene, Vorlesetext, Standardsatz) kommt ohnehin sofort: dann ist er selbst die erste Zeile. Braucht die Antwort ein
+  (Szene, Vorlesetext) kommt ohnehin sofort: dann ist er selbst die erste Zeile. Braucht die Antwort ein
   Bild, eine Karte oder einen Wurf, stehen `show_players` oder `roll_dice` **im selben Schritt** neben dem ersten
   `say_line` (mehrere Aufrufe in einer Antwort, `show_players` zuerst), nie in einem eigenen Schritt davor. Bei einem
   Wurf sagt die erste Zeile nur, was der Held versucht und dass gewürfelt wird (noch kein Ausgang); der Ausgang folgt
@@ -221,17 +218,10 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
   nicht vorbereitet.
 - **NPC-Antworten selbst schreiben** aus dem Bogen des NPCs und mit `say_line` in seiner Stimme sprechen.
   **Nicht `talk_npc`** zwischen Zügen (zweites Sprachmodell, eine Minute extra).
-- **Storytelling-Gerüst für NPC-Antworten:**
-  `say_line { voice: "<NPC>", from: "<Held>", opener: "greet", text: "<nur dein freier Rest>" }`
-  → Erzähler-Brücke („Tobi geht zu Bartel hinüber.“) → fertige Begrüßung des NPCs → dein Nachsatz. Brücke und
-  Begrüßung kommen sofort, nur der Nachsatz wird erzeugt. Weitere Opener: `yes`/`no` bei Bitten, `bye` beim Abschied,
-  `think` wenn der NPC nachdenkt. Den Text des Openers nicht im `text` wiederholen.
-- **Stimmung trifft:** `opener` nimmt einen *zufälligen* Satz der Art. Passt das nur, wenn alle Sätze dieser Art in
-  die Lage passen. Zählt die Stimmung (Hanna erleichtert statt ängstlich, Bartel aufgetaut), such den passenden
-  Standardsatz selbst aus `campaign` aus und sprich ihn als ersten Teil, Wort für Wort mit seinem `how` (dann kommt er
-  sofort, er ist vorbereitet), und den Rest als zweiten: `say_line { parts: [{voice, text: <Standardsatz>, how}, {voice,
-  text: <Rest>, how}] }`. Gibt es keinen passenden, schreib einen kurzen neuen Satz mit dem richtigen `how` – lieber
-  stimmig und zwei Sekunden später als schnell und falsch.
+- **Storytelling-Gerüst für NPC-Antworten:** zuerst ein kurzer Satz, der den Zug aufnimmt (Erzähler: „Tobi geht zu
+  Bartel hinüber.“, oder gleich der NPC: „Na, wen haben wir denn da?“), mit `wait: false`; dann die Worte des NPCs in
+  seiner Stimme. Beides auch als `parts` in einem `say_line`. Die Begrüßung, das Nachdenken, den Abschied schreibst du
+  selbst, passend zur Lage (Hanna erleichtert statt ängstlich, Bartel aufgetaut), mit dem richtigen `how`.
 - **Das how passt zur Lage, nicht nur zur Figur:** Angst, Erleichterung, Ärger, Freude, Flüstern im Wald, Rufen über
   Wölfe hinweg. Eine Figur klingt nicht den ganzen Abend gleich.
 - **Reihenfolge:** `show_players` vor dem `say_line`, zu dem es gehört, im selben Schritt (es ist schnell). Ein Klang, der mit den Worten
@@ -323,9 +313,6 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
   von selbst:** Füller spielst du gezielt ab wie ein menschlicher Spielleiter, nur wo einer passt (Spieltest
   2026-10-28: automatische Füller kamen in fremden Stimmen und passten nicht; Denny: „lieber keinen filler und warten
   als einen von ner fremden stimme oder völlig unpassend“).
-  - **Gesprächsbeginn:** `opener: "greet"`. **Gesprächsende:** `opener: "bye"`.
-  - **Längere Frage an einen NPC:** `opener: "think"` vor seiner Antwort. Bei kurzen Zügen keinen: die Antwort
-    kommt gestreamt nach einer halben Sekunde ohnehin.
   - **Mehr als 12 Sekunden bis zum nächsten Ton: zuerst ein Füller** (Denny, zweiter Laterne-Abend 2026-10-29: „wenn
     du erwartest länger als 12s was zu machen muss ein füller kommen“). Das ist der Fall bei einer Kampfrunde, mehreren
     Würfen hintereinander, Regeln nachschlagen, Werte nachrechnen und dem Ende des Abends. Dann eine kurze Brücke
@@ -334,10 +321,10 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
   - **Brücke zum Zug** (Ödland Kapitel 3, 2026-11-23): Kommt ein Zug, ist die erste Zeile ein kurzer, improvisierter
     Einzeiler, der genau diesen Zug aufnimmt („Marta stemmt sich gegen das Tor – es knirscht.“, „Brór, du willst
     also zurück zum Laster?“), in der Stimme, die gleich weiterspricht. Keine Standard-`think`-Sätze des Erzählers
-    („Hm, lasst mich überlegen …“): die klingen jedes Mal gleich und sagen nichts zum Zug. Mit `wait: false`
+    („Hm, lasst mich überlegen …“): die klingen jedes Mal gleich und sagen nichts zum Zug; das Studio hat keine mehr.
+    Mit `wait: false`
     abschicken, dann den Rest der Antwort erarbeiten und anhängen.
-  - Passt kein Füller, oder hat die Figur keine eigene Stimmprobe: **keiner**. Stille ist besser als ein falscher Satz.
-    Standardsätze gibt es ohnehin nur für Stimmen mit eigener Stimmprobe.
+  - Passt kein Füller: **keiner**. Stille ist besser als ein falscher Satz.
 - `say_line` antwortet spätestens nach 50 s (`playing` / `making`): einfach weitermachen, die nächste Zeile wartet.
 - **`say_line wait: false`** (Denny 2026-11-23: „während say_line läuft … kannst theoretisch auch weiter lines
   queuen“): Die Zeile wird eingereiht, der Aufruf kommt sofort zurück (`queued`). Weitere Zeilen hängen sich in
@@ -394,7 +381,7 @@ Spieler „ich brauch nix“ gesagt hatte – es wirkte, als hätte er gebettelt
   warten, nie „dann ohne Hoffnung“ vorwegnehmen (Archet 2026-11-23).
 - **Antworte auf das, was gesagt wurde, und hör dann auf.** Ein Ortswechsel, ein Abschied, ein Aufbruch gehört den
   Spielern. Endet ihr Zug mitten im Gespräch, antwortet der NPC und das Gespräch bleibt offen. Erst wenn sie gehen,
-  verabschiedet sich der NPC (`opener: "bye"`), dann der Weg.
+  verabschiedet sich der NPC, dann der Weg.
 - **Lies den ganzen Zug, auch Ablehnungen und Nebensätze.** „Danke, ich hab schon eine Laterne“ heißt: nichts
   anbieten oder höchstens fragen. Was im Szenen-Rezept als Belohnung steht, bekommt der Held, wenn es zur Lage passt
   (er fragt, er ist freundlich, er braucht es), nicht automatisch.
@@ -697,7 +684,7 @@ session muss ein recap kommen und ein ausklingen“):
 2. **Ausklingen:** ein ruhiges letztes Bild (das Feuer, das Dorf, die Nacht), dazu passend eine leise Atmosphäre oder
    Musik (`play_sound loop`, `volume` ≈ 0.3), und ein letzter Satz, der nach vorn zeigt: ein Bild, ein Geräusch, eine
    Frage, die bis zum nächsten Abend hängen bleibt (bei einem Kapitelende der vorbereitete Ausblick). Erst dann, als
-   Erzähler aus der Geschichte heraus, der Abschied mit `opener: "bye"` und ein Dank an die Spieler. Zum
+   Erzähler aus der Geschichte heraus, der Abschied und ein Dank an die Spieler. Zum
    Schluss der **Abspann**: `show_players { credits: true, credit_lines: ["Danke fürs Spielen", "Fortsetzung folgt …"],
    music: "<Musik>" }` rollt die Helden mit ihren Spielern, die NPCs des Abends und die Orte; danach `show_players
    clear` und die Musik aus (`play_sound stop`).

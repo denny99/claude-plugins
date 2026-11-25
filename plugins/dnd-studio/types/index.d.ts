@@ -70,8 +70,7 @@ export type Roll = {
   hidden: boolean;
 };
 export type Secret = { who: string; text: string };
-export type StockLine = { kind: string; text: string; how: string };
-export type Npc = { name: string; place: string; stock: StockLine[] };
+export type Npc = { name: string; place: string };
 export type SceneSound = {
   name: string;
   file: string;

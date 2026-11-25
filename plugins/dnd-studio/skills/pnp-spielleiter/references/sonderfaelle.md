@@ -26,7 +26,7 @@ an einer ruhigen Stelle, nie mitten in einem Wurf oder Gespräch:
 ## Fehler
 
 - Ein Werkzeug oder Parameter ist unbekannt (ältere Studio-Version): ohne `prepare_table` feste Zeilen einzeln mit
-  `say_line prepare`; ohne `opener`/`from` die Begrüßung an den Anfang des Textes; ohne `sound` ein `play_sound`
+  `say_line prepare`; ohne `sound` ein `play_sound`
   direkt davor; ohne `parts` einzelne `say_line` nacheinander. Der Abend funktioniert, nur langsamer. Ein Studio,
   das neuer ist als die laufende App, braucht einen Neustart der App, bevor neue Parameter da sind.
 - Ein Werkzeug läuft in den Timeout: Zustand mit `table_state` (und `log`) prüfen, statt blind zu wiederholen; oft
@@ -39,5 +39,5 @@ an einer ruhigen Stelle, nie mitten in einem Wurf oder Gespräch:
   zum Stand weitermacht. Den Stand (Werte, wer wo, letzter Zug) dafür laufend im Kopf oder im Kanon halten.
 - Ein NPC klingt falsch (zu jung, zu alt, falsches Geschlecht): in einer Pause `set_voice` mit `from: "description"`
   und einer deutlicheren Beschreibung (Ödland-Abend: die vierzehnjährige Lotte klang wie eine Vierjährige; „a
-  teenage girl of fifteen … not childish, already sounds almost grown-up“ half), danach seine Standardsätze und
-  festen Texte neu vorbereiten.
+  teenage girl of fifteen … not childish, already sounds almost grown-up“ half), danach seine festen Texte neu
+  vorbereiten.

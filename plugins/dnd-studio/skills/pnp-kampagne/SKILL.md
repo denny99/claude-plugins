@@ -1,6 +1,6 @@
 ---
 name: pnp-kampagne
-description: 'Baut in D&D Studio (MCP-Server dnd-studio) eine spielfertige Pen-and-Paper-Kampagne oder ein Abenteuer, von der Idee bis zum Spielabend – Zusammenfassung, NPCs mit Porträt, Stimme und Standardsätzen, Orte mit Karten, Szenen mit Bild, Vorlesetexte, Würfe, Klänge und Musik je Stimmung aus dem Studio und ein Leitfaden für die KI-Spielleitung. Verwenden, sobald jemand ein Abenteuer, eine Kampagne, ein One-Shot, ein Solo-Abenteuer oder ein Testabenteuer für den Studio-Spieltisch anlegen, ausbauen, umbauen oder „spielfertig machen“ will, auch wenn nur grob („bau mir was Kleines im Breeland für heute Abend“, „mach aus der Idee eine Kampagne“, „ergänz NPCs und Szenen“, „bau das nächste Kapitel nach dem letzten Abend“). Auch für Karten mit Orts-Pins, Handouts und Bögen der Helden, Stimmen und Standardsätze vorab und das Review vor dem Spielabend. Einen Abend leiten: Skill pnp-spielleiter.'
+description: 'Baut in D&D Studio (MCP-Server dnd-studio) eine spielfertige Pen-and-Paper-Kampagne oder ein Abenteuer, von der Idee bis zum Spielabend – Zusammenfassung, NPCs mit Porträt und Stimme, Orte mit Karten, Szenen mit Bild, Vorlesetexte, Würfe, Klänge und Musik je Stimmung aus dem Studio und ein Leitfaden für die KI-Spielleitung. Verwenden, sobald jemand ein Abenteuer, eine Kampagne, ein One-Shot, ein Solo-Abenteuer oder ein Testabenteuer für den Studio-Spieltisch anlegen, ausbauen, umbauen oder „spielfertig machen“ will, auch wenn nur grob („bau mir was Kleines im Breeland für heute Abend“, „mach aus der Idee eine Kampagne“, „ergänz NPCs und Szenen“, „bau das nächste Kapitel nach dem letzten Abend“). Auch für Karten mit Orts-Pins, Handouts und Bögen der Helden, Stimmen und Vorlesetexte vorab und das Review vor dem Spielabend. Einen Abend leiten: Skill pnp-spielleiter.'
 ---
 
 # Eine Kampagne in D&D Studio bauen
@@ -216,12 +216,11 @@ wirklich nicht mehr gilt, mit `remove` wegnehmen. Die offenen Fäden und wo die 
 `threads` (ersetzt die Liste; was fehlt, gilt als gelöst) und `party_at` (ein Ortsname): bei einem neuen Kapitel die
 Fäden, mit denen es beginnt, und den Ort, an dem der Abend anfängt.
 
-## 2. Stimmen und Standardsätze
+## 2. Stimmen
 
 - `set_voice` für Erzähler und jeden sprechenden NPC (alle in einem Aufruf: `voices: [{who, from, description}, …]`): `from: "description"` macht aus `voice` eine Stimme (etwa eine
-  Minute je Stimme), `ready` nimmt eine fertige, `creature` legt einen Klang darüber (Drache, Geist …). **Ohne eigene
-  Stimmprobe keine Standardsätze:** Für eine Figur ohne `set_voice` werden keine erzeugt (die Engine erfände sonst eine
-  fremde Stimme, Spieltest 2026-10-28), und ihre Füller fehlen am Tisch.
+  Minute je Stimme), `ready` nimmt eine fertige, `creature` legt einen Klang darüber (Drache, Geist …). Jede sprechende Figur braucht eine eigene Stimmprobe (ohne
+  `set_voice` erfände die Engine eine fremde Stimme, Spieltest 2026-10-28).
 - **Effekte je Stimme**: Effekte sind eigene, benannte Ketten aus Bausteinen im Profil (`voice_effect` list/new/set/
   remove; Bausteine tempo, band, drive, hiss, crackle, dry, gain). Eine Stimme bekommt einen per Name
   (`set_voice effect`, der Erzähler auch `campaign set narrator_effect`); sie liegen nach S2-Pro über jeder Zeile,
@@ -233,11 +232,9 @@ Fäden, mit denen es beginnt, und den Ort, an dem der Abend anfängt.
   soll (`{"Korath": "[emphasis] Ko-rat", "Gasriese*": "[emphasis] Gas-Riese"}`); die Texte behalten ihre Schreibweise.
   Einen Satz mit dem Wort in Varianten sprechen lassen und den Menschen wählen lassen. Einzelheiten:
   `references/sprechen.md`.
-- **Standardsätze** (`set_campaign_entry stock`, Erzähler: `campaign set narrator_stock`): NPCs `greet`, `bye`,
-  `think`, `yes`, `no`, `gesture`, der Erzähler dieselben mit `approach` statt `gesture`. Sie machen den Abend schnell,
-  weil sie vorab erzeugt werden und am Tisch sofort kommen. Wie viele, in welcher Art und über welche Stimmungen:
-  `references/standardsaetze.md` (die Quelle dafür). Für die Sekunden, in denen die
-  Spielleitung nachdenkt, braucht der Erzähler außerdem die Brücken `look` und `act` und viele `think`-Sätze (ebenda).
+- **Keine Standardsätze** (Denny, Tischtest Archet 2026-11-25: „bauen wir alles wieder aus dann“): Die Spielleitung
+  improvisiert ihre ersten Worte am Tisch, das Studio macht keine vorgefertigten Begrüßungen, Füller oder Brücken
+  mehr. Vorbereitet werden nur Vorlesetexte und die ersten Worte der NPCs.
 
 ## 3. Bilder, Karten, Klang (die langsamen Teile, gesammelt)
 
@@ -327,7 +324,7 @@ einzeln (`jobs watch`: den Befehl mit Bash im Hintergrund starten, er weckt dich
 Gehe den Abend im Kopf einmal als Spielleitung durch und prüfe:
 - Jede Szene hat Bild, Vorlesetext und Rezept in den Notizen; die Reihenfolge stimmt.
 - Es gibt eine Kampagnenkarte mit allen Orten als Marker, und jeder Ort, an dem eine Szene spielt, hat seine Karte.
-- Jeder sprechende NPC hat Porträt, Stimme (mit Stimmprobe), `sheet`, Standardsätze; jeder stumme hat Geräusche.
+- Jeder sprechende NPC hat Porträt, Stimme (mit Stimmprobe), `sheet`; jeder stumme hat Geräusche.
 - Jeder gebundene Klang ist da (mit `make_sound` gemacht, eine Aufnahme nur als Ausweg) und mit `check_sound` gegen
   das gehört, was er sein soll.
 - Die Kampagne hat Musik je Stimmung (`campaign` zeigt `moodMusic`: mindestens `explore` und `fight`), jede Szene
@@ -359,7 +356,7 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
    Orte, sprechende NPCs, Helden), Karten ganz gemalt, ohne Nähte, alle Orte mit Marker, und jeder Marker sitzt auf
    dem, was die Karte an der Stelle zeigt (Karte ansehen, nicht nur zählen); jede Szene auf einer Karte hat
    Startfelder für Helden und NPCs in `markers`, die auf begehbaren Feldern liegen; jede sprechende Figur mit eigener Stimmprobe,
-   Standardsätze erzeugt (`prepare_table` gelaufen, ohne Lücken und ohne `failed`); Klänge gebunden, ihre Dateien da,
+   Vorlesetexte erzeugt (`prepare_table` gelaufen, ohne Lücken und ohne `failed`); Klänge gebunden, ihre Dateien da,
    mit `make_sound` gemacht (echte Aufnahmen nur, wo das nicht reichte), mit `check_sound` gegen ihren Namen gehört, Schleifen und Lautstärken
    richtig; Handouts, Begrüßung, Leitfaden da, ein Handout mit Geheimnis zum Flüstern; bei einem Kapitel `threads`
    und `party_at` gesetzt; `brokenReferences` leer.
@@ -367,8 +364,7 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
    Helden haben, mit passender Schwierigkeit; Gegnerwerte an der Party gemessen; ein umgebogenes Regelwerk überall
    gleich umgebogen (auch `dice_faces`); Namen, Orte, Fraktionen und Zeitlinie widersprechen sich nicht, keine Reste
    aus einem anderen Setting; Bilder passen zu `looks` (je Bild ansehen: falsche Person, kaputte Hände, falscher
-   Stil); Stimmbeschreibungen passen (Alter, Geschlecht, „German“, Jugendliche nicht kindlich); Standardsätze mit
-   niedrigem `how`, Rufname vorn; Szenentexte reine Erzählerstimme ohne wörtliche Rede und ohne vorausgesetzten Stand;
+   Stil); Stimmbeschreibungen passen (Alter, Geschlecht, „German“, Jugendliche nicht kindlich); Szenentexte reine Erzählerstimme ohne wörtliche Rede und ohne vorausgesetzten Stand;
    keine unabsichtlichen Spoiler in Texten, Bildern und Namen; was nur einen Helden angeht, steht im Handout zum
    Flüstern statt in einem Text für alle; was gesprochen wird, ist zum Sprechen geschrieben (`references/sprechen.md`:
    die Art des Textes entscheidet, `[emphasis]` sparsam und nie auf Füllwörtern, kein zerhackter Text, keine Großbuchstaben und keine

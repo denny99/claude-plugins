@@ -129,9 +129,8 @@ test("the GM screen shows scene, party, NPCs and sounds on every surface", async
     // a group row: the name is the title, the values are the meta
     expect(await findShown(ui, /Thorin/)).toBeDefined();
     expect(await findShown(ui, /Ausdauer 18\/22/)).toBeDefined();
-    expect(
-      await ui.find({ type: "Button", key: "npc-Bartel-0" }),
-    ).toBeDefined();
+    // no NPC buttons: the stock lines are gone (the Discord test of 2026-11-25)
+    expect(await ui.find({ type: "Button", key: "npc-Bartel-0" })).toBeUndefined();
     expect(await ui.find({ type: "Button", key: "snd-0" })).toBeDefined();
     // spoiler-safe by default: the whisper's words are not drawn
     expect(await findShown(ui, /Flüstern/)).toBeUndefined();
@@ -157,14 +156,8 @@ test("GM buttons call the right Studio tool only on press", async ($, on) => {
     calls.filter((c) => c.tool !== "table_state" && c.tool !== "campaign");
   expect(writes()).toEqual([]);
 
-  await ui.press({ key: "npc-Bartel-0" });
-  expect(writes()[0]).toEqual({
-    tool: "say_line",
-    args: { voice: "Bartel", text: "Na, ihr da!", how: "say:warm:normal" },
-  });
-
   await ui.press({ key: "snd-0" });
-  expect(writes()[1]).toEqual({
+  expect(writes()[0]).toEqual({
     tool: "play_sound",
     args: { sound: "dnd/rain.flac", loop: true, volume: 0.25 },
   });
@@ -172,9 +165,9 @@ test("GM buttons call the right Studio tool only on press", async ($, on) => {
   await ui.input({ key: "ini-order", text: "Wolf 1, Thorin" });
   await ui.press({ key: "ini-next" });
   // First next: the first in line (a foe clears the spotlight), then Thorin.
-  expect(writes()[2]).toEqual({ tool: "spotlight", args: { who: "" } });
+  expect(writes()[1]).toEqual({ tool: "spotlight", args: { who: "" } });
   await ui.press({ key: "ini-next" });
-  expect(writes()[3]).toEqual({ tool: "spotlight", args: { who: "Thorin" } });
+  expect(writes()[2]).toEqual({ tool: "spotlight", args: { who: "Thorin" } });
   await ui.unmount();
 });
 

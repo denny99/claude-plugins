@@ -44,12 +44,12 @@ Prüfe:
   im Mangel die Punkte, die fehlen, als Liste: daraus wird der Auftrag an den Maler.
 - Stimmbeschreibungen passen zur Figur (Alter, Geschlecht, Sprache am Ende „German“); Jugendliche ausdrücklich nicht
   kindlich beschrieben (Ödland 2026-10-30: die vierzehnjährige Lotte klang wie eine Vierjährige).
-- Standardsätze mit niedrigem `how` (calm, determination, contempt, relief, enthusiasm); `anger`, `sadness`, `fear`,
+- NPC-Worte mit niedrigem `how` (calm, determination, contempt, relief, enthusiasm); `anger`, `sadness`, `fear`,
   `groan` lassen die deutsche Stimme kippen. Rufnamen vorn im Namen eines NPCs („Kühn (Direktor)“, nicht „Direktor
-  Albrecht Kühn“), sonst heißt die Brücke „… geht zu Direktor hinüber“.
+  Albrecht Kühn“), sonst sagt der Erzähler „… geht zu Direktor hinüber“.
 - Szenentexte reine Erzählerstimme ohne wörtliche Rede und ohne vorausgesetzten Stand.
 - **Zum Sprechen geschrieben** (gm_guide `sprechen`), nur bei dem, was vorgelesen wird (Szenen- und Vorlesetexte,
-  erste Worte, Standardsätze):
+  erste Worte):
   - Die Art des Textes passt zur Schreibweise: Beschreibungen und stille Momente nicht zerhackt (Kommas bleiben,
     etwa ein `[emphasis]` je drei, vier Sätze, kein `…`); Spannung in kurzen Sätzen; NPC-Worte höchstens mit einem `[emphasis]` auf einem Wort, das die Figur selbst einschärft.
   - Kein `[emphasis]` auf Füllwörtern, nie zwei in einem Satz; zu viele Marken sind ein Mangel wie zu wenige.
