@@ -136,10 +136,10 @@ Minuten waren zwölf davon. Stattdessen:
    - `secret` (`/geheim`): sofort per `discord whisper` antworten (steht der Zug drin, schon genommen; sonst mit
      `wait_for_players secret: true` holen), auch wenn die anderen gerade reden; das Flüstern wartet nicht auf sie. Wie
      schnell, steht in 4c („Ein Spieler sagt dir etwas heimlich“).
-   - `break`: die Spieler machen Pause: vorbereiten (unten), dann `next_watch`.
+   - `break`: die Spieler machen Pause: vorbereiten (unten), dann `next_watch`; kein `wait_for_players`.
    - `resume`: sie haben „Weiter“ gedrückt: kein `wait_for_players`, mit einem Satz einsteigen, wo sie stehen, im
      selben Schritt `next_watch`.
-   - `null` (30 min nichts): `next_watch`. `error` (ältere Studio-Version): wie früher mit `wait_for_players` warten.
+   - `null` (29 min nichts; Monitor hält höchstens 30): `next_watch`. `error` (ältere Studio-Version): wie früher mit `wait_for_players` warten.
 3. `next_watch` im **selben Schritt** wie dein letzter `say_line` der Antwort starten (alle `say_line` mit
    `wait: false`), nicht erst, wenn die Zeile zu Ende ist: Wer gleich antwortet, wartet sonst, bis der Wächter läuft.
    Ohne Wächter weckt dich nichts.
