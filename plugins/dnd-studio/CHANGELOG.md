@@ -1,3 +1,10 @@
+## [dnd-studio-v1.1.3](https://github.com/denny99/claude-plugins/compare/dnd-studio-v1.1.2...dnd-studio-v1.1.3) (2026-11-25)
+
+### Bug Fixes
+
+* **dnd-studio:** campaign as an overview, a pending turn left to the watch, no cut for an action that follows on ([300c10c](https://github.com/denny99/claude-plugins/commit/300c10c4372f2c12ea680a53cb657f63e4b450be))
+* **dnd-studio:** talk buttons and push to talk instead of the gone open mic; rules the rebuild lost ([e950b48](https://github.com/denny99/claude-plugins/commit/e950b488391616a48c2b1730c90869feb792358a))
+
 ## [dnd-studio-v1.1.2](https://github.com/denny99/claude-plugins/compare/dnd-studio-v1.1.1...dnd-studio-v1.1.2) (2026-11-25)
 
 ### Bug Fixes
