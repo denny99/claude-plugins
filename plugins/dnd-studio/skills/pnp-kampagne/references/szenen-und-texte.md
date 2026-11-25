@@ -107,9 +107,12 @@ Umschreibung in den Text.
 andere (die ersten Worte einer Antwort, Übergänge zwischen Zügen, Nachfragen) improvisiert die Spielleitung am Tisch.
 
 Anfang und Ende sind Szenen, kein Pflichtprogramm:
-- **Begrüßung** („Willkommen (zu Beginn)“): kurz, nur Organisatorisches, eine Fassung für das offene Mikro: einfach
-  reden, „Spielleitung“ ruft sie, nie „drück den Knopf“. Push-to-Talk ist aus, außer es wird für den Abend
-  eingeschaltet; dann sagt die Spielleitung das in eigenen Worten dazu.
+- **Begrüßung** („Willkommen (zu Beginn)“): kurz, nur Organisatorisches. Was zur Bedienung gesagt wird, gibt es als
+  `variants` (`when`) je Sprechart: **Sprechknöpfe** (Standard: jeder drückt zum Reden seinen Knopf, im Spielerfenster
+  oder im Discord-Direktchat mit dem Bot; der Zug ist zu Ende, wenn alle, die gedrückt haben, fertig sind) und
+  **Push-to-Talk** (nur, wenn es für den Abend eingeschaltet wird: reden, solange man Discords eigene
+  Push-to-Talk-Taste hält; der Bot beendet den Zug, wenn alle Tasten los sind). Ein offenes Mikro mit Rufwort gibt es
+  nicht.
 - **Prolog** bei einer neuen Kampagne oder einer Welt, die die Spieler nicht kennen (er fehlt sonst fast immer): sechs
   bis zehn Vorlesetexte („Prolog 1: Die Welt“ …), zusammen bis zu zehn Minuten (etwa 1200–1400 Wörter), jeder mit
   eigenem Bild und Musik: die Welt und wie es sich in ihr lebt, was jeder in ihr weiß, was gerade in der Luft liegt,

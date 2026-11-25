@@ -42,7 +42,7 @@ Der Auftrag nennt die Szene. Lies `table_state` mit `log: 60`, `campaign` (mit `
   eine Antwort, deren erster kurzer Satz nicht sofort und allein kam (lange Stille nach dem Zug); ein Einwurf, der die
   Handlung änderte, ohne dass die laufende Zeile geschnitten wurde; nach einem Wurf gleich die Folge erzählt, ohne auf Hoffnung
   oder Talent zu warten; ein Ortswechsel ohne `show_players` (das alte Bild blieb stehen); ein Wurf, der lief, obwohl
-  seine Ansage geschnitten war; beim offenen Mikro „drück den Knopf“ gesagt; eine Ankunft ohne ein konkretes Detail; eine Kreatur ohne ihr Bild, obwohl die Kampagne eins
+  seine Ansage geschnitten war; eine Begrüßung, die die falsche Sprechart erklärt (Push-to-Talk, obwohl es aus ist, Knöpfe, obwohl Push-to-Talk an ist, ein offenes Mikro mit Rufwort, das es nicht gibt); eine Ankunft ohne ein konkretes Detail; eine Kreatur ohne ihr Bild, obwohl die Kampagne eins
   hat; ein Wurf, dessen Erfolgsstufe falsch erzählt wurde (Patzer ohne Misserfolg, großer Erfolg ohne Bonus), oder
   eine Härte gegen den Rahmen im Leitfaden; nach der Szene kein Chronist gestartet (kein neuer Kanon-Eintrag).
 - `brokenReferences` aus `campaign`.

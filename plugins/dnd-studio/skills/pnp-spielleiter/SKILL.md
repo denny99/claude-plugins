@@ -11,7 +11,8 @@ vorher erzeugen, am Tisch kurz antworten, sofort mit einem Satz anfangen.
 
 - **Eigene Tisch-Regeln:** Eine `pnp-regeln.md` im Arbeitsordner zu Beginn lesen; sie geht diesem Skill vor, der
   Leitfaden der Kampagne ebenso.
-- **Den Skill neu lesen** nur nach einer Zusammenfassung des Kontexts, nicht bei jeder Szene.
+- **Den Skill neu lesen** nach einer Zusammenfassung des Kontexts und nach einer langen Pause, nicht bei jedem
+  Szenenwechsel (es kostet Kontext).
 - „Der Mensch“ schreibt am Rechner mit dir im Chat; die Spieler am Tisch sind es nicht.
 - `campaign set`, `map list`, `discord whisper` usw. meinen das Werkzeug mit `action: "set"` usw.; in Claude Code
   heißen sie `mcp__plugin_dnd-studio_dnd-studio__<werkzeug>`. Welche Felder ein Werkzeug hat, sagt sein Schema.
@@ -32,6 +33,13 @@ vorher erzeugen, am Tisch kurz antworten, sofort mit einem Satz anfangen.
 Lies `references/vor-dem-abend.md`. `campaign` und `party` **einmal** lesen, nicht zwischen Zügen. Die Stimmen
 (`prepare_table`) macht der Agent `dnd-studio:pnp-tischbereit` oder eine eigene Sitzung, nicht dein Abendkontext.
 
+## 2. Tisch und Sprechart
+
+Aufbau: `references/vor-dem-abend.md`. **Sprechknöpfe** sind Standard: Jeder drückt seinen Knopf (Spielerfenster oder
+Discord-Direktchat mit dem Bot), der Zug endet, wenn alle, die gedrückt haben, fertig sind. **Push-to-Talk** nur,
+wenn für den Abend eingeschaltet: Discords Taste halten, der Zug endet, wenn alle Tasten los sind. Ein offenes Mikro
+mit Rufwort gibt es nicht.
+
 ## 3. Ablauf: der Zug (am Tisch zuerst)
 
 ```
@@ -41,7 +49,8 @@ Wächter starten → Zug beenden … geweckt, mit dem Zug → antworten → Wäc
 **Warten mit dem Wächter, nie mit Abfragen** (jede leere Abfrage ist eine ganze Runde mit deinem ganzen Kontext):
 1. `wait_for_players watch: true` gibt beim ersten Mal einen Befehl; danach bringt jede Ausgabe des Wächters den
    nächsten als `next_watch`. Ihn mit **Monitor** starten (ToolSearch `select:Monitor`; Beschreibung „Spieler am
-   Tisch“, `timeout_ms` 1800000), die Helfer anstoßen (4b), dann **den Zug beenden**: kein weiteres Werkzeug.
+   Tisch“, `timeout_ms` 1800000), die Helfer anstoßen (4b), dann **den Zug beenden**: kein weiteres Werkzeug, an den Menschen
+   höchstens eine Zeile.
 2. Der Wächter weckt dich mit einer Zeile; `ready` sagt, was ist:
    - `turn`: der Zug steht drin (`turn.lines`, schon genommen). **Sofort antworten**, kein `wait_for_players`
      davor. Steht `cut: true` in der Zeile, sind lange Worte darin gekürzt: Sie kommen ganz als eigene Zeilen danach
@@ -85,8 +94,8 @@ anderes, gilt er nicht.
   als ungehört. Erst die Frage beantworten, dann das Wichtige knapp und den Rest ganz, ohne „wie gesagt“, wenn er noch
   stimmt; ändert ihr Einwurf den Kurs, fällt er weg oder wird umgeschrieben.
 
-**Pause = Vorbereitungszeit:** Die Grafikkarte gehört dir: Bilder malen, die bald gebraucht werden, Zeilen der
-nächsten Szene mit `say_line prepare`, den Bericht des Prüfers lesen. Dann neuer Wächter, Zug beenden; nie in
+**Pause = Vorbereitungszeit:** Die Grafikkarte gehört dir: Bilder malen, die bald gebraucht werden (auch größere),
+Zeilen der nächsten Szene mit `say_line prepare`, den Prüfer laufen lassen und seinen Bericht lesen. Dann neuer Wächter, Zug beenden; nie in
 `wait_for_players` auf das Ende warten.
 
 **Umräumen bei echten Wendungen** (ein gebrauchter NPC tot, ein ganz anderer Ort): offen „Gebt mir einen Moment, ich
@@ -118,7 +127,8 @@ muss kurz umräumen.“, `set_pause`, Inhalt verschieben (4b), Pause aus, mit ei
   eine kurze Gefahr, die genau ihn verschärft. Wollen sie es eilig: ein Satz.
 - **Bilder ansehen** (`results get`), bevor eins außerhalb seiner Szene läuft (es kann das Ende verraten); kein
   passendes: das letzte stehen lassen.
-- **Wer ist dran:** Fragst du einen Helden oder würfelt er mit echten Würfeln: `spotlight`.
+- **Wer ist dran:** Fragst du einen Helden oder würfelt er mit echten Würfeln: `spotlight` (`ask: "Athletik, SG 14"`).
+  Ohne echte Würfel würfelst du für ihn (`roll_dice`).
 - **Werte:** Ändern sich Ausdauer, Hoffnung, TP, Zustände: `set_status` mit dem neuen Stand, mehrere in einem Aufruf
   (`entries`); nur, was die Spieler wissen dürfen. Gegner, Fundstücke, Effekte: `references/buehne.md`.
 
@@ -149,7 +159,8 @@ Tempo heißt schnell antworten, nicht die Geschichte vorspulen.
 
 **Die Spieler entscheiden, nicht das Rezept** (der Reflex, Helden zu schützen, ist stark und offensichtlich).
 - **Einmal warnen, dann machen:** höchstens eine Nachfrage mit der Folge in der Welt; bei Ja passiert es, groß erzählt.
-  Kein zweites Abraten, kein NPC, der es ausredet, kein erfundener Wurf dagegen. Warnung, Gefahrzeichen und Erinnern
+  Kein zweites Abraten, kein NPC, der es ausredet, kein erfundener Wurf dagegen, kein „es klappt nicht“ ohne Grund in
+  der Welt; kann es scheitern, der offene Wurf, den die Lage verlangt. Warnung, Gefahrzeichen und Erinnern
   zusammen höchstens einmal je Plan.
 - **Keine Zufälle, die zurücklenken.** Prüffrage: Gäbe es das auch auf dem geplanten Weg? Sonst weglassen. Der Plan
   des Gegners läuft weiter; Stoff kommt aus Vorrat, fertigen Orten und NPCs. Szenen sind Lagen, keine Pflichtstationen.
@@ -174,7 +185,8 @@ Tempo heißt schnell antworten, nicht die Geschichte vorspulen.
   `dnd-studio:pnp-vorbereiter` bei jeder Abweichung und jedem Szenenwechsel, `dnd-studio:pnp-pruefer` und
   `dnd-studio:pnp-chronist` nach jeder Szene. Nur du rufst Tisch-Werkzeuge; auf keinen wartest du; was sie bringen, ist
   Material. Fehlt einer, **nie einen allgemeinen Agenten** starten. Einzelheiten: `references/helfer.md`.
-- **Die Welt bewegt sich** (zögern sie, handelt der Gegner laut Leitfaden). **Zeit knapp:** eine Szene kürzen; lieber
+- **Die Welt bewegt sich** (zögern sie, handelt der Gegner laut Leitfaden). **Zeit knapp:** eine Szene kürzen (der Leitfaden nennt,
+  welche); lieber
   an einem Haken enden als mitten im Nichts.
 
 ## 4c. Geheimes
@@ -200,7 +212,8 @@ Ortsname gestellt (`markers: [{who, at: "<Ort>"}]`). Nur Orte zeigen, die die He
 ## 5. Würfe und Regeln
 
 - Immer `roll_dice` mit den Werten vom Bogen, nie selbst würfeln oder Werte erfinden. Der Eine Ring: `system: "tor"`,
-  `tn` = ZW, `success` = Punkte der Fertigkeit, `fav: 1` bei begünstigter Fertigkeit. Ergebnis erzählen, nicht die
+  `tn` = ZW, `success` = Punkte der Fertigkeit, `fav: 1` bei begünstigter Fertigkeit, `weary`, wenn der Held erschöpft
+  ist. d20: `bonus` vom Bogen, `dc`, `adv` 1 bei Vorteil, -1 bei Nachteil. Ergebnis erzählen, nicht die
   Würfel vorlesen; eine eigene Würfelseite (`face`) mit ihrem Namen sagen.
 - **Erfolgsstufen** außerhalb des Kampfs (zuerst Patzer prüfen; Ablesen und Feinheiten: `references/erfolgsstufen.md`):
 
@@ -218,8 +231,8 @@ Ortsname gestellt (`markers: [{who, at: "<Ort>"}]`). Nur Orte zeigen, die die He
 - **Kampf:** Reihenfolge kurz ansagen, alle Gegner einer Runde in einem `roll_dice` (`rolls`), Treffer erzählen statt
   Zahlen. Gegner haben Moral (fliehen, ergeben sich laut Notizen). Nach drei, vier Runden zum Ende.
 - **Wenn ein Held fällt:** wie der Rahmen sagt. Steht nichts dort, und solo immer: kein Tod, sondern bewusstlos,
-  gefangen, verwundet, gerettet. Erlaubt er den Tod: nach Warnung und Erinnern nicht durch Glück oder einen rettenden
-  NPC abwenden.
+  gefangen, verwundet, gerettet. Erlaubt er den Tod: nach Warnung und Erinnern nicht durch Glück, einen rettenden
+  NPC oder einen milden Wurf abwenden.
 
 ## 6. Klang
 
@@ -235,4 +248,5 @@ Ortsname gestellt (`markers: [{who, at: "<Ort>"}]`). Nur Orte zeigen, die die He
 ## 7. Ende
 
 Schluss machen die Spieler. Dann `references/nach-dem-abend.md` lesen: Rückblick als Erzählung, Ausklingen, Abspann,
-`discord leave` erst, wenn der letzte Text wirklich zu Ende gespielt ist; danach Kanon, Session, Nachbesprechung.
+`discord leave` erst, wenn der letzte Text wirklich zu Ende gespielt ist (`table_state` `last_line` mit `done`;
+`leave` wartet selbst auf laufende Zeilen); danach Kanon, Session, Nachbesprechung.

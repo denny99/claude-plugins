@@ -61,7 +61,7 @@ den Leitfaden-Seiten über die Welt, `rule`-Notizen aus Leitfaden-Seiten über R
 `character` (ihr Spielleiterwissen unter `## Geheim (Spielleitung)`), den Kanon unter `## Kanon` in den Notizen, die er
 betrifft (was keine Notiz betrifft, in „Chronik: <Kampagne>“), und die Heimat-Notizen aus G1 („Namen und Aussprache“
 mit den Aussprachen der Kampagne, „Zeitleiste“, „Maße, Preise und Reisezeiten“, „Entscheidungen“). Aus den Fäden der
-Kampagne macht es **keine** Fragen: die bleiben der Spielleitung. Die Notizen kommen ohne `status`. Vorhandene Notizen
+Kampagne macht es **keine** Fragen: die bleiben der Spielleitung. Die Notizen kommen ohne `status` (leer; `lore check` meldet es nicht, `grundregeln.md`). Vorhandene Notizen
 bleiben stehen (die Antwort nennt sie unter `kept`); `replace: true` schreibt sie neu, Heimat-Notizen nie. Danach:
 - `lore map` lesen und dem Menschen in drei Sätzen sagen, was entstand und was fehlt (meist Geschichte, Völker,
   Fraktionen, Religion: was nie eine Szene brauchte).

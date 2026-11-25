@@ -14,12 +14,15 @@ Gehört zu Skill `pnp-spielleiter`, Abschnitt 1. Lesen, wenn du einen Abend vorb
    Szenen- und Ortsbilder (`depth`; nur mit ihnen bekommen die Bilder am Tisch Parallaxe, am Tisch wird keine gemacht).
    Vorbereitetes kommt am Tisch sofort, **wenn es Wort für Wort in derselben Stimme und mit demselben `how` gesagt
    wird.** Standardsätze gibt es nicht mehr; die ersten Worte jeder Antwort improvisierst du.
+   `prepare_table` **einmal** starten, nie ein zweites Mal: Ein zweiter Aufruf hängt sich nur an den laufenden Job.
+   Machst du es ohne den Agenten selbst (vor dem Abend, nie am Tisch), wartest du mit `jobs watch` (Befehl im
+   Hintergrund, er weckt dich), nicht mit wiederholtem `jobs wait`.
 3. Fehlende Bilder für die geplanten Szenen jetzt malen. Am Tisch wird nur nachgemalt, was die Spieler Neues bringen,
    im Hintergrund, nie als Wartezeit zwischen zwei Zügen.
 4. **Rahmen aus dem Leitfaden lesen, nicht fragen:** Wie tödlich, wie hart Misserfolge, was nicht vorkommen soll, ist
-   beim Aufsetzen der Kampagne festgelegt (`pnp-kampagne`, 0). Vor dem Abend fragst du nur, was am Abend hängt: wie
+   beim Aufsetzen der Kampagne festgelegt (`pnp-kampagne`, „Klären, bevor gebaut wird“). Vor dem Abend fragst du nur, was am Abend hängt: wie
    lange er geht, und, sitzt jemand Neues am Tisch, ob es für ihn etwas gibt, das nicht vorkommen soll. Fehlt etwas im
-   Leitfaden (ältere Kampagne), nimm die Vorgaben aus Abschnitt 5 und sag es in der Nachbesprechung.
+   Leitfaden (ältere Kampagne), nimm die Vorgaben aus dem Skill, Abschnitt 5, und sag es in der Nachbesprechung.
 5. **Bögen der Helden:** `party sheet` macht je Held seinen Bogen als PDF (Pfad in der Antwort; `secret: false` ist die
    Tischkopie ohne Geheimnis und Ziel). Ein Bogen mit Geheimnis geht nur geflüstert an seinen Spieler, nie aufs
    Spielerfenster.
@@ -41,8 +44,10 @@ Gehört zu Skill `pnp-spielleiter`, Abschnitt 1. Lesen, wenn du einen Abend vorb
 - **Wer heute spielt:** Das Fenster zeigt nur die Helden der Runde. Mit Discord sind das von selbst die im Kanal; sonst,
   oder wenn es nicht stimmt, nach „Wer spielt?“ `party playing` mit `heroes` (`[]` heißt alle). Der Mensch schaltet es
   im Studio unter „Spielt heute“.
-- **Push-to-Talk:** Wollen die Spieler ohne Knopf reden, `discord` mit `push_to_talk: true` (wer spricht, öffnet den
-  Zug, Stille beendet ihn; am besten mit Discords eigener Push-to-Talk-Taste). Dann gibt es kein `partial`.
+- **Push-to-Talk** (aus, außer für einen Abend eingeschaltet): Wollen die Spieler ohne Knopf reden, `discord` mit
+  `push_to_talk: true`. Wer redet, hält Discords eigene Push-to-Talk-Taste; der Bot beendet den Zug, wenn alle Tasten
+  los sind. Dann gibt es kein `partial`. Ein offenes Mikro mit Rufwort gibt es nicht. Die Begrüßung nimmt die Fassung
+  (`variants`) der Sprechart, die heute gilt.
 - `table_state`: `discord: true`? Spieler zugeordnet? Unbekannte Sprecher kommen mit ihrer Discord-ID → fragen „Wer
   spielt <Charakter>?“ → `party set` mit `who` und `discord`.
 - **Solo:** zuerst fragen, wer spielt. In Discord: „Drück unter der Nachricht des Bots den Knopf deines Helden.“
@@ -60,7 +65,7 @@ die Zugschleife (Skill, Abschnitt 3).
   das die anderen nicht mitbekommen sollen, schreibt dem Bot privat `/geheim` und eure Worte, am besten im Direktchat
   mit ihm, da sieht niemand, dass ihr tippt. Ein ✅ heißt angekommen, 👀 heißt, ich hab es gelesen; die Antwort kommt
   privat.“
-- **Prolog bei einer neuen Kampagne oder Welt:** der vorbereitete Prolog (`pnp-kampagne`, 5) in mehreren Teilen, jeder
+- **Prolog bei einer neuen Kampagne oder Welt:** der vorbereitete Prolog (`pnp-kampagne/references/szenen-und-texte.md`, „Vorlesetexte“) in mehreren Teilen, jeder
   mit Bild und Musik darunter: die Welt, was jeder in ihr weiß, was in der Luft liegt, die wichtigsten Begriffe.
   Erzählt, nicht aufgezählt; er endet, wo die Helden einsteigen. Begriffe, die später neu auftauchen, beim ersten Mal
   in einem Halbsatz erklären.

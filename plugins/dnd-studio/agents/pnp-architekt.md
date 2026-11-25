@@ -36,7 +36,7 @@ Der Plan (in die Datei, deutsch, knapp):
   damit der Mensch sie beim Absegnen festlegt.
 - Anfang und Ende: bei einer neuen Kampagne der Prolog (bis zu zehn Minuten in sechs bis zehn Teilen mit Bild: Welt, was jeder weiß, was in
   der Luft liegt, Begriffe), bei einer Fortsetzung „Was bisher geschah“, je Kapitelende ein Schlusstext mit Ausblick
-  (`szenen-und-texte.md`, „Vorlesetexte“). Die Begrüßung in einer Fassung fürs offene Mikro.
+  (`szenen-und-texte.md`, „Vorlesetexte“). Die Begrüßung als `variants` für Sprechknöpfe (Standard) und Push-to-Talk.
 - Bei vorgefertigten Helden: ihre Vorstellung (je Held etwa eine Minute zum Porträt, ohne Geheimnis), ihre Bögen (Werte, Geheimnis, Ziel) und welches Handout wem wann geflüstert wird; bei
   einem umgedeuteten Spiel die eigenen Würfelseiten (`dice_faces`).
 - Was vorab gemacht werden muss und in welcher Reihenfolge: Bilder, Stimmen, und welche Klänge mit `make_sound`

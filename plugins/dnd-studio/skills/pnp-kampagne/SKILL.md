@@ -107,7 +107,7 @@ Text zuerst, Bilder später.
      (Startfelder), `rolls`, `secret`, und in `notes` das Rezept (Lage, Erfolg und Misserfolg, Wege der Helden, was
      ohne sie geschieht), ohne zu wiederholen, was in den anderen Feldern steht; `variants` nur, wo ein Text sonst
      falsch wäre.
-   - **Vorlesetexte:** Begrüßung (eine Fassung fürs offene Mikro), bei neuer Kampagne der Prolog, bei vorgefertigten
+   - **Vorlesetexte:** Begrüßung (`variants` für Sprechknöpfe und Push-to-Talk), bei neuer Kampagne der Prolog, bei vorgefertigten
      Helden ihre Vorstellung, Kapitelanfang und -ende, die festen ersten Worte der NPCs in deren Stimme. Vorbereitet
      wird nur, was vorgelesen wird; den Rest improvisiert die Spielleitung.
    - **Handouts** (mit Geheimnis: zum Flüstern, je Held eines) und die **Bögen** vorgefertigter Helden.

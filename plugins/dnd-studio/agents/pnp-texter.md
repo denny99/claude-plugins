@@ -35,8 +35,10 @@ schreibst.
 **Zum Sprechen schreiben** (gm_guide `sprechen` einmal vor dem ersten Text lesen): Alles, was eine Stimme vorliest,
 schreibst du gleich mit den Marken, nicht erst hinterher. Das sind Szenentexte, Vorlesetexte (Begrüßung, Prolog,
 Heldenvorstellung, Schlusstexte, Handouts, die vorgelesen werden), und die ersten Worte der NPCs.
-Was die Begrüßung zur Bedienung sagt, bekommt eine Fassung für das offene Mikro („einfach reden, ‚Spielleitung‘ ruft
-mich“, nie „drück den Knopf“; Push-to-Talk ist aus, außer es wird für den Abend eingeschaltet). Vorbereitet wird nur,
+Was die Begrüßung zur Bedienung sagt, bekommt zwei `variants`: mit **Sprechknöpfen** (Standard: „drück deinen Knopf,
+wenn du redest“, im Spielerfenster oder im Discord-Direktchat mit dem Bot; der Zug endet, wenn alle, die gedrückt haben,
+fertig sind) und mit **Push-to-Talk** (für einen Abend eingeschaltet: reden, solange man Discords Push-to-Talk-Taste
+hält; der Zug endet, wenn alle Tasten los sind). Ein offenes Mikro mit Rufwort gibt es nicht. Vorbereitet wird nur,
 was vorgelesen wird; was nicht vorgelesen wird, improvisiert die Spielleitung.
 - **Die Art des Textes entscheidet** (Tabelle in `sprechen`):
   - **Beschreibungen und stille Momente:** so, wie sie geschrieben sind. Sätze nur teilen, wo sie wirklich lang sind;

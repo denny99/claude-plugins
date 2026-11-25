@@ -58,7 +58,7 @@ Prüfe:
 - Jeder sprechende NPC hat Porträt, Stimme und `sheet`; jeder stumme seine Geräusche.
 - Musik: `campaign` zeigt `moodMusic` (mindestens `explore` und `fight`), jede Szene hat eigene Musik mit `mood` in ihren
   `sounds`, jeder Kampfort seine Kampfmusik; die wichtigen Szenen haben ihre Schleife (`animate loop`, in `setup`).
-- Handouts, Begrüßung (eine Fassung fürs offene Mikro), Leitfaden mit der Seite „Vor dem Abend vorbereiten“ da; bei neuer Kampagne der Prolog, bei vorgefertigten Helden ihre Vorstellung, bei
+- Handouts, Begrüßung (`variants` für Sprechknöpfe und Push-to-Talk, keine fürs offene Mikro mit Rufwort), Leitfaden mit der Seite „Vor dem Abend vorbereiten“ da; bei neuer Kampagne der Prolog, bei vorgefertigten Helden ihre Vorstellung, bei
   einem Kapitel Anfang und Schlusstext mit Ausblick, je mit Bild; ein Handout mit Geheimnis ist zum Flüstern gedacht; `brokenReferences` leer.
 - Bei einem Kapitel einer Kampagne: `threads` (die Fäden, mit denen es beginnt) und `partyAt` (der Startort) sind
   gesetzt.

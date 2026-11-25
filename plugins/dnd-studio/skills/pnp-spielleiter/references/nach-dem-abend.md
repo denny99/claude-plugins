@@ -19,7 +19,9 @@ und sie nicht weiterwollen. Ohne Rückblick und Ausklingen endet ein Abend abrup
 3. Nach dem Abschied noch einmal warten, falls jemand etwas sagen will. Erst dann aufräumen: `show_players clear`,
    Musik aus (`play_sound stop`), `discord leave` (holt alle aus Neben- und Ortsräumen zurück und löscht die Räume des
    Bots). Leeren, Klang aus und `leave` erst, wenn der letzte Text wirklich zu Ende gespielt ist, sonst wird er
-   abgeschnitten; `leave` wartet selbst höchstens eine Minute auf Zeilen, die noch spielen.
+   abgeschnitten; `leave` wartet selbst höchstens eine Minute auf Zeilen, die noch spielen. Woran du es erkennst, ohne
+   `wait: true`: `table_state` zeigt unter `last_line` `done` (die letzte Zeile ist durch), oder du rufst gleich
+   `discord leave`, das auf die laufenden Zeilen wartet.
 
 ## Danach, ohne Spieler
 
@@ -28,9 +30,9 @@ und sie nicht weiterwollen. Ohne Rückblick und Ausklingen endet ein Abend abrup
    `set_campaign_entry kind canon remove` weg; was weiter gilt (Preise, Versprechen, Schulden, der Stand der Helden),
    bleibt stehen.
 2. Daraus die Session, von dir selbst geschrieben: `set_campaign_entry kind session` mit `name` (Titel des Abends),
-   `date`, `notes` (Ereignisse, NPCs, Beute, offene Fäden, am Tisch Erfundenes: Namen, Orte, Tatsachen) und `summary`
+   `date` (YYYY-MM-DD, ohne Angabe heute), `notes` (Ereignisse, NPCs, Beute, offene Fäden, am Tisch Erfundenes: Namen, Orte, Tatsachen) und `summary`
    (ein paar Sätze für die Spieler: daraus erzählen `show_players recap` und `write_text recap` am nächsten Abend).
-   Dieselbe Session später: `append`. **Nicht `write_session`:** Das lässt ein lokales Sprachmodell aus Notizen
+   Dieselbe Session später: `append`; es findet sie über denselben `name` oder dasselbe `date`. **Nicht `write_session`:** Das lässt ein lokales Sprachmodell aus Notizen
    schreiben, eine Hilfe für Menschen am Studio, nicht für dich, und hält das Studio minutenlang auf. Bei einer Kampagne
    danach `campaign set` mit `threads` (die nach heute offenen Fäden; die Liste wird ersetzt, was fehlt, gilt als
    gelöst) und `party_at` (wo der nächste Abend beginnt).

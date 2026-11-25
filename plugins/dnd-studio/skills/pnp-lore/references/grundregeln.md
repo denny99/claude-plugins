@@ -45,7 +45,9 @@ Schutzraum 12, Strahlung, Radio-Kultur der 1950er).
 
 - **`status`:** `draft` (Entwurf, noch nicht abgesegnet), `canon` (gilt), `retired` (überholt, bleibt als Verweis).
   Eine `question` ist offen, bis sie `decided` (beantwortet) oder `retired` (fallen gelassen) ist. Gib `status` bei
-  jeder neuen Notiz an: ohne Angabe bleibt er leer, nicht `draft`.
+  jeder neuen Notiz an: ohne Angabe bleibt er leer, nicht `draft`. Ausnahme `from_campaign`: Seine Notizen kommen mit
+  leerem `status`, und `lore check` meldet das nicht; sie bleiben so, bis du oder der Mensch sie beim Durchsehen mit
+  `lore write` auf `draft` oder (mit Quelle) `canon` setzt.
 - **`canon`** nur mit einer Quelle, die die Entscheidung belegt: `entscheidung:E-0007`, `kanon:<Abend>` oder `mensch`
   (sonst meldet `check` `canon_without_decision`).
 - **Quellen** (`sources`), eine Schreibweise: `entscheidung:E-0007`, `kanon:Abend 2026-11-14`, `weltenbau:Schritt 3`,
