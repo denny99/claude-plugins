@@ -1,5 +1,5 @@
 /**
- * The evening around the table: the watcher (`wait_for_players watch` run as a background Bash), the person's
+ * The evening around the table: the watcher (`wait_for_players watch` run with Monitor or as a background Bash), the person's
  * interjections for the debrief, the Discord section, and the Studio version (stale MCP schemas after an app update).
  * Everything here only reads, notes and reminds; nothing acts on the table by itself.
  */
@@ -57,7 +57,7 @@ const obj = (v: unknown): Obj =>
 
 export const STALE_TEXT = "MCP schemas stale — restart Claude";
 export const NO_WATCHER_NOTE =
-  "Your last turn ended at a live table without a running watcher: the players' turns go unnoticed. Call wait_for_players with watch: true and run its command with Bash run_in_background before you end a turn.";
+  "Your last turn ended at a live table without a running watcher: the players' turns go unnoticed. Start the watch (next_watch from the last watch's output, else wait_for_players with watch: true) with Monitor, or Bash run_in_background, before you end a turn.";
 
 /**
  * Submits a prompt for the main thread on a person's press (never on its own), through the kit's `askClaude`: a toast
@@ -391,6 +391,24 @@ export function registerEvening(on: On): void {
         isWatchCommand(String(input.command ?? ""))
       )
         await noteBash($, input, e.agentId);
+    } catch {
+      // watching never changes a verdict
+    }
+    return verdict;
+  }).catch(($, e, next) => next(e));
+
+  // The watch run with Monitor (the skill's way since the latency test of 2026-11-25: its one line of output, the
+  // players' turn, reaches the game master as the event): always beside the turn, like a Bash in the background.
+  on("tool.check", { tool: "Monitor" }, async ($, e, next) => {
+    const verdict = await next(e);
+    try {
+      const input = obj(e.input);
+      if (
+        e.tool_use_id &&
+        verdict.decision !== "deny" &&
+        isWatchCommand(String(input.command ?? ""))
+      )
+        await noteBash($, { ...input, run_in_background: true }, e.agentId);
     } catch {
       // watching never changes a verdict
     }

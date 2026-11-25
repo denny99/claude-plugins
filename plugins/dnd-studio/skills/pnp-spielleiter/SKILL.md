@@ -112,29 +112,37 @@ vorgefertigten Helden ihre Vorstellung und die Wahl → erste Szene: `show_playe
 der Szenentext → Schleife:
 
 ```
-Wächter starten  →  Zug beenden  …  geweckt  →  wait_for_players  →  antworten  →  Wächter starten  → …  bis „Schluss“
+Wächter starten  →  Zug beenden  …  geweckt, mit dem Zug  →  antworten  →  Wächter starten  → …  bis „Schluss“
 ```
 
 **Warten mit dem Wächter, nicht mit Abfragen** (Denny 2026-11-13: „warum das Polling, geht auch Push?“). Jedes
 `wait_for_players`, das nach 50 s leer zurückkommt, ist eine ganze Runde mit deinem ganzen Kontext; eine Pause von zehn
 Minuten waren zwölf davon. Stattdessen:
-1. `wait_for_players` mit `watch: true` gibt einen Befehl (`curl … /watch/<id>`). Ihn mit Bash und
-   `run_in_background: true` starten, die Helfer (4b) anstoßen, dann **den Zug beenden**: kein weiteres Werkzeug, kein
-   Text an den Menschen außer bei Bedarf einer Zeile.
-2. Der Befehl endet, sobald die Spieler etwas haben, und Claude Code weckt dich. Seine Ausgabe sagt `ready`:
-   - `turn`: `wait_for_players` holt den Zug sofort, dann antworten.
-   - `partial`: Ein Spieler ist fertig, andere reden noch (`partial.lines` bisher, `holders` wer noch spricht).
-     Nicht antworten, vordenken: wahrscheinliche Antworten mit `say_line prepare: true` vorbereiten, dann gleich
-     einen neuen Wächter. Der ganze Zug kommt als `turn`, wenn alle still sind (Denny 2026-11-23: „endet die tonspur
-     von jemandem sofort text prozessen und dir schicken damit du schon mal denken kannst“).
-   - `secret` (`/geheim`): sofort holen und per `discord whisper` antworten, auch wenn die anderen gerade reden; das
-     Flüstern wartet nicht auf sie. Wie schnell, steht in 4c („Ein Spieler sagt dir etwas heimlich“).
-   - `break`: die Spieler machen Pause: vorbereiten (unten), dann einen neuen Wächter.
-   - `resume`: sie haben „Weiter“ gedrückt: kein `wait_for_players`, mit einem Satz einsteigen, wo sie stehen, dann
-     einen neuen Wächter.
-   - `null` (30 min nichts) oder `error` (ältere Studio-Version): neuer Wächter, bei `error` wie früher mit
-     `wait_for_players` warten.
-3. Vor dem Ende jedes Zugs, in dem du geantwortet hast, wieder einen Wächter starten. Ohne Wächter weckt dich nichts.
+1. `wait_for_players` mit `watch: true` gibt einen Befehl (`curl … /watch/<id>`), nur beim ersten Mal: danach bringt
+   jede Ausgabe des Wächters den nächsten Befehl als `next_watch` mit. Ihn mit dem Werkzeug **Monitor**
+   starten (laden mit ToolSearch `select:Monitor`; Beschreibung „Spieler am Tisch“, `timeout_ms` 1800000), die Helfer
+   (4b) anstoßen, dann **den Zug beenden**: kein weiteres Werkzeug, kein Text an den Menschen außer bei Bedarf einer
+   Zeile. Gibt es Monitor nicht: Bash mit `run_in_background: true`.
+2. Der Befehl endet, sobald die Spieler etwas haben. Mit Monitor kommt seine eine Zeile Ausgabe als Nachricht bei dir
+   an, mit Bash nur „fertig“. Die Ausgabe sagt `ready`:
+   - `turn`: der Zug steht schon drin (`turn.lines`, schon genommen). **Sofort antworten**, erstes Werkzeug `say_line`
+     (`wait: false`), kein `wait_for_players` davor. Jede Runde davor kostet die Spieler 2 bis 5 Sekunden Stille
+     (Latenztest 2026-11-25). Weckte dich Bash ohne Ausgabe: `wait_for_players` gibt dir den genommenen Zug.
+   - `partial`: Ein Spieler ist fertig, andere halten ihren Sprechknopf noch (`partial.lines` bisher, `holders` wer
+     noch spricht; bei Push-to-talk gibt es ihn nicht). Nicht antworten, vordenken: wahrscheinliche Antworten mit
+     `say_line prepare: true` vorbereiten, dann gleich `next_watch`. Der ganze Zug kommt als `turn`, wenn alle still
+     sind (Denny 2026-11-23: „endet die tonspur von jemandem sofort text prozessen und dir schicken damit du schon mal
+     denken kannst“).
+   - `secret` (`/geheim`): sofort per `discord whisper` antworten (steht der Zug drin, schon genommen; sonst mit
+     `wait_for_players secret: true` holen), auch wenn die anderen gerade reden; das Flüstern wartet nicht auf sie. Wie
+     schnell, steht in 4c („Ein Spieler sagt dir etwas heimlich“).
+   - `break`: die Spieler machen Pause: vorbereiten (unten), dann `next_watch`.
+   - `resume`: sie haben „Weiter“ gedrückt: kein `wait_for_players`, mit einem Satz einsteigen, wo sie stehen, im
+     selben Schritt `next_watch`.
+   - `null` (30 min nichts): `next_watch`. `error` (ältere Studio-Version): wie früher mit `wait_for_players` warten.
+3. `next_watch` im **selben Schritt** wie dein letzter `say_line` der Antwort starten (alle `say_line` mit
+   `wait: false`), nicht erst, wenn die Zeile zu Ende ist: Wer gleich antwortet, wartet sonst, bis der Wächter läuft.
+   Ohne Wächter weckt dich nichts.
 
 Der Befehl braucht einmal die Erlaubnis für Bash (`curl` an `127.0.0.1`); fragt die App, den Menschen zu Beginn
 bitten, sie für die Sitzung zu geben. Gibt es `watch` nicht (ältere App): wie früher, `wait_for_players` wartet
@@ -186,10 +194,13 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
 
 - **Kurz.** 1–3 Sätze, gesprochene Sprache, keine Listen, kein Markdown. Ihr redet, nicht lest.
 - **Erste Zeile sofort** (Denny, 2026-11-21; am Tisch vom 20.11. kam die Antwort 10–21 s nach dem Zug, fast alles
-  Schreibzeit): Der erste Werkzeugaufruf jeder Antwort auf einen Zug ist ein `say_line` mit einem kurzen Satz (bis
-  etwa zwölf Wörter), der schon zur Sache gehört („Der Wirt hebt eine Braue.“, „Die Tür gibt nach … fast.“). Er
-  klingt, während du den Rest schreibst. Erst danach `campaign`, Bilder und die übrigen Sätze in einem zweiten
-  `say_line`; nichts nachschlagen, bevor der erste Satz läuft, außer der Satz hinge davon ab. Ein vorbereiteter Text
+  Schreibzeit): Der erste Werkzeugaufruf jeder Antwort auf einen Zug ist ein `say_line` mit **einem** kurzen Satz
+  (höchstens zwölf Wörter) und `wait: false`, der schon zur Sache gehört („Der Wirt hebt eine Braue.“, „Ein Zimmer?
+  Hab ich.“). Allein in seinem Schritt: Er klingt, während du den Rest schreibst: im nächsten Schritt die übrigen
+  Sätze (`say_line` mit `wait: false` oder `parts`), dazu `next_watch`. Latenztest 2026-11-25 mit Opus: vom letzten
+  Wort bis zum ersten Ton 6 s, davon 1,5 s Stille, gut 3 s deine Runde, 1,3 s die Stimme; jeder Schritt vor dem
+  ersten `say_line` kostete 2 bis 5 s mehr. Erst danach `campaign` und Bilder; nichts
+  nachschlagen, bevor der erste Satz läuft, außer der Satz hinge davon ab. Ein vorbereiteter Text
   (Szene, Vorlesetext, Standardsatz) kommt ohnehin sofort: dann ist er selbst die erste Zeile. Braucht die Antwort ein
   Bild, eine Karte oder einen Wurf, stehen `show_players` oder `roll_dice` **im selben Schritt** neben dem ersten
   `say_line` (mehrere Aufrufe in einer Antwort, `show_players` zuerst), nie in einem eigenen Schritt davor. Bei einem

@@ -231,6 +231,37 @@ test("the watcher: a background watch runs, ends with its task notification, and
   expect(r2.context ?? []).toEqual([]);
 });
 
+test("the watcher run with Monitor counts as running, and its event ends it", async ($, on) => {
+  // the latency test of 2026-11-25: the skill runs the watch with Monitor, so its output (the turn) reaches the game
+  // master; the band must not say the players go unheard while it runs
+  const w = world(on);
+  on("tool.call", () => toolResult({ ok: true }) as never);
+  on(
+    "tool.check",
+    () =>
+      ({
+        decision: "allow" as const,
+        value: { decision: "allow" as const },
+      }) as never,
+  );
+  await $.session.start({ cwd: "/", surface: "desktop", isInteractive: true });
+  await $.command.run({ command: "dnd", args: "table" } as never);
+  await $.tool.call({ tool: "Monitor", command: WATCH, description: "Spieler am Tisch", timeout_ms: 1800000 } as never);
+  let b = await $.ui.mount({ ...band(), surface: "desktop" });
+  expect(await findShown(b, /Spieler ungehört/)).toBeUndefined();
+  await b.unmount();
+  await $.turn.complete({ answer: "", durationMs: 1, isAborted: false, turnId: "t1", reason: "answer" } as never);
+  expect(w.toasts.filter((t) => /Niemand hört gerade auf die Spieler/.test(t))).toEqual([]);
+  // its event: the watch's one line, the turn and the next watch's command
+  await $.prompt.submit({
+    text: '<task-notification><task-id>bmon1</task-id><status>completed</status><summary>Monitor "Spieler am Tisch": {"ready":"turn","next_watch":"curl -s -m 1900 http://127.0.0.1:37641/watch/abc"}</summary></task-notification>',
+    origin: { kind: "task-notification" },
+  } as never);
+  b = await $.ui.mount({ ...band(), surface: "desktop" });
+  expect(await findShown(b, /Spieler ungehört/)).toBeDefined();
+  await b.unmount();
+});
+
 test("a changed Studio version or a refused argument warns: MCP schemas stale", async ($, on) => {
   world(on);
   let status: Record<string, unknown> = STATUS;
