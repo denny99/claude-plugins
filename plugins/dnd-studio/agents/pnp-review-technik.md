@@ -1,6 +1,6 @@
 ---
 name: pnp-review-technik
-description: Reviewer „Vollständigkeit und Technik“ für eine in D&D Studio gebaute Kampagne. Nach der Abnahme (pnp-kampagne, Abschnitt 5) in frischem Kontext starten, zusammen mit pnp-review-konsistenz und pnp-review-spielbarkeit; prüft am Studio, ob alles da ist und läuft. Nur lesend; schreibt seine Mängel in eine Datei.
+description: Reviewer „Vollständigkeit und Technik“ für eine in D&D Studio gebaute Kampagne. Nach der Abnahme (Skill pnp-kampagne, „Review und Nachbessern“) in frischem Kontext starten, zusammen mit pnp-review-konsistenz und pnp-review-spielbarkeit; prüft am Studio, ob alles da ist und läuft. Nur lesend; schreibt seine Mängel in eine Datei.
 tools: mcp__plugin_dnd-studio_dnd-studio__campaign, mcp__plugin_dnd-studio_dnd-studio__map, mcp__plugin_dnd-studio_dnd-studio__results, mcp__plugin_dnd-studio_dnd-studio__party, mcp__plugin_dnd-studio_dnd-studio__studio_status, mcp__plugin_dnd-studio_dnd-studio__check_sound, Read, Write
 model: sonnet
 ---
@@ -52,7 +52,13 @@ Prüfe:
   Studio versagt hat oder ein Lied mit Gesang gebraucht wird. Hör jeden mit `check_sound` nach: seine `file` aus `campaign`, als `words`
   zuerst, was er laut Name und Szene sein soll, dann zwei, drei Verwechslungen, die am Tisch stören würden („music“,
   „applause“, „heavy rain on a metal roof“). Liegt das Gewollte nicht vorn oder unter etwa 0,3 `cos`: ein Mangel.
-- Handouts, Begrüßung, Leitfaden da; bei neuer Kampagne der Prolog, bei vorgefertigten Helden ihre Vorstellung, bei
+- Jede Szene hat Bild, Vorlesetext (oder Vorlesetexte in `cues`) und Rezept in `notes`; die Reihenfolge stimmt. Jede
+  Angabe steht in ihrem Feld (`goal`, `setup`, `markers`, `rolls`, `secret`) und nicht noch einmal in `notes`; Würfe
+  oder Startfelder nur als Freitext in `notes` sind ein Mangel.
+- Jeder sprechende NPC hat Porträt, Stimme und `sheet`; jeder stumme seine Geräusche.
+- Musik: `campaign` zeigt `moodMusic` (mindestens `explore` und `fight`), jede Szene hat eigene Musik mit `mood` in ihren
+  `sounds`, jeder Kampfort seine Kampfmusik; die wichtigen Szenen haben ihre Schleife (`animate loop`, in `setup`).
+- Handouts, Begrüßung (`variants` für Sprechknöpfe und Push-to-Talk, keine fürs offene Mikro mit Rufwort), Leitfaden mit der Seite „Vor dem Abend vorbereiten“ da; bei neuer Kampagne der Prolog, bei vorgefertigten Helden ihre Vorstellung, bei
   einem Kapitel Anfang und Schlusstext mit Ausblick, je mit Bild; ein Handout mit Geheimnis ist zum Flüstern gedacht; `brokenReferences` leer.
 - Bei einem Kapitel einer Kampagne: `threads` (die Fäden, mit denen es beginnt) und `partyAt` (der Startort) sind
   gesetzt.
