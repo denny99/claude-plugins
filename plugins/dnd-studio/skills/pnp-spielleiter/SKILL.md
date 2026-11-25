@@ -123,7 +123,7 @@ Minuten waren zwölf davon. Stattdessen:
 2. Der Befehl endet, sobald die Spieler etwas haben. Mit Monitor kommt seine eine Zeile Ausgabe als Nachricht bei dir
    an, mit Bash nur „fertig“. Die Ausgabe sagt `ready`:
    - `turn`: der Zug steht schon drin (`turn.lines`, schon genommen). **Sofort antworten**, erstes Werkzeug `say_line`
-     (`wait: false`), kein `wait_for_players` davor. Jede Runde davor kostet die Spieler 2 bis 5 Sekunden Stille
+     (`wait: false`), allein in seiner Nachricht, kein `wait_for_players` davor. Jede Runde davor kostet die Spieler 2 bis 5 Sekunden Stille
      (Latenztest 2026-11-25). Weckte dich Bash ohne Ausgabe: `wait_for_players` gibt dir den genommenen Zug.
    - `partial`: Ein Spieler ist fertig, andere halten ihren Sprechknopf noch (`partial.lines` bisher, `holders` wer
      noch spricht; bei Push-to-talk gibt es ihn nicht). Nicht antworten, vordenken: wahrscheinliche Antworten mit
@@ -193,10 +193,13 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
 - **Erste Zeile sofort** (Denny, 2026-11-21; am Tisch vom 20.11. kam die Antwort 10–21 s nach dem Zug, fast alles
   Schreibzeit): Der erste Werkzeugaufruf jeder Antwort auf einen Zug ist ein `say_line` mit **einem** kurzen Satz
   (höchstens zwölf Wörter) und `wait: false`, der schon zur Sache gehört („Der Wirt hebt eine Braue.“, „Ein Zimmer?
-  Hab ich.“). Allein in seinem Schritt: Er klingt, während du den Rest schreibst: im nächsten Schritt die übrigen
-  Sätze (`say_line` mit `wait: false` oder `parts`), dazu `next_watch`. Latenztest 2026-11-25 mit Opus: vom letzten
-  Wort bis zum ersten Ton 6 s, davon 1,5 s Stille, gut 3 s deine Runde, 1,3 s die Stimme; jeder Schritt vor dem
-  ersten `say_line` kostete 2 bis 5 s mehr. Erst danach `campaign` und Bilder; nichts
+  Hab ich.“). **Allein in seiner Nachricht**, kein zweites Werkzeug daneben: Ein `say_line` startet erst, wenn
+  deine ganze Nachricht geschrieben ist; ein zweiter Satz, ein Wurf oder der Wächter in derselben Nachricht hielten
+  den ersten Satz 1,5 bis 3 s zurück (Archet-Abend 2026-11-25). Er klingt, während du den Rest schreibst: in der
+  nächsten Nachricht die übrigen Sätze (`say_line` mit `wait: false` oder `parts`), Würfe, Bilder, dazu `next_watch`.
+  Denk erst danach nach: Am Archet-Abend lagen 3 bis 9 s Denkzeit vor dem ersten Satz, der größte Posten. Latenztest
+  2026-11-25 mit Opus: vom letzten Wort bis zum ersten Ton 6 s, davon 1,5 s Stille, gut 3 s deine Runde, 1,3 s die
+  Stimme; jeder Schritt vor dem ersten `say_line` kostete 2 bis 5 s mehr. Erst danach `campaign` und Bilder; nichts
   nachschlagen, bevor der erste Satz läuft, außer der Satz hinge davon ab. Ein vorbereiteter Text
   (Szene, Vorlesetext) kommt ohnehin sofort: dann ist er selbst die erste Zeile. Braucht die Antwort ein
   Bild, eine Karte oder einen Wurf, stehen `show_players` oder `roll_dice` **im selben Schritt** neben dem ersten
@@ -328,8 +331,10 @@ genau: `references/sonderfaelle.md`, „Bevor der Kontext voll ist“, dann lese
 - `say_line` antwortet spätestens nach 50 s (`playing` / `making`): einfach weitermachen, die nächste Zeile wartet.
 - **`say_line wait: false`** (Denny 2026-11-23: „während say_line läuft … kannst theoretisch auch weiter lines
   queuen“): Die Zeile wird eingereiht, der Aufruf kommt sofort zurück (`queued`). Weitere Zeilen hängen sich in
-  Reihenfolge an. Der übliche Ablauf bei einem Zug: Brücke mit `wait: false`, nachdenken, nachschlagen, dann die
-  eigentliche Antwort, ebenfalls mit `wait: false` oder als letzte Zeile ohne. Wie die Zeile lief, steht in der
+  Reihenfolge an. Der übliche Ablauf bei einem Zug: der erste kurze Satz allein, nachdenken, nachschlagen, dann die
+  eigentliche Antwort, ebenfalls mit `wait: false`, mit `next_watch` im selben Schritt. Während ein Wächter läuft, ist
+  `wait: false` ohnehin der Standard; wer auf das Ende einer Zeile wartet, hört in der Zeit niemanden (35 s Vorlesetext
+  am Archet-Abend 2026-11-25). Wie die Zeile lief, steht in der
   Antwort des nächsten `say_line` unter `before` (`interrupted`, `unheard`, `error`) und in `table_state` unter
   `last_line`.
 - **Ein Sprechknopf schneidet nichts:** Drückt jemand, läuft deine Zeile (und was dahinter eingereiht ist) zu Ende;
