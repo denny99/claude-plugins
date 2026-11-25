@@ -1,3 +1,9 @@
+## [dnd-studio-v1.1.1](https://github.com/denny99/claude-plugins/compare/dnd-studio-v1.1.0...dnd-studio-v1.1.1) (2026-11-25)
+
+### Bug Fixes
+
+* **dnd-studio:** first line alone in its message, the preparer invents nothing ([a7026dd](https://github.com/denny99/claude-plugins/commit/a7026ddd80f6a31d5710c4e2be5d97b0a486bcab))
+
 ## [dnd-studio-v1.1.0](https://github.com/denny99/claude-plugins/compare/dnd-studio-v1.0.0...dnd-studio-v1.1.0) (2026-11-25)
 
 ### Features
