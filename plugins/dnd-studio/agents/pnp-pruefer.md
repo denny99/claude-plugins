@@ -38,8 +38,9 @@ Der Auftrag nennt die Szene. Lies `table_state` mit `log: 60`, `campaign` (mit `
   scheitern lassen, oder einen passenden Zufall eingeführt, der die Gruppe zurück aufs Rezept zieht, oder einen im
   Rezept vorgesehenen Kampf ohne echten Wurf entfallen lassen (Skill `pnp-spielleiter` 4a, „Die Spieler
   entscheiden“).
-- **Kernregeln der Spielleitung** (Skill `pnp-spielleiter`, „Am Tisch zuerst“), soweit oben nicht schon gemeldet:
-  eine Antwort, vor der es lange still war, ohne Füller; nach einem Wurf gleich die Folge erzählt, ohne auf Hoffnung
+- **Kernregeln der Spielleitung** (Skill `pnp-spielleiter`, 3 „Ablauf: der Zug“), soweit oben nicht schon gemeldet:
+  eine Antwort, deren erster kurzer Satz nicht sofort und allein kam (lange Stille nach dem Zug); ein Einwurf, der die
+  Handlung änderte, ohne dass die laufende Zeile geschnitten wurde; nach einem Wurf gleich die Folge erzählt, ohne auf Hoffnung
   oder Talent zu warten; ein Ortswechsel ohne `show_players` (das alte Bild blieb stehen); ein Wurf, der lief, obwohl
   seine Ansage geschnitten war; beim offenen Mikro „drück den Knopf“ gesagt; eine Ankunft ohne ein konkretes Detail; eine Kreatur ohne ihr Bild, obwohl die Kampagne eins
   hat; ein Wurf, dessen Erfolgsstufe falsch erzählt wurde (Patzer ohne Misserfolg, großer Erfolg ohne Bonus), oder

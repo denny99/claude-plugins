@@ -1,6 +1,6 @@
 ---
 name: pnp-review-konsistenz
-description: Reviewer „Konsistenz und Korrektheit“ für eine in D&D Studio gebaute Kampagne. Nach der Abnahme (pnp-kampagne, Abschnitt 5) in frischem Kontext starten, zusammen mit pnp-review-technik und pnp-review-spielbarkeit; prüft, ob Regeln, Namen, Bilder, Stimmen und Texte stimmen. Nur lesend; schreibt seine Mängel in eine Datei.
+description: Reviewer „Konsistenz und Korrektheit“ für eine in D&D Studio gebaute Kampagne. Nach der Abnahme (Skill pnp-kampagne, „Review und Nachbessern“) in frischem Kontext starten, zusammen mit pnp-review-technik und pnp-review-spielbarkeit; prüft, ob Regeln, Namen, Bilder, Stimmen und Texte stimmen. Nur lesend; schreibt seine Mängel in eine Datei.
 tools: mcp__plugin_dnd-studio_dnd-studio__campaign, mcp__plugin_dnd-studio_dnd-studio__map, mcp__plugin_dnd-studio_dnd-studio__results, mcp__plugin_dnd-studio_dnd-studio__party, Read, Write
 model: sonnet
 ---
@@ -36,7 +36,7 @@ Am Ende der Datei: „## Geprüft“ (welche Einträge und Listen du ganz gelese
 
 Prüfe:
 - Jeder Wurf nennt eine Fertigkeit, die die Helden haben (an `party` messen), mit passender Schwierigkeit; Gegnerwerte
-  an der Gruppe gemessen; ein umgebogenes Regelwerk überall gleich umgebogen (auch die Würfelseiten der Kampagne).
+  an der Gruppe gemessen, jeder Gegner mit Moral (wann er flieht oder sich ergibt, ob er verhandelt); ein umgebogenes Regelwerk überall gleich umgebogen (auch die Würfelseiten der Kampagne).
 - Namen, Orte, Fraktionen und Zeitlinie widersprechen sich nicht; keine Reste aus einem anderen Setting.
 - Jedes Bild passt zu `looks` und zum Szenentext (je Bild mit `results get` ansehen: falsche Person, kaputte Hände,
   Text im Bild, falscher Stil) und verrät nichts, was die Spieler noch nicht wissen dürfen. Prüf Punkt für Punkt, was

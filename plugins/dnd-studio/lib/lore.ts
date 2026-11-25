@@ -379,7 +379,7 @@ export function stepPrompt(flow: Flow, world: string, n: number): string {
 
 /** The prompt of „Aus Kampagne übernehmen“: seed the world's lore from the open campaign. */
 export function fromCampaignPrompt(campaign: string, world: string): string {
-  return `D&D-Panel: Lore aus der Kampagne übernehmen. Skill pnp-lore, Abschnitt 2: lore from_campaign mit campaign „${campaign}“ und world „${world}“, danach lore map lesen und mir in drei Sätzen sagen, was entstand und was fehlt.`;
+  return `D&D-Panel: Lore aus der Kampagne übernehmen. Skill pnp-lore, „1. Bestand sichten“: lore from_campaign mit campaign „${campaign}“ und world „${world}“, danach lore map lesen und mir in drei Sätzen sagen, was entstand und was fehlt.`;
 }
 
 /** The prompt of „Welt entwerfen“: start world design (no world yet). */
