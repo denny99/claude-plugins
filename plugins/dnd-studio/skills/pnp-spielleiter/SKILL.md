@@ -124,7 +124,9 @@ Minuten waren zwölf davon. Stattdessen:
    an, mit Bash nur „fertig“. Die Ausgabe sagt `ready`:
    - `turn`: der Zug steht schon drin (`turn.lines`, schon genommen). **Sofort antworten**, erstes Werkzeug `say_line`
      (`wait: false`), allein in seiner Nachricht, kein `wait_for_players` davor. Jede Runde davor kostet die Spieler 2 bis 5 Sekunden Stille
-     (Latenztest 2026-11-25). Weckte dich Bash ohne Ausgabe: `wait_for_players` gibt dir den genommenen Zug.
+     (Latenztest 2026-11-25). Weckte dich Bash ohne Ausgabe: `wait_for_players` gibt dir den genommenen Zug. Steht
+     `cut: true` in der Zeile, sind lange Worte darin gekürzt: Sie kommen ganz als eigene Zeilen danach („Name: …“),
+     Monitor bringt sie mit; keine Ausgabedatei lesen.
    - `partial`: Ein Spieler ist fertig, andere halten ihren Sprechknopf noch (`partial.lines` bisher, `holders` wer
      noch spricht; bei Push-to-talk gibt es ihn nicht). Nicht antworten, vordenken: wahrscheinliche Antworten mit
      `say_line prepare: true` vorbereiten, dann gleich `next_watch`. Der ganze Zug kommt als `turn`, wenn alle still
