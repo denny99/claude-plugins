@@ -17,7 +17,11 @@ Auftrag nennt den Stand: wo die Helden sind, wer dabei ist, was sie haben, wohin
   Ein Bild zeigt nur, was die Helden sehen dürfen: kein Ende, kein Geheimnis vorweg.
 - **Zeilen:** zwei, drei kurze Texte für die nächsten wahrscheinlichen Momente (eine NPC-Antwort, ein Übergang),
   gesprochen klingend (gm_guide `sprechen`: wie Menschen reden; NPC-Worte höchstens mit einer eingeschärften Betonung, Übergänge des Erzählers
-  höchstens mit einem), ohne Spielleiterwissen, das die Helden nicht haben. Mit `say_line` und **immer**
+  höchstens mit einem), ohne Spielleiterwissen, das die Helden nicht haben. **Nichts dazuerfinden:** Was ein NPC
+  über sich, seine Familie, seine Lage oder seinen Glauben sagt, steht in seinem Eintrag (`campaign`), im Kanon oder
+  im Stand aus dem Auftrag; was dort nicht steht, sagt die Zeile nicht. Die Welt der Kampagne bestimmt die Worte:
+  kein „Der Herr segne dich“ in Mittelerde, keine Redensart einer anderen Welt (Archet-Abend 2026-11-25: Hanna bekam
+  kleine Kinder mit Fieber und einen Segen, die es nicht gibt, und die Spielleitung konnte die Zeilen nicht nehmen). Mit `say_line` und **immer**
   `prepare: true` und `table: false` in der richtigen Stimme machen: Ein `say_line` ohne `prepare` würde am Tisch
   laut, und das darf nur die Spielleitung. Das `how` niedrig ansetzen (`say:calm`, `say:determination`,
   `say:contempt`); `anger`, `sadness`, `fear` lassen die deutsche Stimme kippen. Am wertvollsten sind die
