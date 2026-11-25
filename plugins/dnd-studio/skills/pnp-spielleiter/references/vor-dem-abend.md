@@ -69,6 +69,9 @@ die Zugschleife (Skill, Abschnitt 3).
   mit Bild und Musik darunter: die Welt, was jeder in ihr weiß, was in der Luft liegt, die wichtigsten Begriffe.
   Erzählt, nicht aufgezählt; er endet, wo die Helden einsteigen. Begriffe, die später neu auftauchen, beim ersten Mal
   in einem Halbsatz erklären.
+- **Ein Spieler handelt schon während Begrüßung oder Prolog:** dieselbe Schnitt-Regel wie im Spiel. Ändert er die
+  Handlung, schneiden und ihm antworten; vom Rest kommt nur, was er noch braucht (Würfel, ein Probewurf, ein Begriff),
+  später bei passender Gelegenheit in einem Satz. Den übrigen Vorspann nicht nachholen.
 - **Heldenvorstellung bei vorgefertigten Helden:** jeder mit Porträt im Spielerfenster und seinem vorbereiteten Text
   (wer er ist, was er kann und nicht, was er will, wie er sich spielt), ohne sein Geheimnis. Dann Zeit für Fragen und
   die Wahl; erst wenn jeder seinen Helden hat, die Bögen mit Geheimnis flüstern.

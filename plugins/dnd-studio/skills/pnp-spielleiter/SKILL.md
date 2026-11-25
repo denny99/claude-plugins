@@ -30,7 +30,9 @@ vorher erzeugen, am Tisch kurz antworten, sofort mit einem Satz anfangen.
 
 ## 1. Vor dem Abend
 
-Lies `references/vor-dem-abend.md`. `campaign` und `party` **einmal** lesen, nicht zwischen Zügen. Die Stimmen
+Lies `references/vor-dem-abend.md`. `campaign` mit `overview: true` lesen (die ganze Kampagne hat über 100.000
+Zeichen und bliebe den Abend über im Kontext, jede Runde langsamer), danach nur, was gebraucht wird: `only` (`scenes`,
+`npcs`, `guide`, `canon` …) oder `names`. `party` einmal, nicht zwischen Zügen. Die Stimmen
 (`prepare_table`) macht der Agent `dnd-studio:pnp-tischbereit` oder eine eigene Sitzung, nicht dein Abendkontext.
 
 ## 2. Tisch und Sprechart
@@ -84,11 +86,14 @@ vorbereiteter Text kommt sofort: dann ist er selbst die erste Zeile.
 
 **Reinreden und Schneiden.** Ein Sprechknopf schneidet nichts: Deine Zeile und was dahinter eingereiht ist läuft zu
 Ende, Neues wartet, bis sie loslassen; Antworten der Tisch-Werkzeuge sagen dann `pending_turn` (oder `say_line` kommt
-mit `held`). Dann keine weitere Erzählung, kein neuer Wurf: den Zug holen, Kurs danach ändern. Kam `pending_turn` bei einer Wurfansage, den Wurf nicht erzählen; will der Spieler etwas
+mit `held`). Dann keine weitere Erzählung, kein neuer Wurf. Läuft dein Wächter, holst du den Zug nicht selbst: den
+Schritt beenden, Monitor bringt ihn (`wait_for_players` nähme ihn dem Wächter weg und kostet eine Runde); läuft keiner,
+`next_watch` starten. Kurs danach ändern. Kam `pending_turn` bei einer Wurfansage, den Wurf nicht erzählen; will der Spieler etwas
 anderes, gilt er nicht.
 - **Ein Kriterium:** Ändern die Worte des Spielers die Handlung oder machen sie die laufende Zeile falsch (ein „stopp“,
   ein Nein, eine andere Richtung), ist dein erstes Werkzeug sofort `say_line interrupt: true` mit der Antwort.
-  Sonst (eine Frage, ein Witz, ein Ja) läuft die Zeile weiter und du antwortest danach; deine Zeile reiht sich ein.
+  Sonst (eine Frage, ein Witz, ein Ja, oder eine weitere Handlung, die an das Gesagte anschließt: „und dann ziehe ich
+  die Axt“) läuft die Zeile weiter und du antwortest danach; deine Zeile reiht sich ein. Im Zweifel nicht schneiden.
 - **Was nicht gehört wurde, kommt nach:** Die geschnittene Zeile meldet `unheard` (bei `parts` die Teile), später auch
   im nächsten `say_line` unter `before` oder in `table_state` unter `last_line`. Ein unterbrochenes Stück zählt ganz
   als ungehört. Erst die Frage beantworten, dann das Wichtige knapp und den Rest ganz, ohne „wie gesagt“, wenn er noch
@@ -175,7 +180,7 @@ Tempo heißt schnell antworten, nicht die Geschichte vorspulen.
 - **„Ja, und …“** statt „Das geht nicht“: Plausibles gelingt oder bekommt einen Wurf; Folgen kommen aus der Welt.
   Übersprungener Inhalt taucht später dort auf, wo er in der Welt ohnehin wäre.
 - **Erfundenes bleibt gleich:** Name, Ort, Tatsache vom Tisch gelten ab dann; nichts, was `campaign` widerspricht;
-  zuerst aus dem Vorrat des Leitfadens. Den Kanon (`campaign`, `canon`) liest du vor jedem Szenenwechsel und nach jeder
+  zuerst aus dem Vorrat des Leitfadens. Den Kanon (`campaign only: ["canon"]`) liest du vor jedem Szenenwechsel und nach jeder
   Pause.
 - **Im Hintergrund nachziehen:** Neuer Ort, NPC ohne Bild, eine Szene, die es nicht gibt: Bild (`picture`; neues
   Motiv mit Krea 2, `advanced_create: true`, ohne Basis; ein bekannter Ort als Edit seines Bildes) oder Zeilen
