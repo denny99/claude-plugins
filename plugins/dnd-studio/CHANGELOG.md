@@ -1,3 +1,9 @@
+## [dnd-studio-v1.1.2](https://github.com/denny99/claude-plugins/compare/dnd-studio-v1.1.1...dnd-studio-v1.1.2) (2026-11-25)
+
+### Bug Fixes
+
+* **dnd-studio:** a watch line with cut: true has the whole words below it ([004cf0d](https://github.com/denny99/claude-plugins/commit/004cf0d56542f5f9fb3b00695396de3b1049fbf7))
+
 ## [dnd-studio-v1.1.1](https://github.com/denny99/claude-plugins/compare/dnd-studio-v1.1.0...dnd-studio-v1.1.1) (2026-11-25)
 
 ### Bug Fixes
