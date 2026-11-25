@@ -39,13 +39,9 @@ test("Tisch: a live table keeps the kit rules, folded and unfolded, wide and nar
   await $.command.run({ command: "dnd", args: "table" } as never);
   let ui = await $.ui.mount({ ...pane(90, 80), surface: "desktop" });
   expect(kitRuleLines(await ui.drawn())).toEqual([]);
-  // one card „Tisch“ with rows instead of loose status sentences; the listener's state stands in its own card only
+  // one card „Tisch“ with rows instead of loose status sentences
   expect(await findShown(ui, "Tisch")).toBeDefined();
   expect(await findShown(ui, "Spielerfenster")).toBeDefined();
-  expect(await findShown(ui, /Zuhörer (an|aus|hört zu)/)).toBeUndefined();
-  expect((await ui.find({ type: "Button", key: "listener" }))?.text).toBe(
-    "Einschalten",
-  );
   // the three cards at the end, each with its own action row
   for (const title of ["Pause", "Abendende", /^Einwürfe/])
     expect(await findShown(ui, title), String(title)).toBeDefined();

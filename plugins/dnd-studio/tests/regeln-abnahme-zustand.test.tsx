@@ -54,8 +54,7 @@ test("rules: tab Zustand connected, and with the app down and an old server in t
   expect(await findShown(ui, /^Zuletzt geprüft um \d\d:\d\d\.$/)).toBeDefined();
   expect(await findShown(ui, "Alter Studio-Server")).toBeUndefined(); // only when there is one
   expect(await ui.find({ type: "Button", key: "reconfigure" })).toBeUndefined();
-  // the listener is switched in the Tisch tab only; seven settings, each a row with its state as a pill
-  expect(await findShown(ui, /Zuhörer/)).toBeUndefined();
+  // seven settings, each a row with its state as a pill
   expect(
     (await ui.findAll({ type: "Svg" })).filter((x) => /^(an|aus)$/.test(String(x.props.alt))),
   ).toHaveLength(7);

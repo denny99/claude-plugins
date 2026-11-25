@@ -31,7 +31,7 @@ test("pure: the §4 checklist names what is missing and who fixes it", () => {
   expect(by.npcs).toMatchObject({
     status: "failed",
     counts: "1/2 · 1 stumm",
-    detail: "Bartel (Werte); stumm (gewollt, ohne Stimme und Sätze): Hund",
+    detail: "Bartel (Werte); stumm (gewollt, ohne Stimme): Hund",
     fix: "pnp-texter",
   });
   expect(by.start).toMatchObject({ status: "ok", counts: "1/1" });
@@ -579,5 +579,5 @@ test("pure: gaps left open on purpose count as done but say so (gathering scenes
   expect(by.scenes.detail).toContain("Sammelszenen (gewollt, Vorlesetexte in den Cues): Anfang");
   expect(by.npcs.status).toBe("ok");
   expect(by.npcs.counts).toBe("1/1 · 2 stumm");
-  expect(by.npcs.detail).toBe("stumm (gewollt, ohne Stimme und Sätze): Wesen, Ding");
+  expect(by.npcs.detail).toBe("stumm (gewollt, ohne Stimme): Wesen, Ding");
 });

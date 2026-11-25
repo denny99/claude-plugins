@@ -6,14 +6,16 @@ Gehört zu Skill `pnp-spielleiter`, Abschnitt 7: was nach dem Abschied kommt, we
    (`campaign`, Liste `canon`). Was davon nur heute galt (ein Wetter, eine Wache vor der Tür), nimmst du mit
    `set_campaign_entry kind canon remove` weg; was weiter gilt (Preise, Versprechen, Schulden, der Stand der Helden),
    bleibt für den nächsten Abend stehen.
-2. Daraus knappe Session-Notizen: `set_campaign_entry kind session` ist für eine vorhandene Session;
-   eine neue schreibt `write_session` mit `notes` (Ereignisse, NPCs, Beute, offene Fäden, und was am Tisch erfunden
-   wurde: Namen, Orte, Tatsachen, damit der nächste Abend dazu passt). Antwortet sie „working“, lädt das
-   Sprachmodell noch: denselben Aufruf noch einmal. `write_session` erzählt nur deine Notizen und lässt die Fäden der
-   Kampagne, wie sie sind; `new_threads` und `resolved_threads` in der Antwort sind ein Vorschlag des Sprachmodells.
-   Bei einer Kampagne danach `campaign set` mit `threads` (die Fäden, die nach heute offen sind; die Liste wird
-   ersetzt, was fehlt, gilt als gelöst) und `party_at` (wo der nächste Abend beginnt): damit fängt das nächste
-   Kapitel an.
+2. Daraus die Session, von dir selbst geschrieben: `set_campaign_entry kind session` mit `name` (ein Titel für den
+   Abend), `date` (YYYY-MM-DD, ohne: heute), `notes` (Ereignisse, NPCs, Beute, offene Fäden, und was am Tisch erfunden
+   wurde: Namen, Orte, Tatsachen, damit der nächste Abend dazu passt) und `summary` (ein paar Sätze für die Spieler:
+   daraus erzählen `show_players recap` und `write_text recap` am nächsten Abend). Dieselbe Session später: `name` oder
+   `date` wieder, `append` hängt an die Notizen an. **Nicht `write_session`:** Das lässt ein lokales Sprachmodell
+   (Ollama) aus Notizen schreiben, eine Hilfe für Menschen am Studio, nicht für dich (Denny, Ödland 2026-11-23: „wozu
+   brauchst DU ollama dafür? … ollama ist nur support für menschen“; es lief auf dem Prozessor und hielt das Studio
+   minutenlang auf). Bei einer Kampagne danach `campaign set` mit `threads` (die Fäden, die nach heute offen sind; die
+   Liste wird ersetzt, was fehlt, gilt als gelöst) und `party_at` (wo der nächste Abend beginnt): damit fängt das
+   nächste Kapitel an.
 3. **Nachbesprechung mit dem Menschen** (Denny, 2026-10-30: „das gehört immer ans ende jeder session … self
    reflection mit mir oder jemand anderen der mit dir arbeitet“), vorerst nach jedem Abend, mit dem Menschen am
    Rechner oder wer sonst mit dir arbeitet: Was lief gut, was war seltsam, wo hast du gestockt oder gewartet, was hat

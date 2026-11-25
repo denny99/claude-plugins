@@ -1,6 +1,6 @@
 ---
 name: pnp-kampagne
-description: 'Baut in D&D Studio (MCP-Server dnd-studio) eine spielfertige Pen-and-Paper-Kampagne oder ein Abenteuer, von der Idee bis zum Spielabend – Zusammenfassung, NPCs mit Porträt, Stimme und Standardsätzen, Orte mit Karten, Szenen mit Bild, Vorlesetexte, Würfe, Klänge und Musik je Stimmung aus dem Studio und ein Leitfaden für die KI-Spielleitung. Verwenden, sobald jemand ein Abenteuer, eine Kampagne, ein One-Shot, ein Solo-Abenteuer oder ein Testabenteuer für den Studio-Spieltisch anlegen, ausbauen, umbauen oder „spielfertig machen“ will, auch wenn nur grob („bau mir was Kleines im Breeland für heute Abend“, „mach aus der Idee eine Kampagne“, „ergänz NPCs und Szenen“, „bau das nächste Kapitel nach dem letzten Abend“). Auch für Karten mit Orts-Pins, Handouts und Bögen der Helden, Stimmen und Standardsätze vorab und das Review vor dem Spielabend. Einen Abend leiten: Skill pnp-spielleiter.'
+description: 'Baut in D&D Studio (MCP-Server dnd-studio) eine spielfertige Pen-and-Paper-Kampagne oder ein Abenteuer, von der Idee bis zum Spielabend – Zusammenfassung, NPCs mit Porträt und Stimme, Orte mit Karten, Szenen mit Bild, Vorlesetexte, Würfe, Klänge und Musik je Stimmung aus dem Studio und ein Leitfaden für die KI-Spielleitung. Verwenden, sobald jemand ein Abenteuer, eine Kampagne, ein One-Shot, ein Solo-Abenteuer oder ein Testabenteuer für den Studio-Spieltisch anlegen, ausbauen, umbauen oder „spielfertig machen“ will, auch wenn nur grob („bau mir was Kleines im Breeland für heute Abend“, „mach aus der Idee eine Kampagne“, „ergänz NPCs und Szenen“, „bau das nächste Kapitel nach dem letzten Abend“). Auch für Karten mit Orts-Pins, Handouts und Bögen der Helden, Stimmen und Vorlesetexte vorab und das Review vor dem Spielabend. Einen Abend leiten: Skill pnp-spielleiter.'
 ---
 
 # Eine Kampagne in D&D Studio bauen
@@ -128,6 +128,10 @@ Rahmen), dann wird nach dem Plan gebaut.
      Hinterhalt, eine Bestie), wie Ton und Rahmen verlangen (Ödland: zwei, drei je Abend, weil die Gruppe in Kapitel 2
      fast jeden Kampf umging), und bei den übrigen, was Ausweichen kostet (ein Wurf, Zeit, ein Gegenstand, ein
      Verbündeter).
+   - **Kämpfe sind gefährlich** (Archet 2026-11-23, Denny: „beim Kampf sei gemein, mach es spannend“): Gegner brechen
+     nicht beim ersten Erfolg (der Anführer hat Mut für mehrere, das Rudel weicht erst beim zweiten), und was danach
+     kommt (der Rückweg mit Verfolgern, ein zweiter Angriff), geschieht auch, wenn der Anführer gewichen ist. Im
+     Leitfaden nicht „großzügig, sie weichen beim ersten Erfolg“.
    - **Haken der Helden:** Jeder Held bekommt irgendwo einen Haken aus seinem Hintergrund (eine Bekannte, ein altes
      Versprechen, sein Volk), nicht nur einen Wurf, der zu seinen Fertigkeiten passt.
 5. **Vorlesetexte** (`kind text`, auch die Szenentexte): zwei, drei konkrete Sinnesdetails (Geruch, Geräusch, ein
@@ -137,7 +141,8 @@ Rahmen), dann wird nach dem Plan gebaut.
    in kurzen Sätzen; NPC-Worte höchstens mit einer Betonung, die die Figur selbst setzt. Die Spieler sehen die Marken nicht. Jeder
    erfundene Name kommt mit seiner Aussprache in `campaign set pronunciations`, nie als Umschreibung in den Text. Anfang und Ende
    sind Szenen, kein Pflichtprogramm (Denny 2026-11-13: „Intros und Outros bissel flach“), darum gehören hinein:
-   - **Begrüßung** („Willkommen (zu Beginn)“): kurz, nur Organisatorisches.
+   - **Begrüßung** („Willkommen (zu Beginn)“): kurz, nur Organisatorisches. Was zur Bedienung gesagt wird, gibt es
+     als `variants` je Tisch: mit Sprechknopf und mit Push-to-Talk je die Fassung dafür.
    - **Prolog** bei einer neuen Kampagne oder einer Welt, die die Spieler nicht kennen („bei neuen Kampagnen fehlt
      fast immer ein Prolog“): sechs bis zehn Vorlesetexte („Prolog 1: Die Welt“ …), zusammen bis zu zehn Minuten (Denny 2026-11-13:
      „Prolog ruhig 10 min“; etwa 1200–1400 Wörter), jeder
@@ -211,12 +216,11 @@ wirklich nicht mehr gilt, mit `remove` wegnehmen. Die offenen Fäden und wo die 
 `threads` (ersetzt die Liste; was fehlt, gilt als gelöst) und `party_at` (ein Ortsname): bei einem neuen Kapitel die
 Fäden, mit denen es beginnt, und den Ort, an dem der Abend anfängt.
 
-## 2. Stimmen und Standardsätze
+## 2. Stimmen
 
 - `set_voice` für Erzähler und jeden sprechenden NPC (alle in einem Aufruf: `voices: [{who, from, description}, …]`): `from: "description"` macht aus `voice` eine Stimme (etwa eine
-  Minute je Stimme), `ready` nimmt eine fertige, `creature` legt einen Klang darüber (Drache, Geist …). **Ohne eigene
-  Stimmprobe keine Standardsätze:** Für eine Figur ohne `set_voice` werden keine erzeugt (die Engine erfände sonst eine
-  fremde Stimme, Spieltest 2026-10-28), und ihre Füller fehlen am Tisch.
+  Minute je Stimme), `ready` nimmt eine fertige, `creature` legt einen Klang darüber (Drache, Geist …). Jede sprechende Figur braucht eine eigene Stimmprobe (ohne
+  `set_voice` erfände die Engine eine fremde Stimme, Spieltest 2026-10-28).
 - **Effekte je Stimme**: Effekte sind eigene, benannte Ketten aus Bausteinen im Profil (`voice_effect` list/new/set/
   remove; Bausteine tempo, band, drive, hiss, crackle, dry, gain). Eine Stimme bekommt einen per Name
   (`set_voice effect`, der Erzähler auch `campaign set narrator_effect`); sie liegen nach S2-Pro über jeder Zeile,
@@ -228,11 +232,9 @@ Fäden, mit denen es beginnt, und den Ort, an dem der Abend anfängt.
   soll (`{"Korath": "[emphasis] Ko-rat", "Gasriese*": "[emphasis] Gas-Riese"}`); die Texte behalten ihre Schreibweise.
   Einen Satz mit dem Wort in Varianten sprechen lassen und den Menschen wählen lassen. Einzelheiten:
   `references/sprechen.md`.
-- **Standardsätze** (`set_campaign_entry stock`, Erzähler: `campaign set narrator_stock`): NPCs `greet`, `bye`,
-  `think`, `yes`, `no`, `gesture`, der Erzähler dieselben mit `approach` statt `gesture`. Sie machen den Abend schnell,
-  weil sie vorab erzeugt werden und am Tisch sofort kommen. Wie viele, in welcher Art und über welche Stimmungen:
-  `references/standardsaetze.md` (die Quelle dafür). Spielt der Tisch mit offenem Mikro (Zuhörer), braucht der
-  Erzähler außerdem die Brücken `look` und `act` und viele `think`-Sätze (ebenda).
+- **Keine Standardsätze** (Denny, Tischtest Archet 2026-11-25: „bauen wir alles wieder aus dann“): Die Spielleitung
+  improvisiert ihre ersten Worte am Tisch, das Studio macht keine vorgefertigten Begrüßungen, Füller oder Brücken
+  mehr. Vorbereitet werden nur Vorlesetexte und die ersten Worte der NPCs.
 
 ## 3. Bilder, Karten, Klang (die langsamen Teile, gesammelt)
 
@@ -250,9 +252,10 @@ einzeln (`jobs watch`: den Befehl mit Bash im Hintergrund starten, er weckt dich
   früheren Kapitel), entsteht jedes neue Bild von ihm als Edit mit diesem Bild als Basis (`picture` mit dem alten
   Bild, FLUX Klein): nur Tageszeit, Licht, Wetter, Figuren oder Blickwinkel ändern. Neu aus Text nur, was noch nie
   gezeigt wurde. Danach Alt und Neu nebeneinander ansehen: Bauten, Formen und Farben müssen dieselben sein.
-- **Neue Motive, die Klein schlecht kennt** (Monster, fremde Kreaturen, Sci-Fi-Maschinen, seltsame Bauten): das
-  Ausgangsbild mit `picture` ohne Basis und `advanced_create: true` (Krea 2, nur aus Worten), dann mit diesem Ergebnis
-  als Basis normal weiter (Klein: Helden hinein, Licht, Blickwinkel; oder `advanced_edit`). Krea sieht keine Bilder:
+- **Jedes neue Motiv entsteht mit Krea 2** (Denny 2026-11-23): Alles aus Worten ohne Referenz (Ort, Szene, NSC,
+  Wesen, Gegenstand) mit `picture` ohne Basis und `advanced_create: true`. FLUX Klein oder ein Referenzbild erst
+  danach und nur, wenn es nötig ist: mit dem Ergebnis als Basis Helden hineinsetzen, Licht, Blickwinkel, ein Detail
+  ändern (oder `advanced_edit`). Krea sieht keine Bilder:
   kein `person`, keine Helden mit Foto in der Idee, keine `references`, keine `pose`; NSCs nur über ihr Aussehen in
   Worten. Für viele solche Bilder (`paint_campaign`) `options set kreaCreate: true`, danach wieder `false`: solange es an
   ist, verweigern `paint_player` und `paint_map`. Fehlt Krea, meldet der Aufruf „models missing“ (`models install
@@ -299,8 +302,11 @@ einzeln (`jobs watch`: den Befehl mit Bash im Hintergrund starten, er weckt dich
   gehört (ein Wesen, das überall heult), in die Notizen des NPC.
 - **Musik nach Stimmung** (Denny 2026-11-21): Je Kampagne eine Musik für `explore`, `tense`, `fight`, `rest`
   (`make_sound` mit `kind: "bgmusic"`, lange Schleifen), gebunden mit `campaign set` und `mood_music: { explore: <Datei>,
-  fight: <Datei>, … }`. Eine Szene mit eigener Musik je Stimmung: in ihren `sounds` den Klang mit `mood: "fight"`.
-  Am Tisch blendet die Musik dann mit der Stimmung über, ein Kampf schaltet von selbst um.
+  fight: <Datei>, … }`. Das ist nur der Rückfall: **Jede Szene bekommt eigene Musik** in ihren `sounds` mit `mood`
+  (Archet 2026-11-23: Vorspann, Szene 1 und 2 auf derselben `explore`-Musik, 20 Minuten dieselbe Gitarre). Jeder Ort,
+  an dem gekämpft wird, seine eigene Kampfmusik (`mood: "fight"`), die zum Gegner passt und meist düsterer ist als
+  die der Kampagne (am Turm lief schneller Folk mit Fiedel gegen die Wölfe). Am Tisch blendet die Musik dann mit der
+  Stimmung über, ein Kampf schaltet von selbst um.
 - **Schleifen für die wichtigen Szenen** (Ankunft an einem Ort, der Höhepunkt, ein Ort mit Feuer, Nebel oder Wasser):
   `animate { start: <Szenenbild>, loop: true, idea: "was sich bewegt: das Feuer flackert, Rauch zieht" }` macht ein
   lebendes Standbild (Kamera und Personen still, ohne Ton, 5 s, nahtlos). Nur vor dem Abend: mit offenem Tisch passt
@@ -318,11 +324,11 @@ einzeln (`jobs watch`: den Befehl mit Bash im Hintergrund starten, er weckt dich
 Gehe den Abend im Kopf einmal als Spielleitung durch und prüfe:
 - Jede Szene hat Bild, Vorlesetext und Rezept in den Notizen; die Reihenfolge stimmt.
 - Es gibt eine Kampagnenkarte mit allen Orten als Marker, und jeder Ort, an dem eine Szene spielt, hat seine Karte.
-- Jeder sprechende NPC hat Porträt, Stimme (mit Stimmprobe), `sheet`, Standardsätze; jeder stumme hat Geräusche.
+- Jeder sprechende NPC hat Porträt, Stimme (mit Stimmprobe), `sheet`; jeder stumme hat Geräusche.
 - Jeder gebundene Klang ist da (mit `make_sound` gemacht, eine Aufnahme nur als Ausweg) und mit `check_sound` gegen
   das gehört, was er sein soll.
-- Die Kampagne hat Musik je Stimmung (`campaign` zeigt `moodMusic`: mindestens `explore` und `fight`), und die
-  wichtigen Szenen haben ihre Schleife (`animate loop`, in den Notizen der Szene).
+- Die Kampagne hat Musik je Stimmung (`campaign` zeigt `moodMusic`: mindestens `explore` und `fight`), jede Szene
+  ihre eigene mit `mood`, jeder Kampfort seine Kampfmusik, und die wichtigen Szenen haben ihre Schleife (`animate loop`, in den Notizen der Szene).
 - Bei einem Kapitel einer Kampagne: `threads` und `party_at` gesetzt (`campaign` zeigt `threads` und `partyAt`).
 - Jede Szene auf einer Karte hat ihre Startfelder in `markers`, und `brokenReferences` ist leer.
 - Jeder Held hat einen Weg, der zu seinem Bogen passt, und jeder Wurf nennt die Fertigkeit, die er auch hat.
@@ -350,7 +356,7 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
    Orte, sprechende NPCs, Helden), Karten ganz gemalt, ohne Nähte, alle Orte mit Marker, und jeder Marker sitzt auf
    dem, was die Karte an der Stelle zeigt (Karte ansehen, nicht nur zählen); jede Szene auf einer Karte hat
    Startfelder für Helden und NPCs in `markers`, die auf begehbaren Feldern liegen; jede sprechende Figur mit eigener Stimmprobe,
-   Standardsätze erzeugt (`prepare_table` gelaufen, ohne Lücken und ohne `failed`); Klänge gebunden, ihre Dateien da,
+   Vorlesetexte erzeugt (`prepare_table` gelaufen, ohne Lücken und ohne `failed`); Klänge gebunden, ihre Dateien da,
    mit `make_sound` gemacht (echte Aufnahmen nur, wo das nicht reichte), mit `check_sound` gegen ihren Namen gehört, Schleifen und Lautstärken
    richtig; Handouts, Begrüßung, Leitfaden da, ein Handout mit Geheimnis zum Flüstern; bei einem Kapitel `threads`
    und `party_at` gesetzt; `brokenReferences` leer.
@@ -358,8 +364,7 @@ zu alt installiert; dem Menschen sagen), bekommt ein allgemeiner Agent die Prüf
    Helden haben, mit passender Schwierigkeit; Gegnerwerte an der Party gemessen; ein umgebogenes Regelwerk überall
    gleich umgebogen (auch `dice_faces`); Namen, Orte, Fraktionen und Zeitlinie widersprechen sich nicht, keine Reste
    aus einem anderen Setting; Bilder passen zu `looks` (je Bild ansehen: falsche Person, kaputte Hände, falscher
-   Stil); Stimmbeschreibungen passen (Alter, Geschlecht, „German“, Jugendliche nicht kindlich); Standardsätze mit
-   niedrigem `how`, Rufname vorn; Szenentexte reine Erzählerstimme ohne wörtliche Rede und ohne vorausgesetzten Stand;
+   Stil); Stimmbeschreibungen passen (Alter, Geschlecht, „German“, Jugendliche nicht kindlich); Szenentexte reine Erzählerstimme ohne wörtliche Rede und ohne vorausgesetzten Stand;
    keine unabsichtlichen Spoiler in Texten, Bildern und Namen; was nur einen Helden angeht, steht im Handout zum
    Flüstern statt in einem Text für alle; was gesprochen wird, ist zum Sprechen geschrieben (`references/sprechen.md`:
    die Art des Textes entscheidet, `[emphasis]` sparsam und nie auf Füllwörtern, kein zerhackter Text, keine Großbuchstaben und keine

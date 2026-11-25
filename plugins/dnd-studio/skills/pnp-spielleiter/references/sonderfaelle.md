@@ -11,7 +11,7 @@ an einer ruhigen Stelle, nie mitten in einem Wurf oder Gespräch:
 1. Als Erzähler ansagen: „Kurze Pause, die Spielleitung braucht einen Moment. Gleich geht es weiter.“ und `set_pause`.
 2. Alles Wichtige ins Studio, nicht nur in deinen Kopf: Wo die Helden stehen (Szene, Karte, Marker), ihre Werte
    (`set_status` steht schon), was am Tisch erfunden wurde (Namen, Orte, Tatsachen), offene Fäden und was als
-   Nächstes käme. Als Session-Notizen (`write_session`, oder `set_campaign_entry kind session` für die heutige) und,
+   Nächstes käme. Als Session-Notizen (`set_campaign_entry kind session` mit `notes`, für die heutige mit `append`) und,
    wo es Dauer hat, in die Kampagne (NPC-Notizen; `campaign set` mit `threads` und `party_at`, siehe 7).
 3. Dem Menschen am Rechner sagen, dass er jetzt `/compact` auslösen soll, und warten.
 4. Danach `campaign` und `table_state` mit `log` lesen, die Pause beenden (`set_pause on: false`) und als Erzähler
@@ -26,7 +26,7 @@ an einer ruhigen Stelle, nie mitten in einem Wurf oder Gespräch:
 ## Fehler
 
 - Ein Werkzeug oder Parameter ist unbekannt (ältere Studio-Version): ohne `prepare_table` feste Zeilen einzeln mit
-  `say_line prepare`; ohne `opener`/`from` die Begrüßung an den Anfang des Textes; ohne `sound` ein `play_sound`
+  `say_line prepare`; ohne `sound` ein `play_sound`
   direkt davor; ohne `parts` einzelne `say_line` nacheinander. Der Abend funktioniert, nur langsamer. Ein Studio,
   das neuer ist als die laufende App, braucht einen Neustart der App, bevor neue Parameter da sind.
 - Ein Werkzeug läuft in den Timeout: Zustand mit `table_state` (und `log`) prüfen, statt blind zu wiederholen; oft
@@ -39,5 +39,5 @@ an einer ruhigen Stelle, nie mitten in einem Wurf oder Gespräch:
   zum Stand weitermacht. Den Stand (Werte, wer wo, letzter Zug) dafür laufend im Kopf oder im Kanon halten.
 - Ein NPC klingt falsch (zu jung, zu alt, falsches Geschlecht): in einer Pause `set_voice` mit `from: "description"`
   und einer deutlicheren Beschreibung (Ödland-Abend: die vierzehnjährige Lotte klang wie eine Vierjährige; „a
-  teenage girl of fifteen … not childish, already sounds almost grown-up“ half), danach seine Standardsätze und
-  festen Texte neu vorbereiten.
+  teenage girl of fifteen … not childish, already sounds almost grown-up“ half), danach seine festen Texte neu
+  vorbereiten.

@@ -5,8 +5,7 @@ während du leitest. Nur mit dem Plugin `dnd-studio` (die Agents gehören zu ihm
 
 **Helfer-Agents, die nie bremsen** (Denny, 2026-10-29: „vllt bist du nie alleine … die dürfen dich aber nicht hart
 ausbremsen“). Du bist der Erzähler und der Einzige am Tisch: Nur du rufst `say_line`, `show_players`, `roll_dice`,
-`play_sound`, `wait_for_players` und die übrigen Tisch-Werkzeuge (einzige Ausnahme: der Zuhörer, `dnd-studio:pnp-zuhoerer`,
-holt mit dem Schalter `listener: "haiku"` die Züge und schneidet; er spricht nie). Helfer laufen im Hintergrund (Agent-Tool), und
+`play_sound`, `wait_for_players` und die übrigen Tisch-Werkzeuge. Helfer laufen im Hintergrund (Agent-Tool), und
 auf keinen wartest du zwischen zwei Zügen:
 - **`dnd-studio:pnp-vorbereiter`** bei jeder Abweichung und jedem Szenenwechsel: malt die Bilder, die bald gebraucht werden,
   und macht kurze Texte für die nächsten wahrscheinlichen Momente in der richtigen Stimme fertig. Der Auftrag nennt
@@ -18,7 +17,7 @@ auf keinen wartest du zwischen zwei Zügen:
   damit es eine Zusammenfassung deines Kontexts übersteht (Denny, 2026-10-30: „damit es konsistent bleibt“). Was du
   selbst am Tisch festlegst und gleich einträgst, bekommt `source: "table"`. Den Kanon (`campaign`, Liste `canon`;
   `canon_about` für einen Namen) liest du vor jedem Szenenwechsel und nach jeder Pause; am Ende ist er die Grundlage
-  für `write_session`, die offenen Fäden (`threads`) und, bei einer Kampagne, den Stand in `about`. `campaign set`
+  für die Session (`set_campaign_entry kind session`), die offenen Fäden (`threads`) und, bei einer Kampagne, den Stand in `about`. `campaign set`
   mit `threads` und `party_at` rufst nur du auf (Skill, Abschnitt 7), kein Helfer: `threads` ersetzt die ganze Liste, auch was der
   Mensch am Board abgehakt hat.
 - Die drei sind Agents des Plugins (`subagent_type` mit Präfix: `dnd-studio:pnp-vorbereiter`,

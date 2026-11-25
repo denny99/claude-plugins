@@ -127,23 +127,6 @@ test("launcher at a table with warn and bad hints: only the bad one in the band,
   expect(bandHint(hints.slice(0, 1))).toBeUndefined();
 });
 
-test("a listener that woke the GM is the normal hand-over, not a warning", () => {
-  const ev = bandEvening(
-    {
-      listener: {
-        running: [],
-        returned: true,
-        woke: true,
-        why: "Ada fragt",
-        between: [],
-        turn: [],
-      },
-    } as never,
-    true,
-  );
-  expect(ev.watching).toBe(true);
-});
-
 test("build: plan and findings show their file name, not the temp path", () => {
   expect(
     fileName("/private/tmp/claude-501/abc/scratchpad/maengel-technik.md"),

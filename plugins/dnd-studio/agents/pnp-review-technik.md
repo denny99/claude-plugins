@@ -44,7 +44,7 @@ Prüfe:
   außerhalb der Karte); prüf auf der Karte, ob die Felder auch passen (Helden nicht mitten im Gegner) (Ödland-Abend 2026-10-30: eine Regionalkarte ohne Marker, „i did not understand what what
   was“). Die Marker selbst setzt das Studio beim Szenenstart; dass vor dem Abend keine Figuren auf der
   Karte stehen, ist kein Mangel.
-- Jede sprechende Figur hat eine eigene Stimmprobe und Standardsätze; `prepare_table` ist gelaufen, ohne Lücken
+- Jede sprechende Figur hat eine eigene Stimmprobe; `prepare_table` ist gelaufen, ohne Lücken
   (gekippte Stimmen stehen dort als `failed`). Du rufst es nicht selbst auf (es erzeugt); seine letzte Antwort nennt
   der Auftrag. Fehlt sie, melde das als offenen Punkt.
 - Klänge gebunden, ihre Dateien da, Schleifen und Lautstärken sinnvoll (Musik und Atmo unter Sprache höchstens 0.3).

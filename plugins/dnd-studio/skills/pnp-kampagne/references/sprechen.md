@@ -40,7 +40,7 @@ sprechen“, und Betonungen auf Füllwörtern („da seid ihr [emphasis] ja“) 
    | Beschreibung (Ort, Ankunft) | normal lang, am Ende ein, zwei kurze Sätze für den Haken | etwa eine je drei, vier Sätze | keine |
    | Stiller, menschlicher Moment | normal lang | höchstens eine | keine |
    | Spannung (Flug, Gefahr, Eile) | kurz, auch knapp abgehackt | etwa eine je Satz | sparsam, vor dem einen Wort, das zuschlägt |
-   | NPC-Worte, Standardsätze | wie Menschen reden, Satzzeichen wie geschrieben | höchstens eine, nur auf dem Wort, das die Figur selbst betont (eine Warnung, eine Bedingung) | höchstens eine |
+   | NPC-Worte | wie Menschen reden, Satzzeichen wie geschrieben | höchstens eine, nur auf dem Wort, das die Figur selbst betont (eine Warnung, eine Bedingung) | höchstens eine |
 
 3. **`[emphasis]` nur auf dem Wort, das das Bild trägt** (das Ding, die Zahl, das Gefühl), nie auf Füllwörtern
    („ja“, „doch“, „mal“), nie zwei in einem Satz. Großbuchstaben wirken auch, sind aber im Spielerfenster zu sehen.
@@ -78,7 +78,7 @@ Autors. Eine Beschreibung, die zu einer Referenz passen soll: deren Tonhöhe mes
 „medium-pitched“, „light baritone“ oder „deep“ danach wählen. „low baritone“ ergab 72 Hz und klang zu tief. Jede
 Erzeugung klingt anders: die gehörte Datei übernehmen (`set_voice from file`), nicht neu aus der Beschreibung machen.
 
-Das gilt auch für Standardsätze, erste Worte der NPCs und was die Spielleitung am Tisch frei spricht.
+Das gilt auch für die ersten Worte der NPCs und was die Spielleitung am Tisch frei spricht.
 
 ## Aussprache der eigenen Wörter: `campaign set pronunciations`
 
@@ -104,8 +104,8 @@ campaign set {
 - Das längste passende Wort gewinnt; was eingesetzt wurde, wird nicht noch einmal ersetzt.
 - **Ändern:** die genannten Wörter kommen dazu oder ändern sich, `""` nimmt eines heraus, `null` leert alles.
   `campaign get` zeigt die Liste unter `pronunciations`.
-- Es wirkt auf **jede Stimme** (Erzähler, NPCs, Helden), auf `say_line`, `prepare_table`, `talk_npc`, die
-  Standardsätze und die Vorlese-Knöpfe im Studio. Nach einer Änderung macht `prepare_table` die betroffenen Zeilen neu.
+- Es wirkt auf **jede Stimme** (Erzähler, NPCs, Helden), auf `say_line`, `prepare_table`, `talk_npc` und
+  die Vorlese-Knöpfe im Studio. Nach einer Änderung macht `prepare_table` die betroffenen Zeilen neu.
 
 **Wie man die richtige Schreibweise findet:** einen Satz mit dem Wort ein paar Mal in Varianten sprechen lassen und
 den Menschen hören lassen, der weiß, wie es klingen soll (`say_line`, ein Teil je Variante, „Eins. …“, „Zwei. …“

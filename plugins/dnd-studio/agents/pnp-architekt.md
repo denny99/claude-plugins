@@ -22,7 +22,8 @@ Der Plan (in die Datei, deutsch, knapp):
   naheliegende Abzweigung (Skill `pnp-kampagne`, „Mehr Strecke statt mehr Verzweigungen“). Szenen als Lagen, nicht
   als Wege; keine Köder, die die Gruppe zurück aufs Rezept ziehen; so viele Kämpfe, die sich nicht wegreden lassen,
   wie Ton und Rahmen verlangen, und bei den übrigen, was Ausweichen kostet (Skill `pnp-kampagne`, „Lage statt Weg“, „Kämpfe, die
-  stattfinden“).
+  stattfinden“). Kämpfe sind gefährlich: Gegner brechen nicht beim ersten Erfolg, und was danach kommt (Rückweg mit
+  Verfolgern), geschieht auch, wenn der Anführer weicht („Kämpfe sind gefährlich“).
 - Je Held ein Weg und ein großer Moment aus seinem Bogen; Geheimnisse, die sich enthüllen oder bewusst behalten lassen
   (beides belohnt), und wo eine geheime Szene Platz hat (Flüstern, Nebenraum).
 - Orte mit Karten: welche Karte (Typ nie raten), was darauf liegen muss, wo jeder Ort-Marker hingehört; Karten ohne
@@ -38,7 +39,8 @@ Der Plan (in die Datei, deutsch, knapp):
   einem umgedeuteten Spiel die eigenen Würfelseiten (`dice_faces`).
 - Was vorab gemacht werden muss und in welcher Reihenfolge: Bilder, Stimmen, und welche Klänge mit `make_sound`
   zu machen sind (je Klang ein paar kurze englische Worte; echte Aufnahmen nur, wo das Erzeugte nicht reicht).
-- Was den Tisch lebendig macht (Denny 2026-11-21): die Musik je Stimmung (`explore`, `tense`, `fight`, `rest`), welche
+- Was den Tisch lebendig macht (Denny 2026-11-21): die Musik je Stimmung (`explore`, `tense`, `fight`, `rest`) als
+  Rückfall, dazu je Szene eigene Musik mit `mood` und je Kampfort eine passende, meist düsterere Kampfmusik, welche
   Szenen eine Schleife bekommen (Ankunft, Höhepunkt, Feuer, Nebel, Wasser; der Maler macht sie), und ob die Welt einen
   eigenen Effekt hat (Strahlung, Schattenmagie …; der Texter legt ihn an), mit den Szenen, in denen er passt.
 - Bei einem Kapitel einer Kampagne: die Fäden, mit denen es beginnt, und der Startort (`campaign set threads`,

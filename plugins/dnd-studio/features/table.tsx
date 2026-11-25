@@ -14,7 +14,6 @@ import {
   noteStudioStatus,
   renderDiscord,
   renderInterjections,
-  renderListener,
   STALE_TEXT,
 } from "./evening";
 import { autoOpen, Fold, noteTableEnded } from "./dnd-ui";
@@ -26,7 +25,6 @@ import {
   advance,
   bandParts,
   currentTurn,
-  isListenerMode,
   isLive,
   strandedTurns,
   looksPrivate,
@@ -160,8 +158,8 @@ async function followLiveTable($: EngineInterface): Promise<void> {
 const LIVE_POLL_MS = 30_000;
 
 /**
- * Takes the turns that wait with nobody to answer them (wait_for_players quiet, one turn a call, a second at most
- * each) and drops them: the Studio has no tool to discard a turn, wait_for_players is the only way to take one.
+ * Takes the turns that wait with nobody to answer them (wait_for_players, one turn a call, a second at most each)
+ * and drops them: the Studio has no tool to discard a turn, wait_for_players is the only way to take one.
  */
 export async function discardTurns(
   $: EngineInterface,
@@ -171,7 +169,6 @@ export async function discardTurns(
   try {
     for (let i = 0; i < count; i++) {
       const r = await studioCall($, "wait_for_players", {
-        quiet: true,
         timeout_seconds: 1,
       });
       if (r.finished !== true) break;
@@ -335,7 +332,8 @@ export async function observe(
     case "say_line": {
       await patchLive($, () => ({ saidAt: now, ...touch(input.from) }));
       // The Studio nests the cut under `table` (say_line's table part); older answers had it on top.
-      const cut = { ...json, ...obj(json.table) };
+      // a line said with wait: false reports how it went in the next say_line's before (Ödland chapter 3, 2026-11-23)
+      const cut = { ...json, ...obj(json.table), ...(json.before && typeof json.before === "object" && !obj(json.table).interrupted ? obj(json.before) : {}) };
       const unheardRaw = cut.unheard;
       const unheard =
         typeof unheardRaw === "string"
@@ -349,22 +347,18 @@ export async function observe(
                 .filter(Boolean)
                 .join(" ")
             : "";
-      const listenerCut =
-        cut.interrupted === true &&
-        (isListenerMode(view) || /the listener cut/i.test(String(cut.note)));
-      if (listenerCut) {
+      // a talk button cuts nothing since 2026-11-23: a line is only cut by the game master (interrupt); held means the
+      // players talk and it plays when they let go
+      if (cut.held === true)
         notes.push(
-          `**The listener cut the line** — do nothing more at the table: wait for the listener's return (pnp-zuhoerer), then answer the turn it brings${unheard ? `; afterwards deliver what they did not hear if it still holds: "${truncate(unheard, 160)}"` : ""}.`,
+          "**The players are talking** — the line plays when they let go; take their turn next and answer it.",
+        );
+      if (cut.interrupted === true || unheardRaw) {
+        notes.push(
+          `**Line cut** — deliver later what they did not hear${unheard ? `: "${truncate(unheard, 160)}"` : ""}, if it still holds.`,
         );
         await patchLive($, () => ({
-          warning: "listener cut the line: wait for its return",
-        }));
-      } else if (cut.interrupted === true || cut.held === true || unheardRaw) {
-        notes.push(
-          `**The players cut in** — answer them first; deliver later what they did not hear${unheard ? `: "${truncate(unheard, 160)}"` : ""}.`,
-        );
-        await patchLive($, () => ({
-          warning: "players cut in: deliver the rest later",
+          warning: "line cut: deliver the rest later",
         }));
       }
       if (json.sounds_not_played || json.sound_note)
@@ -387,7 +381,15 @@ export async function observe(
       break;
     }
     case "show_players": {
-      if (input.map && !(Array.isArray(input.markers) && input.markers.length))
+      // only places, fog, an overlay or the weather on the map shown: its markers stay (the Discord test of
+      // 2026-11-25 was told off for a reveal_places)
+      const mapUpdate =
+        !input.picture &&
+        !input.title &&
+        ["reveal_places", "hide_places", "reveal", "hide", "fog", "places", "overlay", "weather", "effect", "big"].some(
+          (k) => input[k] !== undefined,
+        );
+      if (input.map && !mapUpdate && !(Array.isArray(input.markers) && input.markers.length))
         notes.push(
           "A map without markers: nobody knows where they are — add markers for the heroes (and what they see).",
         );
@@ -429,13 +431,6 @@ export async function observe(
         notes.push(
           `**Screen share ended** for ${json.stream_ended.map(String).join(", ")}: ask them to share the players' window again.`,
         );
-      const mode =
-        input.listener === "haiku" || input.listener === "off"
-          ? String(input.listener)
-          : typeof json.listener === "string"
-            ? json.listener
-            : "";
-      if (mode && view) await setTable($, { ...view, listener: mode });
       if (input.action === "leave" && view?.speaker)
         notes.push("A line was still playing when the bot left.");
       break;
@@ -568,8 +563,6 @@ export async function watch(
   await noteProgressCall($, tool, e, r, start);
   try {
     if (r.deny) return r as never;
-    // The listener's own take (pnp-zuhoerer, a subagent, quiet): its turn reaches the GM with the listener's return.
-    if (tool === "wait_for_players" && (e as Obj)?.agentId) return r as never;
     const text = textOf(r.result ?? r);
     const notes = await observe($, tool, inputOf(e), text);
     if (await noteStale($, text))
@@ -808,7 +801,7 @@ export async function bandStatus($: EngineInterface): Promise<{
   const live = await readLive($);
   const now = await $.clock.now();
   const band = bandParts(view, ini, live, now);
-  const ev = bandEvening(await readEvening($), isListenerMode(view));
+  const ev = bandEvening(await readEvening($));
   const hints: { text: string; tone: "ok" | "warn" | "bad" }[] = [];
   if (band.silence > SILENCE_WARN_S)
     hints.push({ text: `${band.silence} s still – Füller?`, tone: "warn" });
@@ -883,8 +876,7 @@ export function renderTable(
   }
   // `view.error` (a failed read) stands in the pane's fixed status line, see the pane's render in hooks/register.tsx
 
-  // The card „Tisch“: what is open and who hears the players, problems as rows of their own. The listener's own
-  // state stands only in the Zuhörer card (one place per state).
+  // The card „Tisch“: what is open and who hears the players, problems as rows of their own.
   const running = isLive(view, ini);
   const watching = evening.watcher.state === "running";
   const stranded = strandedTurns(view, ini, watching);
@@ -927,7 +919,7 @@ export function renderTable(
         wrap: true,
       }),
     );
-  const unheardTable = running && !isListenerMode(view) && !watching;
+  const unheardTable = running && !watching;
   const desk: RenderElement[] = running
     ? [
         ListRow(k, {
@@ -952,17 +944,13 @@ export function renderTable(
               }),
             ]
           : []),
-        ...(isListenerMode(view)
-          ? []
-          : [
-              ListRow(k, {
-                key: "desk-gm",
-                status: watching ? "ok" : "warning",
-                title: watching
-                  ? "Claude hört auf die Spieler"
-                  : "Niemand hört auf die Spieler",
-              }),
-            ]),
+        ListRow(k, {
+          key: "desk-gm",
+          status: watching ? "ok" : "warning",
+          title: watching
+            ? "Claude hört auf die Spieler"
+            : "Niemand hört auf die Spieler",
+        }),
       ]
     : [];
   if (desk.length || problems.length)
@@ -1221,55 +1209,6 @@ export function renderTable(
     }),
   );
 
-  // NPCs: stock lines in their voice, picked by hand; a line is a row (the text wraps), the deed is „Sprechen“
-  for (const n of view.npcs)
-    out.push(
-      Card(k, {
-        key: `npc-card-${n.name}`,
-        title: {
-          icon: "chat",
-          title: n.place ? `${n.name} · ${n.place}` : n.name,
-        },
-        empty: "Keine vorbereiteten Sätze.",
-        children: n.stock.map((l, i) =>
-          ListRow(k, {
-            key: `npc-line-${n.name}-${i}`,
-            title: `„${l.text}“`,
-            meta: l.how,
-            wrap: true,
-            actions: [
-              {
-                key: `npc-${n.name}-${i}`,
-                label: "Sprechen",
-                variant: "secondary",
-                onPress: () =>
-                  void tableAction($, `${n.name}: ${l.text}`, "say_line", {
-                    voice: n.name,
-                    text: l.text,
-                    ...(l.how ? { how: l.how } : {}),
-                  }),
-              },
-            ],
-          }),
-        ),
-        actions: n.stock.length
-          ? []
-          : [
-              {
-                key: `npc-${n.name}-greet`,
-                label: "Begrüßen",
-                variant: "secondary",
-                onPress: () =>
-                  void tableAction($, `${n.name} grüßt`, "say_line", {
-                    voice: n.name,
-                    text: "",
-                    opener: "greet",
-                  }),
-              },
-            ],
-      }),
-    );
-
   // Dice and secrets: drawn only when there is something (R8)
   const rolls = view.rolls.slice(-5);
   if (rolls.length)
@@ -1308,7 +1247,6 @@ export function renderTable(
       }),
     );
 
-  out.push(renderListener($, k, { evening, view, rules }));
   out.push(renderDiscord($, k, { evening, view, rules, now }));
 
   // Pause · end of the evening · interjections: one card per topic, each with one action row and one hint

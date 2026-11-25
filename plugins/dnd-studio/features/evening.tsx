@@ -1,5 +1,5 @@
 /**
- * The evening around the table: the watcher (`wait_for_players watch` run as a background Bash), the person's
+ * The evening around the table: the watcher (`wait_for_players watch` run with Monitor or as a background Bash), the person's
  * interjections for the debrief, the Discord section, and the Studio version (stale MCP schemas after an app update).
  * Everything here only reads, notes and reminds; nothing acts on the table by itself.
  */
@@ -8,11 +8,8 @@ import type { EngineInterface, On, RenderElement } from "claude-code";
 import {
   debriefText,
   discordOf,
-  EMPTY_LISTENER,
-  isListenerMode,
   isLive,
   isWatchCommand,
-  listenerReturnOf,
   watchIdOf,
   slug,
   staleSchemaOf,
@@ -31,9 +28,7 @@ import {
   campaignName,
   readEvening,
   readInitiative,
-  readLive,
   readTable,
-  setTable,
 } from "../lib/state";
 import { studioCall } from "../lib/studio";
 import {
@@ -45,7 +40,6 @@ import {
   sanitize,
   ListRow,
   Sentence,
-  Toggle,
   truncate,
 } from "../lib/ui";
 import { Fold } from "./dnd-ui";
@@ -53,7 +47,6 @@ import type { Action, AskOptions, AskResult, Kit } from "../lib/ui";
 import type {
   EveningState,
   Interjection,
-  ListenerState,
   Rules,
   TableView,
 } from "../types";
@@ -64,10 +57,7 @@ const obj = (v: unknown): Obj =>
 
 export const STALE_TEXT = "MCP schemas stale — restart Claude";
 export const NO_WATCHER_NOTE =
-  "Your last turn ended at a live table without a running watcher: the players' turns go unnoticed. Call wait_for_players with watch: true and run its command with Bash run_in_background before you end a turn.";
-export const NO_LISTENER_NOTE =
-  'Your last answer ended in listener mode (discord listener haiku) without a running pnp-zuhoerer: nothing wakes you when the players speak. Start exactly one dnd-studio:pnp-zuhoerer in the background (Agent, run_in_background: true) at the beginning of each answer to a listener wake (pnp-spielleiter, references/zuhoerer.md).';
-export const LISTENER_AGENT = "pnp-zuhoerer";
+  "Your last turn ended at a live table without a running watcher: the players' turns go unnoticed. Start the watch (next_watch from the last watch's output, else wait_for_players with watch: true) with Monitor, or Bash run_in_background, before you end a turn.";
 
 /**
  * Submits a prompt for the main thread on a person's press (never on its own), through the kit's `askClaude`: a toast
@@ -250,7 +240,7 @@ export async function noteBash(
 ): Promise<void> {
   const command = String(input.command ?? "");
   if (!isWatchCommand(command)) return;
-  // A subagent's watch is the listener's (pnp-zuhoerer, in the foreground): never the GM's watcher.
+  // A subagent's watch is its own: never the GM's watcher.
   if (agentId) return;
   const now = await $.clock.now();
   const watchId = watchIdOf(command);
@@ -293,186 +283,13 @@ async function tableIsLive($: EngineInterface): Promise<boolean> {
 export async function noteTurnEnd($: EngineInterface): Promise<boolean> {
   if (!(await tableIsLive($))) return false;
   const s = await readEvening($);
-  if (isListenerMode(await readTable($))) {
-    // Listener mode: the running pnp-zuhoerer is the watcher.
-    const running = await dropExpiredListeners($, s.listener.running);
-    if (running.length) return false;
-    // It came back during this very turn (or its wake is still on its way): the GM restarts it after reading it.
-    const l = s.listener;
-    if (s.wakePending) return false;
-    if (!l.error && l.endedAt && l.endedAt >= (s.mainTurnAt ?? 0)) return false;
-    await patchEvening($, () => ({
-      remindPending: true,
-      remindListener: true,
-    }));
-    if (!s.remindPending)
-      $.ui.toast(
-        "⚠ Claude hat ohne Zuhörer geantwortet: die Spieler werden gerade nicht gehört. Claude wird beim nächsten Zug daran erinnert.",
-      );
-    return true;
-  }
   if (s.watcher.state === "running") return false;
-  await patchEvening($, () => ({ remindPending: true, remindListener: false }));
+  await patchEvening($, () => ({ remindPending: true }));
   if (!s.remindPending)
     $.ui.toast(
       "⚠ Niemand hört gerade auf die Spieler: ihre Züge kommen nicht an. Claude wird beim nächsten Zug daran erinnert.",
     );
   return true;
-}
-
-// --- the listener (pnp-zuhoerer) ---------------------------------------------------------------------------------
-
-/** Listeners started without an agentId carry a made-up id `pnp-zuhoerer-<startedAt>`. */
-const SYNTHETIC_PREFIX = `${LISTENER_AGENT}-`;
-/** A made-up listener id older than this is a run whose end never reached the mod: dropped. */
-const SYNTHETIC_TTL_MS = 15 * 60 * 1000;
-
-const syntheticAt = (id: string): number | undefined => {
-  if (!id.startsWith(SYNTHETIC_PREFIX)) return undefined;
-  const at = Number(id.slice(SYNTHETIC_PREFIX.length));
-  return Number.isFinite(at) ? at : undefined;
-};
-
-/** `running` without the made-up ids older than the TTL (stored back when any were dropped). */
-async function dropExpiredListeners(
-  $: EngineInterface,
-  running: string[],
-): Promise<string[]> {
-  const now = await $.clock.now();
-  const keep = running.filter((r) => {
-    const at = syntheticAt(r);
-    return at === undefined || now - at < SYNTHETIC_TTL_MS;
-  });
-  if (keep.length !== running.length)
-    await patchEvening($, (e) => ({
-      listener: {
-        ...e.listener,
-        running: e.listener.running.filter((r) => keep.includes(r)),
-      },
-    }));
-  return keep;
-}
-
-/** The main thread's turn started: a listener return after this belongs to this turn; an earlier wake is now read. */
-export async function noteMainTurnStart($: EngineInterface): Promise<void> {
-  const now = await $.clock.now();
-  await patchEvening($, () => ({ mainTurnAt: now, wakePending: false }));
-}
-
-/** A pnp-zuhoerer started (agent.spawn): it is the watcher in listener mode. */
-export async function noteListenerSpawn(
-  $: EngineInterface,
-  agentId: string | undefined,
-): Promise<void> {
-  const now = await $.clock.now();
-  const id = agentId || `${LISTENER_AGENT}-${now}`;
-  await patchEvening($, (s) => ({
-    listener: {
-      ...s.listener,
-      running: [...s.listener.running.filter((r) => r !== id), id],
-      startedAt: now,
-      error: "",
-    },
-    remindPending: false,
-    remindListener: false,
-  }));
-}
-
-/**
- * An agent's turn ended: when it is a running listener, read its return `{woke, why, turn, between}`. A wake with a
- * turn counts as the players' turn (silence, spotlight fairness, a pending secret). True when it was the listener.
- */
-export async function noteListenerEnd(
-  $: EngineInterface,
-  agentId: string,
-  answer: string,
-  failed: boolean,
-): Promise<boolean> {
-  const s = await readEvening($);
-  const running = await dropExpiredListeners($, s.listener.running);
-  const back = failed ? undefined : listenerReturnOf(answer);
-  // A listener spawned without an agentId: its return is matched only when it is the one such run.
-  const synthetic = running.filter((r) => syntheticAt(r) !== undefined);
-  const id = running.includes(agentId)
-    ? agentId
-    : back && synthetic.length === 1
-      ? synthetic[0]
-      : undefined;
-  if (!id) return false;
-  const now = await $.clock.now();
-  const rest = running.filter((r) => r !== id);
-  if (!back) {
-    await patchEvening($, (e) => ({
-      listener: {
-        ...e.listener,
-        running: rest,
-        endedAt: now,
-        error: failed
-          ? "Der Zuhörer ist abgebrochen"
-          : "Der Zuhörer kam mit einer unlesbaren Antwort zurück",
-      },
-    }));
-    return true;
-  }
-  const lines = back.lines.map((l) => `${l.who}: ${l.text}`);
-  await patchEvening($, (e) => ({
-    listener: {
-      ...e.listener,
-      running: rest,
-      endedAt: now,
-      returned: true,
-      woke: back.woke,
-      why: back.why,
-      turn: lines.length ? lines : back.woke ? [] : e.listener.turn,
-      sent: back.sent,
-      secret: back.secret,
-      // a real wake was answered: what the group said before it is the GM's now
-      between: [
-        ...(e.listener.returned && e.listener.woke ? [] : e.listener.between),
-        ...back.between,
-      ].slice(-30),
-      error: "",
-    },
-    wakePending: back.woke,
-  }));
-  if (back.woke && back.lines.length) {
-    const live = await readLive($);
-    const addressed = { ...live.addressed };
-    for (const l of back.lines) if (l.who) addressed[l.who] = now;
-    const secret = back.lines.find((l) => l.secret);
-    await patchLive($, () => ({
-      turnAt: now,
-      addressed,
-      secretPending: secret
-        ? secret.who || "a player"
-        : back.secret
-          ? back.lines[0]?.who || "a player"
-          : live.secretPending,
-    }));
-  }
-  return true;
-}
-
-/** The listener switch on a person's press: `discord` with `listener` haiku/off; the Table view follows at once. */
-export async function setListener(
-  $: EngineInterface,
-  mode: "haiku" | "off",
-): Promise<void> {
-  try {
-    const json = await studioCall($, "discord", { listener: mode });
-    await noteDiscord($, "discord", { action: "status" }, json);
-    const view = await readTable($);
-    if (view) await setTable($, { ...view, listener: mode });
-    $.ui.toast(
-      mode === "haiku"
-        ? "Zuhörer an: die Spieler sprechen einfach los, ohne Sprechknopf; Claude meldet sich, wenn ein Zug es braucht."
-        : "Zuhörer aus: die Spieler nutzen wieder die Sprechknöpfe unter der Nachricht des Bots.",
-    );
-  } catch (err) {
-    $.ui.toast(
-      `✗ Zuhörer nicht umgeschaltet: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`,
-    );
-  }
 }
 
 // --- interjections -------------------------------------------------------------------------------------------------
@@ -580,10 +397,27 @@ export function registerEvening(on: On): void {
     return verdict;
   }).catch(($, e, next) => next(e));
 
+  // The watch run with Monitor (the skill's way since the latency test of 2026-11-25: its one line of output, the
+  // players' turn, reaches the game master as the event): always beside the turn, like a Bash in the background.
+  on("tool.check", { tool: "Monitor" }, async ($, e, next) => {
+    const verdict = await next(e);
+    try {
+      const input = obj(e.input);
+      if (
+        e.tool_use_id &&
+        verdict.decision !== "deny" &&
+        isWatchCommand(String(input.command ?? ""))
+      )
+        await noteBash($, { ...input, run_in_background: true }, e.agentId);
+    } catch {
+      // watching never changes a verdict
+    }
+    return verdict;
+  }).catch(($, e, next) => next(e));
+
   on("turn.start", async ($, e, next) => {
     try {
       if (!e.agentId) {
-        await noteMainTurnStart($);
         await endInterjections($);
       }
     } catch {
@@ -623,18 +457,12 @@ export function registerEvening(on: On): void {
         /<task-notification>/.test(e.text)
       ) {
         await noteTaskNotification($, e.text);
-        // a returned agent reaches the main thread: a pending wake is delivered with it
-        if ((await readEvening($)).wakePending)
-          await patchEvening($, () => ({ wakePending: false }));
       } else if (isPersonsPrompt(e)) {
         await endInterjections($);
         const s = await readEvening($);
         if (s.remindPending) {
-          context = [s.remindListener ? NO_LISTENER_NOTE : NO_WATCHER_NOTE];
-          await patchEvening($, () => ({
-            remindPending: false,
-            remindListener: false,
-          }));
+          context = [NO_WATCHER_NOTE];
+          await patchEvening($, () => ({ remindPending: false }));
         }
         if (await tableIsLive($)) await recordInterjection($, e.text);
       }
@@ -653,136 +481,17 @@ export function registerEvening(on: On): void {
 export const BAND_STALE = "Studio aktualisiert – Claude neu starten";
 
 /** The band's evening parts: watcher state and the stale-schema warning. */
-export function bandEvening(
-  s: EveningState,
-  listenerMode = false,
-): {
+export function bandEvening(s: EveningState): {
   watch: string;
   watching: boolean;
   stale: string;
 } {
   const stale = s.stale ? BAND_STALE : "";
-  if (listenerMode) {
-    const l = s.listener;
-    const skipped = l.returned && !l.woke ? l.between.length : 0;
-    if (l.running.length > 1)
-      return {
-        watching: false,
-        watch: `${l.running.length} Zuhörer laufen (einer reicht)`,
-        stale,
-      };
-    if (l.running.length)
-      return {
-        watching: true,
-        watch: `Zuhörer wartet · ${skipped} übersprungen`,
-        stale,
-      };
-    // Woken is the normal hand-over, not a warning: the GM is answering now (the band turns back from orange).
-    return {
-      watching: Boolean(l.returned && l.woke),
-      watch:
-        l.returned && l.woke
-          ? `Zuhörer hat geweckt: ${l.why || "ein Zug"}`
-          : "kein Zuhörer",
-      stale,
-    };
-  }
   return {
     watching: s.watcher.state === "running",
     watch: s.watcher.state === "running" ? "Spieler werden gehört" : "Spieler ungehört",
     stale,
   };
-}
-
-/**
- * The Zuhörer card of the Table tab, the one place the listener's state stands: the switch (key `listener`), then
- * what the listener does right now, its last wake and turn, and what the group discussed without the GM.
- */
-export function renderListener(
-  $: EngineInterface,
-  k: Kit,
-  d: { evening: EveningState; view: TableView | null; rules: Rules },
-): RenderElement {
-  const on = isListenerMode(d.view);
-  const l: ListenerState = d.evening.listener ?? EMPTY_LISTENER;
-  const n = l.running.length;
-  const rows: (RenderElement | null)[] = [
-    Toggle(k, {
-      key: "listener",
-      label: "Offenes Mikro",
-      on,
-      onToggle: (next) => void setListener($, next ? "haiku" : "off"),
-    }),
-  ];
-  // The switch says on/off; this row only says what the switch cannot: whether a listener really runs. A listener
-  // that woke the GM is the normal hand-over (the GM answers now), not a warning.
-  const woke = l.returned && l.woke;
-  const skipped = l.returned && !l.woke ? l.between.length : 0;
-  if (n || on)
-    rows.push(
-      ListRow(k, {
-        key: "ls-state",
-        status: n === 1 ? "running" : !n && woke ? "ok" : "warning",
-        title:
-          n > 1
-            ? `${n} Zuhörer laufen`
-            : n
-              ? "Wartet auf die Spieler"
-              : woke
-                ? "Spielleitung ist dran"
-                : "Kein Zuhörer läuft",
-        meta:
-          n > 1
-            ? "einer reicht"
-            : n && skipped
-              ? `${skipped} übersprungen`
-              : "",
-      }),
-    );
-  if (l.returned)
-    rows.push(
-      ListRow(k, {
-        key: "ls-back",
-        icon: "clock",
-        title: "Zuletzt zurück",
-        meta: [l.why, l.sent ? "gesendet" : ""].filter(Boolean).join(" · "),
-        pill: l.woke
-          ? { text: "geweckt", tone: "ok" }
-          : { text: "nicht geweckt", tone: "neutral", glyph: false },
-      }),
-    );
-  if (l.turn.length) {
-    const hide = l.secret && d.rules.spoilerSafe;
-    rows.push(
-      ListRow(k, {
-        key: "ls-turn",
-        icon: "chat",
-        title: "Letzter Zug",
-        meta: hide ? "geheim, verborgen" : "",
-        under: hide
-          ? undefined
-          : l.turn.slice(-6).map((t) => Sentence(k, t, { faint: true })),
-      }),
-    );
-  }
-  if (l.between.length)
-    rows.push(
-      ListRow(k, {
-        key: "ls-between",
-        icon: "chat",
-        title: "Ohne Spielleitung besprochen",
-        meta: String(l.between.length),
-        details: () =>
-          l.between.slice(-8).map((b) => Sentence(k, b, { faint: true })),
-      }),
-    );
-  return Card(k, {
-    key: "listener-card",
-    title: { icon: "mic", title: "Zuhörer" },
-    children: rows,
-    hint: "Mit offenem Mikro sprechen die Spieler ohne Sprechknopf; Claude meldet sich, wenn ein Zug die Spielleitung braucht.",
-    status: l.error ? { text: l.error, tone: "bad" } : undefined,
-  });
 }
 
 /** The Einwürfe card of the Table tab: what the person typed at the running table, kept for the debrief. */
