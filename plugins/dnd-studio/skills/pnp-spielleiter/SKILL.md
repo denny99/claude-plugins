@@ -367,6 +367,12 @@ Spieler „ich brauch nix“ gesagt hatte – es wirkte, als hätte er gebettelt
   kommt `say_line` mit `held` zurück oder weckt der Wächter mit `turn`, dann keine weitere Erzählung, kein neuer Wurf,
   sondern den Zug holen, lesen, was sie wollten, und den Kurs danach ändern. Was schon vorbereitet war, ist dann eben
   nicht mehr dran. Überholt ihr Einwurf die laufende Zeile, schneidest du selbst (`interrupt`).
+- **Ändert der Einwurf die Handlung, sofort schneiden; sonst weiterlaufen lassen** (Denny, Tischtest Archet
+  2026-11-25: „hätte abbrechen sollen“, als er dazwischenredete und deine Zeile weiter erzählte, was nicht mehr galt).
+  Sobald du den Einwurf liest (Teilzug `partial` oder Zug `turn`, während deine Zeile noch läuft): Ändert er, was
+  geschieht (eine Handlung, ein „stopp“, ein Nein, eine andere Richtung), ist dein erstes Werkzeug `say_line` mit
+  `interrupt: true` und der Antwort darauf; nicht erst die laufende Zeile zu Ende hören. Ist er nur eine Frage, ein
+  Witz oder ein Ja, läuft die Zeile weiter und du antwortest danach (`wait: false`, sie kommt hinter die laufende).
 - **Was nicht gehört wurde, kommt nach** (Denny, Ödland Kapitel 2, Abend 1, 2026-11-01: wir haben dich unterbrochen,
   „auch wenn unsere aussage nichts geändert hat an der story, weils nur ne frage war. und dann fehlten uns manchmal
   infos weil der text nicht zu ende gelesen wurde“). Eine Unterbrechung ist oft nur eine Frage oder ein Witz.
