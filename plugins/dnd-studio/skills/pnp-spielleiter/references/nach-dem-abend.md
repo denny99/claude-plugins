@@ -16,12 +16,13 @@ und sie nicht weiterwollen. Ohne Rückblick und Ausklingen endet ein Abend abrup
    Abend hängen bleibt (bei einem Kapitelende der vorbereitete Ausblick). Dann, als Erzähler aus der Geschichte heraus,
    der Abschied und ein Dank. Zum Schluss der **Abspann**: `show_players` mit `credits: true`, `credit_lines` („Danke
    fürs Spielen“, „Fortsetzung folgt …“) und `music` rollt die Helden mit ihren Spielern, die NPCs und Orte des Abends.
-3. Nach dem Abschied noch einmal warten, falls jemand etwas sagen will. Erst dann aufräumen: `show_players clear`,
-   Musik aus (`play_sound stop`), `discord leave` (holt alle aus Neben- und Ortsräumen zurück und löscht die Räume des
-   Bots). Leeren, Klang aus und `leave` erst, wenn der letzte Text wirklich zu Ende gespielt ist, sonst wird er
-   abgeschnitten; `leave` wartet selbst höchstens eine Minute auf Zeilen, die noch spielen. Woran du es erkennst, ohne
-   `wait: true`: `table_state` zeigt unter `last_line` `done` (die letzte Zeile ist durch), oder du rufst gleich
-   `discord leave`, das auf die laufenden Zeilen wartet.
+3. **Nach dem Abspann von selbst aufräumen,** ohne dass jemand „wir sind fertig, geh jetzt“ sagen muss: Ist der
+   Abspann durchgelaufen und der letzte Text zu Ende gespielt (`table_state` zeigt unter `last_line` `done`), Musik aus
+   (`play_sound stop`), dann `discord leave`: Es wartet selbst höchstens eine Minute auf Zeilen, die noch spielen, holt
+   alle aus Neben- und Ortsräumen zurück, löscht die Räume des Bots und schließt das Spielerfenster. Ohne Discord
+   `open_players` mit `close: true`. Vorher nichts leeren und nichts schließen, sonst wird der letzte Text
+   abgeschnitten. Ein Spielerfenster, das offen bleibt, hält den Tisch offen: Stimme und Diktat bleiben auf der
+   Grafikkarte, auch wenn danach Kampagnen gebaut werden.
 
 ## Danach, ohne Spieler
 

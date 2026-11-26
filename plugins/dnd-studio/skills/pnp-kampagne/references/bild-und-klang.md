@@ -34,6 +34,9 @@ Bilder belegen die GPU minutenlang: erst wenn der Text steht, gebündelt malen u
 - **Jedes neue Motiv entsteht mit Krea 2:** Alles aus Worten ohne Referenz (Ort, Szene, NSC, Wesen, Gegenstand) mit
   `picture` ohne Basis und `advanced_create: true`. FLUX Klein oder ein Referenzbild erst danach und nur, wenn es nötig
   ist: mit dem Ergebnis als Basis Helden hineinsetzen, Licht, Blickwinkel, ein Detail ändern (oder `advanced_edit`).
+  Zeigt das Bild einen Helden oder einen NPC mit Porträt, ist dieser Edit Pflicht: die Figur kommt mit ihrem Porträt
+  hinein (`person`, bei mehreren `replace`), danach auf dem Kontaktbogen gegen das Porträt prüfen. Ein reines
+  Krea-Bild zeigt sonst fremde Gesichter (Kreide und Eisen, 2026-11-25).
   Krea sieht keine Bilder: kein `person`, keine Helden mit Foto in der Idee, keine `references`, keine `pose`; NSCs nur
   über ihr Aussehen in Worten. Für viele solche Bilder (`paint_campaign`) `options set kreaCreate: true`, danach wieder
   `false`: Solange es an ist, verweigern `paint_player` und `paint_map`. Fehlt Krea, meldet der Aufruf „models

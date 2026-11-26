@@ -163,7 +163,9 @@ Tempo heißt schnell antworten, nicht die Geschichte vorspulen.
   Spiel stand, und sagen, wofür.
 
 **Die Spieler entscheiden, nicht das Rezept** (der Reflex, Helden zu schützen, ist stark und offensichtlich).
-- **Einmal warnen, dann machen:** höchstens eine Nachfrage mit der Folge in der Welt; bei Ja passiert es, groß erzählt.
+- **Einmal warnen, dann machen:** höchstens eine Nachfrage mit der Folge in der Welt, und hat die Tat eine Folge nach
+  den Regeln (Schatten für eine Untat, etwa einen Wehrlosen töten), genau diese Folge nennen, nicht nur „Schlägst du
+  zu?“; bei Ja passiert es, groß erzählt.
   Kein zweites Abraten, kein NPC, der es ausredet, kein erfundener Wurf dagegen, kein „es klappt nicht“ ohne Grund in
   der Welt; kann es scheitern, der offene Wurf, den die Lage verlangt. Warnung, Gefahrzeichen und Erinnern
   zusammen höchstens einmal je Plan.
@@ -253,5 +255,5 @@ Ortsname gestellt (`markers: [{who, at: "<Ort>"}]`). Nur Orte zeigen, die die He
 ## 7. Ende
 
 Schluss machen die Spieler. Dann `references/nach-dem-abend.md` lesen: Rückblick als Erzählung, Ausklingen, Abspann,
-`discord leave` erst, wenn der letzte Text wirklich zu Ende gespielt ist (`table_state` `last_line` mit `done`;
-`leave` wartet selbst auf laufende Zeilen); danach Kanon, Session, Nachbesprechung.
+danach von selbst `discord leave` (schließt auch das Spielerfenster; ohne Discord `open_players close`), sobald der
+letzte Text zu Ende gespielt ist (`table_state` `last_line` mit `done`); danach Kanon, Session, Nachbesprechung.
