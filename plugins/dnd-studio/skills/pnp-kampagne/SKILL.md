@@ -136,8 +136,9 @@ Die langsamen Teile, gesammelt, erst wenn der Text steht. `dnd-studio:pnp-maler`
 dem Protokoll des Texters, `dnd-studio:pnp-klang` danach die Klangliste, beide mit `references/bild-und-klang.md` im
 Auftrag. Worauf es ankommt:
 - Jede Szene hat ein Bild, jeder sprechende NPC ein Porträt; neue Motive mit Krea 2, bekannte Orte als Edit ihres
-  alten Bildes. Zeigt ein Bild einen Helden oder einen NPC mit Porträt, entsteht es als FLUX-Edit mit deren Porträts
-  (`person`), nie als reines Krea-Bild: sonst sehen die Figuren am Tisch anders aus als ihre Porträts.
+  alten Bildes. Zeigt ein Bild einen Helden oder einen NPC mit Porträt: erst Krea 2 für die Szene, danach ein
+  FLUX-Edit mit dem Krea-Bild als Basis, der die Figuren mit ihren Porträts hineinsetzt (`person`); nie nur das
+  Krea-Bild, sonst sehen die Figuren am Tisch anders aus als ihre Porträts.
 - Eine Kampagnenkarte mit allen Orten und eine Karte je wichtigem Ort; Marker statt aufgemalter Namen, jeder Marker auf
   dem, was das Bild an der Stelle zeigt.
 - Klänge macht das Studio (`make_sound`), geprüft mit `check_sound`; Musik je Stimmung als Rückfall, jede Szene ihre
